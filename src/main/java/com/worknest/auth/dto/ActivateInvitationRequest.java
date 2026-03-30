@@ -11,8 +11,7 @@ public record ActivateInvitationRequest(
         @Size(min = 8, max = 255)
         String password,
 
-        @NotBlank
-        @Size(max = 10)
-        String preferredLanguage
+        @Size(max = 255)
+        String jobTitle
 ) {
 }

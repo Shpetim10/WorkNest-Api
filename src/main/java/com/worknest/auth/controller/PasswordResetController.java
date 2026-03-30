@@ -5,14 +5,12 @@ import com.worknest.auth.dto.GenericMessageResponse;
 import com.worknest.auth.dto.ResetPasswordRequest;
 import com.worknest.auth.service.PasswordResetRequestService;
 import com.worknest.auth.service.PasswordResetService;
+import com.worknest.common.api.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -23,13 +21,18 @@ public class PasswordResetController {
     private final PasswordResetService resetService;
 
     @PostMapping("/forgot-password")
-    @ResponseStatus(HttpStatus.ACCEPTED)
-    public void forgotPassword(@RequestBody @Valid ForgotPasswordRequest request) {
+    public ResponseEntity<ApiResponse<GenericMessageResponse>> forgotPassword(@RequestBody @Valid ForgotPasswordRequest request) {
         requestService.requestPasswordReset(request);
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(ApiResponse.success(
+                        "Password reset request accepted",
+                        new GenericMessageResponse("If the account exists, password reset instructions will be sent")
+                ));
     }
 
     @PostMapping("/reset-password")
-    public GenericMessageResponse resetPassword(@RequestBody @Valid ResetPasswordRequest request) {
-        return resetService.resetPassword(request);
+    public ResponseEntity<ApiResponse<GenericMessageResponse>> resetPassword(@RequestBody @Valid ResetPasswordRequest request) {
+        GenericMessageResponse response = resetService.resetPassword(request);
+        return ResponseEntity.ok(ApiResponse.success(response.message(), response));
     }
 }

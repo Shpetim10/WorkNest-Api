@@ -1,7 +1,9 @@
 package com.worknest.auth.service.impl;
 
+import com.worknest.audit.domain.AuditLog;
 import com.worknest.audit.domain.PlatformEvent;
-import com.worknest.audit.repository.PlatformEventRepository;
+import com.worknest.audit.service.AuditLogService;
+import com.worknest.audit.service.PlatformEventService;
 import com.worknest.auth.domain.Company;
 import com.worknest.auth.domain.CompanyStatus;
 import com.worknest.auth.domain.PlatformRole;
@@ -18,6 +20,7 @@ import com.worknest.auth.repository.CompanyRepository;
 import com.worknest.auth.repository.RoleAssignmentRepository;
 import com.worknest.auth.repository.UserRepository;
 import java.time.Instant;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,7 +37,8 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
-    private final PlatformEventRepository platformEventRepository;
+    private final AuditLogService auditLogService;
+    private final PlatformEventService platformEventService;
 
     @Override
     @Transactional
@@ -84,14 +88,34 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
 
         RoleAssignment savedRoleAssignment = roleAssignmentRepository.save(adminRoleAssignment);
 
-        PlatformEvent platformEvent = new PlatformEvent(
+        platformEventService.publishEvent(new PlatformEvent(
                 "COMPANY_REGISTERED",
                 savedCompany.getId(),
                 savedCompany.getName(),
                 savedAdminUser.getId(),
                 "Company workspace registered and initial admin account prepared for activation"
-        );
-        platformEventRepository.save(platformEvent);
+        ));
+
+        auditLogService.logAction(new AuditLog(
+                savedCompany.getId(),
+                savedAdminUser.getId(),
+                savedRoleAssignment.getId(),
+                PlatformRole.ADMIN,
+                null,
+                "COMPANY_REGISTERED",
+                "Company",
+                savedCompany.getId(),
+                Map.of(
+                        "companyName", savedCompany.getName(),
+                        "slug", savedCompany.getSlug(),
+                        "status", savedCompany.getStatus().name()
+                ),
+                Map.of(
+                        "adminUserId", savedAdminUser.getId(),
+                        "adminRoleAssignmentId", savedRoleAssignment.getId()
+                ),
+                null
+        ));
 
         return new CompanyRegistrationResponse(
                 savedCompany.getId(),

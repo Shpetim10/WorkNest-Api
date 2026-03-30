@@ -12,8 +12,10 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
@@ -71,4 +73,29 @@ public class UserInvitation {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (expiresAt == null) {
+            expiresAt = Instant.now().plus(Duration.ofHours(24));
+        }
+    }
+
+    ///  Helpers
+
+    // Checks if the invitation has expired.
+    public boolean isExpired(Instant now) {
+        return expiresAt != null && expiresAt.isBefore(now);
+    }
+
+    // Checks if the invitation has already been used.
+    public boolean isUsed() {
+        return usedAt != null;
+    }
+
+    // Checks if the invitation is currently valid (not used and not expired).
+
+    public boolean isValid(Instant now) {
+        return !isUsed() && !isExpired(now);
+    }
 }

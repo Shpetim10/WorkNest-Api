@@ -4,15 +4,14 @@ import com.worknest.auth.dto.ActivateInvitationRequest;
 import com.worknest.auth.dto.ActivateInvitationResponse;
 import com.worknest.auth.dto.CreateInvitationRequest;
 import com.worknest.auth.dto.CreateInvitationResponse;
+import com.worknest.auth.service.InvitationActivationService;
 import com.worknest.auth.service.InvitationService;
+import com.worknest.common.api.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/auth/invitations")
@@ -20,15 +19,20 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserInvitationController {
 
     private final InvitationService invitationService;
+    private final InvitationActivationService invitationActivationService;
 
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public CreateInvitationResponse createInvitation(@RequestBody @Valid CreateInvitationRequest request) {
-        return invitationService.createInvitation(request);
+    public ResponseEntity<ApiResponse<CreateInvitationResponse>> createInvitation(@RequestBody @Valid CreateInvitationRequest request) {
+        CreateInvitationResponse response = invitationService.createInvitation(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(response.message(), response));
     }
 
     @PostMapping("/activate")
-    public ActivateInvitationResponse activateInvitation(@RequestBody @Valid ActivateInvitationRequest request) {
-        return invitationService.activateInvitation(request);
+    public ResponseEntity<ApiResponse<ActivateInvitationResponse>> activateInvitation(
+            @RequestBody @Valid ActivateInvitationRequest request
+    ) {
+        ActivateInvitationResponse response = invitationActivationService.activateInvitation(request);
+        return ResponseEntity.ok(ApiResponse.success(response.message(), response));
     }
 }
