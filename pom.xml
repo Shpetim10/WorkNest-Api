@@ -31,6 +31,7 @@
         <liquibase.url>jdbc:postgresql://localhost:5432/worknest_db</liquibase.url>
         <liquibase.username>root</liquibase.username>
         <liquibase.password>root</liquibase.password>
+        <postgresql.version>42.7.4</postgresql.version>
         <lombok.version>1.18.38</lombok.version>
         <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
         <maven.surefire.plugin.version>3.3.1</maven.surefire.plugin.version>
@@ -39,6 +40,11 @@
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>${postgresql.version}</version>
+            </dependency>
             <dependency>
                 <groupId>org.testcontainers</groupId>
                 <artifactId>testcontainers-bom</artifactId>
@@ -239,6 +245,7 @@
                             <dependency>
                                 <groupId>org.postgresql</groupId>
                                 <artifactId>postgresql</artifactId>
+                                <version>${postgresql.version}</version>
                             </dependency>
                         </dependencies>
                     </plugin>
@@ -270,6 +277,7 @@
                             <dependency>
                                 <groupId>org.postgresql</groupId>
                                 <artifactId>postgresql</artifactId>
+                                <version>${postgresql.version}</version>
                             </dependency>
                         </dependencies>
                     </plugin>

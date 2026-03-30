@@ -22,23 +22,12 @@ public class PasswordResetController {
     private final PasswordResetRequestService requestService;
     private final PasswordResetService resetService;
 
-    /**
-     * Initiates a password reset request by sending a unique link to the user's email.
-     *
-     * @param request the email and company slug
-     */
     @PostMapping("/forgot-password")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public void forgotPassword(@RequestBody @Valid ForgotPasswordRequest request) {
         requestService.requestPasswordReset(request);
     }
 
-    /**
-     * Completes a password reset operation using the token provided in the link.
-     *
-     * @param request the token and new password
-     * @return a GenericMessageResponse confirming the new password has been set
-     */
     @PostMapping("/reset-password")
     public GenericMessageResponse resetPassword(@RequestBody @Valid ResetPasswordRequest request) {
         return resetService.resetPassword(request);

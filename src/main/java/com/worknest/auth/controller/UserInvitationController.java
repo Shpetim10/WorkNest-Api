@@ -21,24 +21,12 @@ public class UserInvitationController {
 
     private final InvitationService invitationService;
 
-    /**
-     * Creates a new user invitation for a specific company and role.
-     *
-     * @param request invitation details
-     * @return the created invitation link and session data
-     */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public CreateInvitationResponse createInvitation(@RequestBody @Valid CreateInvitationRequest request) {
         return invitationService.createInvitation(request);
     }
 
-    /**
-     * Activates an existing invitation by setting a password and establishing identity.
-     *
-     * @param request activation details including the unique token
-     * @return the newly activated user details
-     */
     @PostMapping("/activate")
     public ActivateInvitationResponse activateInvitation(@RequestBody @Valid ActivateInvitationRequest request) {
         return invitationService.activateInvitation(request);

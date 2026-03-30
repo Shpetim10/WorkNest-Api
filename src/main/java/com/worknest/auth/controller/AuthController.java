@@ -26,25 +26,12 @@ public class AuthController {
     private final RoleSelectionService roleSelectionService;
     private final RefreshTokenService refreshTokenService;
 
-    /**
-     * Authenticates a user within a specific company environment.
-     *
-     * @param request the login credentials and company context
-     * @param servletRequest raw request used to capture the IP address
-     * @return identifying data and initial token sets
-     */
     @PostMapping("/login")
     public LoginResponse login(@RequestBody @Valid LoginRequest request, HttpServletRequest servletRequest) {
         String ipAddress = servletRequest.getRemoteAddr();
         return authLoginService.login(request, ipAddress);
     }
 
-    /**
-     * Allows an authenticated platform user to switch to a specific company/role assignment.
-     *
-     * @param request the role assignment details
-     * @return the context-specific access and refresh tokens
-     */
     @PostMapping("/select-role")
     public SelectRoleResponse selectRole(@RequestBody @Valid SelectRoleRequest request) {
         // TODO: Extract authenticated userId from SecurityContext
@@ -52,13 +39,6 @@ public class AuthController {
         return roleSelectionService.selectRole(request, userId);
     }
 
-    /**
-     * Rotates existing tokens using a valid refresh token.
-     *
-     * @param request the current refresh token
-     * @param servletRequest raw request for tracking
-     * @return a fresh access and refresh token pair
-     */
     @PostMapping("/refresh")
     public RefreshTokenResponse refresh(@RequestBody @Valid RefreshTokenRequest request, HttpServletRequest servletRequest) {
         String ipAddress = servletRequest.getRemoteAddr();

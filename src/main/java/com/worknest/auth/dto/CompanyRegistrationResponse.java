@@ -6,8 +6,8 @@ import java.util.UUID;
 public record CompanyRegistrationResponse(
         UUID companyId,
         UUID adminUserId,
-        String companyName,
-        String companySlug,
-        CompanyStatus companyStatus
+        UUID adminRoleAssignmentId,
+        CompanyStatus status,
+        String message
 ) {
 }
