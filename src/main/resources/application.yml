@@ -1,4 +1,6 @@
 spring:
+  classformat:
+    ignore: true
   application:
     name: worknest-api
   datasource:
