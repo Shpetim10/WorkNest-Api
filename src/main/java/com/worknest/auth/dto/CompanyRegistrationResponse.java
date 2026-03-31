@@ -8,6 +8,7 @@ public record CompanyRegistrationResponse(
         UUID adminUserId,
         UUID adminRoleAssignmentId,
         CompanyStatus status,
+        Boolean onboardingCompleted,
         String message
 ) {
 }
