@@ -4,6 +4,7 @@ import com.worknest.audit.domain.AuditLog;
 import com.worknest.audit.domain.PlatformEvent;
 import com.worknest.audit.service.AuditLogService;
 import com.worknest.audit.service.PlatformEventService;
+import com.worknest.auth.domain.PlatformAccess;
 import com.worknest.auth.domain.PlatformRole;
 import com.worknest.auth.domain.RoleAssignment;
 import com.worknest.auth.domain.User;
@@ -24,6 +25,8 @@ import com.worknest.auth.utility.Sha256TokenHashUtility;
 import java.time.Instant;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.BeanWrapper;
+import org.springframework.beans.PropertyAccessorFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +49,7 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
     public ActivateInvitationResponse activateInvitation(ActivateInvitationRequest request) {
         validateRequest(request);
 
+        Instant now = Instant.now();
         String tokenHash = sha256TokenHashUtility.hash(request.token());
         UserInvitation invitation = userInvitationRepository.findByTokenHash(tokenHash)
                 .orElseThrow(InvitationTokenInvalidException::new);
@@ -53,7 +57,7 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
         if (invitation.isUsed()) {
             throw new InvitationAlreadyUsedException();
         }
-        if (invitation.isExpired(Instant.now())) {
+        if (invitation.isExpired(now)) {
             throw new InvitationTokenExpiredException();
         }
 
@@ -67,19 +71,24 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
 
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setStatus(UserStatus.ACTIVE);
+        user.setFirstName(request.firstName().trim());
+        user.setLastName(request.lastName().trim());
+        user.setDisplayName(resolveDisplayName(request.firstName(), request.lastName(), request.displayName()));
         User savedUser = userRepository.save(user);
 
+        PlatformAccess platformAccess = resolveInvitationPlatformAccess(invitation);
         RoleAssignment roleAssignment = new RoleAssignment();
         roleAssignment.setCompany(invitation.getCompany());
         roleAssignment.setUser(savedUser);
         roleAssignment.setRole(invitation.getPlatformRole());
-        roleAssignment.setJobTitle(resolveJobTitle(invitation.getPlatformRole(), request.jobTitle()));
+        roleAssignment.setJobTitle(resolveJobTitle(invitation));
         roleAssignment.setIsActive(true);
-        roleAssignment.setActivatedAt(Instant.now());
+        roleAssignment.setActivatedAt(now);
         roleAssignment.setCreatedBy(invitation.getInvitedBy());
+        applyPlatformAccess(roleAssignment, platformAccess);
         RoleAssignment savedRoleAssignment = roleAssignmentRepository.save(roleAssignment);
 
-        invitation.setUsedAt(Instant.now());
+        invitation.setUsedAt(now);
         userInvitationRepository.save(invitation);
 
         platformEventService.publishEvent(new PlatformEvent(
@@ -101,7 +110,8 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
                 savedUser.getId(),
                 Map.of(
                         "status", savedUser.getStatus().name(),
-                        "roleAssignmentId", savedRoleAssignment.getId()
+                        "roleAssignmentId", savedRoleAssignment.getId(),
+                        "platformAccess", platformAccess.name()
                 ),
                 Map.of(
                         "invitationId", invitation.getId(),
@@ -113,6 +123,8 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
         return new ActivateInvitationResponse(
                 savedUser.getId(),
                 savedRoleAssignment.getId(),
+                savedRoleAssignment.getRole(),
+                platformAccess,
                 savedUser.getStatus(),
                 "Invitation activated successfully"
         );
@@ -127,6 +139,12 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
         }
         if (!StringUtils.hasText(request.password())) {
             throw new WeakPasswordException("Password is required");
+        }
+        if (!StringUtils.hasText(request.firstName())) {
+            throw new InvalidInvitationRequestException("firstName is required");
+        }
+        if (!StringUtils.hasText(request.lastName())) {
+            throw new InvalidInvitationRequestException("lastName is required");
         }
     }
 
@@ -145,10 +163,42 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
         }
     }
 
-    private String resolveJobTitle(PlatformRole platformRole, String requestedJobTitle) {
-        if (platformRole == PlatformRole.STAFF && !StringUtils.hasText(requestedJobTitle)) {
-            throw new InvalidInvitationRequestException("jobTitle is required for STAFF role assignment");
+    private String resolveJobTitle(UserInvitation invitation) {
+        String invitedJobTitle = invitation.getInvitedJobTitle();
+        if (invitation.getPlatformRole() == PlatformRole.STAFF && !StringUtils.hasText(invitedJobTitle)) {
+            throw new InvalidInvitationRequestException("invitedJobTitle is required for STAFF role assignment");
         }
-        return StringUtils.hasText(requestedJobTitle) ? requestedJobTitle.trim() : null;
+        return StringUtils.hasText(invitedJobTitle) ? invitedJobTitle.trim() : null;
+    }
+
+    private String resolveDisplayName(String firstName, String lastName, String requestedDisplayName) {
+        if (StringUtils.hasText(requestedDisplayName)) {
+            return requestedDisplayName.trim();
+        }
+        return (firstName.trim() + " " + lastName.trim()).trim();
+    }
+
+    private PlatformAccess resolveInvitationPlatformAccess(UserInvitation invitation) {
+        BeanWrapper beanWrapper = PropertyAccessorFactory.forBeanPropertyAccess(invitation);
+        if (beanWrapper.isReadableProperty("platformAccess")) {
+            Object value = beanWrapper.getPropertyValue("platformAccess");
+            if (value instanceof PlatformAccess platformAccess) {
+                return platformAccess;
+            }
+        }
+
+        return switch (invitation.getPlatformRole()) {
+            case EMPLOYEE -> PlatformAccess.MOBILE;
+            case ADMIN -> PlatformAccess.WEB;
+            case STAFF -> PlatformAccess.WEB;
+            default -> PlatformAccess.WEB;
+        };
+    }
+
+    private void applyPlatformAccess(RoleAssignment roleAssignment, PlatformAccess platformAccess) {
+        BeanWrapper beanWrapper = PropertyAccessorFactory.forBeanPropertyAccess(roleAssignment);
+        if (beanWrapper.isWritableProperty("platformAccess")) {
+            beanWrapper.setPropertyValue("platformAccess", platformAccess);
+        }
     }
 }

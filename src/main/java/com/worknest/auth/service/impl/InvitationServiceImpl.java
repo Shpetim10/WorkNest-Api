@@ -6,6 +6,7 @@ import com.worknest.audit.service.AuditLogService;
 import com.worknest.audit.service.PlatformEventService;
 import com.worknest.auth.domain.Company;
 import com.worknest.auth.domain.CompanyStatus;
+import com.worknest.auth.domain.PlatformAccess;
 import com.worknest.auth.domain.PlatformRole;
 import com.worknest.auth.domain.RoleAssignment;
 import com.worknest.auth.domain.User;
@@ -24,9 +25,12 @@ import com.worknest.auth.service.InvitationService;
 import com.worknest.auth.utility.SecureTokenGenerator;
 import com.worknest.auth.utility.Sha256TokenHashUtility;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.BeanWrapper;
+import org.springframework.beans.PropertyAccessorFactory;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -38,7 +42,7 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class InvitationServiceImpl implements InvitationService {
 
-    private static final String DEFAULT_PREFERRED_LANGUAGE = "en";
+    private static final String DEFAULT_PREFERRED_LANGUAGE = "sq";
 
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
@@ -63,6 +67,8 @@ public class InvitationServiceImpl implements InvitationService {
         }
 
         String normalizedEmail = request.email().trim().toLowerCase();
+        PlatformAccess resolvedPlatformAccess = resolveInvitationPlatformAccess(request.platformRole(), request.platformAccess());
+        String invitedJobTitle = resolveInvitedJobTitle(request.platformRole(), request.invitedJobTitle());
 
         if (userInvitationRepository.existsByCompanyIdAndEmailIgnoreCaseAndUsedAtIsNullAndExpiresAtAfter(
                 company.getId(),
@@ -78,6 +84,7 @@ public class InvitationServiceImpl implements InvitationService {
 
         User invitedBy = resolveCurrentAuthenticatedUser(company.getId());
         RoleAssignment inviterRoleAssignment = resolveActiveRoleAssignment(invitedBy.getId());
+        validateInviterAuthorization(inviterRoleAssignment);
 
         String rawToken = secureTokenGenerator.generateToken();
         String tokenHash = sha256TokenHashUtility.hash(rawToken);
@@ -89,7 +96,9 @@ public class InvitationServiceImpl implements InvitationService {
         invitation.setTokenHash(tokenHash);
         invitation.setInvitedBy(invitedBy);
         invitation.setPlatformRole(request.platformRole());
+        invitation.setInvitedJobTitle(invitedJobTitle);
         invitation.setExpiresAt(expiresAt);
+        applyPlatformAccess(invitation, resolvedPlatformAccess);
 
         UserInvitation savedInvitation = userInvitationRepository.save(invitation);
 
@@ -110,11 +119,7 @@ public class InvitationServiceImpl implements InvitationService {
                 "INVITATION_CREATED",
                 "UserInvitation",
                 savedInvitation.getId(),
-                Map.of(
-                        "email", savedInvitation.getEmail(),
-                        "platformRole", savedInvitation.getPlatformRole().name(),
-                        "expiresAt", savedInvitation.getExpiresAt().toString()
-                ),
+                buildInvitationAuditDiff(savedInvitation, resolvedPlatformAccess),
                 Map.of(
                         "companyId", company.getId(),
                         "invitedByUserId", invitedBy.getId()
@@ -125,6 +130,8 @@ public class InvitationServiceImpl implements InvitationService {
         return new CreateInvitationResponse(
                 savedInvitation.getId(),
                 savedInvitation.getEmail(),
+                savedInvitation.getPlatformRole(),
+                resolvedPlatformAccess,
                 savedInvitation.getExpiresAt(),
                 "Invitation created successfully"
         );
@@ -142,6 +149,9 @@ public class InvitationServiceImpl implements InvitationService {
         }
         if (request.platformRole() == null) {
             throw new InvalidInvitationRequestException("platformRole is required");
+        }
+        if (request.platformAccess() == null) {
+            throw new InvalidInvitationRequestException("platformAccess is required");
         }
     }
 
@@ -185,5 +195,49 @@ public class InvitationServiceImpl implements InvitationService {
                 .stream()
                 .findFirst()
                 .orElse(null);
+    }
+
+    private void validateInviterAuthorization(RoleAssignment inviterRoleAssignment) {
+        if (inviterRoleAssignment == null) {
+            throw new InvalidInvitationRequestException("Inviter must have an active role assignment");
+        }
+        if (inviterRoleAssignment.getRole() == PlatformRole.EMPLOYEE) {
+            throw new InvalidInvitationRequestException("Inviter is not authorized to send invitations");
+        }
+    }
+
+    private PlatformAccess resolveInvitationPlatformAccess(PlatformRole platformRole, PlatformAccess requestedPlatformAccess) {
+        return switch (platformRole) {
+            case EMPLOYEE -> PlatformAccess.MOBILE;
+            case ADMIN -> PlatformAccess.WEB;
+            case STAFF -> requestedPlatformAccess;
+            default -> requestedPlatformAccess;
+        };
+    }
+
+    private String resolveInvitedJobTitle(PlatformRole platformRole, String requestedJobTitle) {
+        if (platformRole == PlatformRole.STAFF && !StringUtils.hasText(requestedJobTitle)) {
+            throw new InvalidInvitationRequestException("invitedJobTitle is required for STAFF invitations");
+        }
+        return StringUtils.hasText(requestedJobTitle) ? requestedJobTitle.trim() : null;
+    }
+
+    private void applyPlatformAccess(Object target, PlatformAccess platformAccess) {
+        BeanWrapper beanWrapper = PropertyAccessorFactory.forBeanPropertyAccess(target);
+        if (beanWrapper.isWritableProperty("platformAccess")) {
+            beanWrapper.setPropertyValue("platformAccess", platformAccess);
+        }
+    }
+
+    private Map<String, Object> buildInvitationAuditDiff(UserInvitation invitation, PlatformAccess platformAccess) {
+        Map<String, Object> diff = new LinkedHashMap<>();
+        diff.put("email", invitation.getEmail());
+        diff.put("platformRole", invitation.getPlatformRole().name());
+        diff.put("platformAccess", platformAccess.name());
+        diff.put("expiresAt", invitation.getExpiresAt().toString());
+        if (StringUtils.hasText(invitation.getInvitedJobTitle())) {
+            diff.put("invitedJobTitle", invitation.getInvitedJobTitle());
+        }
+        return diff;
     }
 }
