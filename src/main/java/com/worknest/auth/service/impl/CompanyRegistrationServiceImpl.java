@@ -6,6 +6,7 @@ import com.worknest.audit.service.AuditLogService;
 import com.worknest.audit.service.PlatformEventService;
 import com.worknest.auth.domain.Company;
 import com.worknest.auth.domain.CompanyStatus;
+import com.worknest.auth.domain.PlatformAccess;
 import com.worknest.auth.domain.PlatformRole;
 import com.worknest.auth.domain.RoleAssignment;
 import com.worknest.auth.domain.User;
@@ -22,6 +23,8 @@ import com.worknest.auth.repository.UserRepository;
 import java.time.Instant;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.BeanWrapper;
+import org.springframework.beans.PropertyAccessorFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -30,9 +33,13 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class CompanyRegistrationServiceImpl implements CompanyRegistrationService {
 
-    private static final String DEFAULT_TIMEZONE = "UTC";
-    private static final String DEFAULT_LOCALE = "en";
-    private static final String DEFAULT_PREFERRED_LANGUAGE = "en";
+    private static final String DEFAULT_TIMEZONE = "Europe/Tirane";
+    private static final String DEFAULT_LOCALE = "sq";
+    private static final String DEFAULT_CURRENCY = "ALL";
+    private static final String DEFAULT_DATE_FORMAT = "DD/MM/YYYY";
+    private static final String DEFAULT_COUNTRY_CODE = "AL";
+    private static final String DEFAULT_PREFERRED_LANGUAGE = "sq";
+    private static final String DEFAULT_SUBSCRIPTION_STATUS = "trial";
 
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
@@ -47,7 +54,7 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
 
         String normalizedSlug = request.slug().trim().toLowerCase();
         String normalizedAdminEmail = request.adminEmail().trim().toLowerCase();
-        String normalizedContactEmail = normalizeNullableEmail(request.contactEmail(), normalizedAdminEmail);
+        String normalizedPrimaryEmail = normalizeRequiredEmail(request.primaryEmail());
 
         if (companyRepository.existsBySlugIgnoreCaseAndDeletedAtIsNull(normalizedSlug)) {
             throw new CompanySlugAlreadyExistsException(normalizedSlug);
@@ -55,11 +62,22 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
 
         Company company = new Company();
         company.setName(request.companyName().trim());
+        company.setLegalName(trimToNull(request.legalName()));
         company.setSlug(normalizedSlug);
         company.setStatus(CompanyStatus.ACTIVE);
-        company.setContactEmail(normalizedContactEmail);
+        company.setNipt(trimToNull(request.nipt()));
+        company.setRegistrationNumber(trimToNull(request.registrationNumber()));
+        company.setVatNumber(trimToNull(request.vatNumber()));
+        company.setPrimaryEmail(normalizedPrimaryEmail);
+        company.setPrimaryPhone(trimToNull(request.primaryPhone()));
+        company.setWebsite(trimToNull(request.website()));
+        company.setCountryCode(defaultIfBlank(request.countryCode(), DEFAULT_COUNTRY_CODE).toUpperCase());
         company.setTimezone(defaultIfBlank(request.timezone(), DEFAULT_TIMEZONE));
         company.setLocale(defaultIfBlank(request.locale(), DEFAULT_LOCALE));
+        company.setCurrency(defaultIfBlank(request.currency(), DEFAULT_CURRENCY));
+        company.setDateFormat(defaultIfBlank(request.dateFormat(), DEFAULT_DATE_FORMAT));
+        company.setOnboardingCompletedAt(null);
+        company.setSubscriptionStatus(DEFAULT_SUBSCRIPTION_STATUS);
         company.setDataRetentionDays(90);
 
         Company savedCompany = companyRepository.save(company);
@@ -73,10 +91,18 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
         adminUser.setEmail(normalizedAdminEmail);
         adminUser.setPasswordHash(null);
         adminUser.setStatus(UserStatus.PENDING);
+        adminUser.setFirstName(request.adminFirstName().trim());
+        adminUser.setLastName(request.adminLastName().trim());
+        adminUser.setDisplayName(buildDisplayName(request.adminFirstName(), request.adminLastName()));
         adminUser.setPreferredLanguage(defaultIfBlank(request.preferredLanguage(), DEFAULT_PREFERRED_LANGUAGE));
+        adminUser.setTimezoneOverride(null);
         adminUser.setFailedLoginCount((short) 0);
+        adminUser.setMfaEnabled(false);
 
         User savedAdminUser = userRepository.save(adminUser);
+
+        savedCompany.setOwnerUserId(savedAdminUser.getId());
+        savedCompany = companyRepository.save(savedCompany);
 
         RoleAssignment adminRoleAssignment = new RoleAssignment();
         adminRoleAssignment.setCompany(savedCompany);
@@ -85,6 +111,7 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
         adminRoleAssignment.setIsActive(true);
         adminRoleAssignment.setActivatedAt(Instant.now());
         adminRoleAssignment.setCreatedBy(null);
+        applyPlatformAccess(adminRoleAssignment, PlatformAccess.WEB);
 
         RoleAssignment savedRoleAssignment = roleAssignmentRepository.save(adminRoleAssignment);
 
@@ -108,11 +135,13 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
                 Map.of(
                         "companyName", savedCompany.getName(),
                         "slug", savedCompany.getSlug(),
-                        "status", savedCompany.getStatus().name()
+                        "status", savedCompany.getStatus().name(),
+                        "subscriptionStatus", savedCompany.getSubscriptionStatus()
                 ),
                 Map.of(
                         "adminUserId", savedAdminUser.getId(),
-                        "adminRoleAssignmentId", savedRoleAssignment.getId()
+                        "adminRoleAssignmentId", savedRoleAssignment.getId(),
+                        "workspaceCreated", true
                 ),
                 null
         ));
@@ -122,6 +151,7 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
                 savedAdminUser.getId(),
                 savedRoleAssignment.getId(),
                 savedCompany.getStatus(),
+                savedCompany.getOnboardingCompletedAt() != null,
                 "Company registered successfully"
         );
     }
@@ -142,13 +172,37 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
         if (!StringUtils.hasText(request.adminEmail())) {
             throw new InvalidRegistrationDataException("adminEmail is required");
         }
+        if (!StringUtils.hasText(request.primaryEmail())) {
+            throw new InvalidRegistrationDataException("primaryEmail is required");
+        }
+        if (!StringUtils.hasText(request.adminFirstName())) {
+            throw new InvalidRegistrationDataException("adminFirstName is required");
+        }
+        if (!StringUtils.hasText(request.adminLastName())) {
+            throw new InvalidRegistrationDataException("adminLastName is required");
+        }
     }
 
     private String defaultIfBlank(String value, String defaultValue) {
         return StringUtils.hasText(value) ? value.trim() : defaultValue;
     }
 
-    private String normalizeNullableEmail(String email, String fallback) {
-        return StringUtils.hasText(email) ? email.trim().toLowerCase() : fallback;
+    private String normalizeRequiredEmail(String email) {
+        return email.trim().toLowerCase();
+    }
+
+    private String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String buildDisplayName(String firstName, String lastName) {
+        return (firstName.trim() + " " + lastName.trim()).trim();
+    }
+
+    private void applyPlatformAccess(RoleAssignment roleAssignment, PlatformAccess platformAccess) {
+        BeanWrapper beanWrapper = PropertyAccessorFactory.forBeanPropertyAccess(roleAssignment);
+        if (beanWrapper.isWritableProperty("platformAccess")) {
+            beanWrapper.setPropertyValue("platformAccess", platformAccess);
+        }
     }
 }
