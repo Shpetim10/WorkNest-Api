@@ -45,8 +45,10 @@ public class PasswordResetToken {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    // Store only token hash, never raw token.
-    @Column(name = "token_hash", nullable = false, length = 255)
+    /**
+     * Secure hash of the reset token. Raw token is never stored.
+     */
+    @Column(name = "token_hash", nullable = false, unique = true, length = 255)
     private String tokenHash;
 
     @Column(name = "expires_at", nullable = false)

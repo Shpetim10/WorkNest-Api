@@ -52,8 +52,10 @@ public class UserInvitation {
     @Column(name = "email", nullable = false, length = 255)
     private String email;
 
-    // Store only token hash, never raw token.
-    @Column(name = "token_hash", nullable = false, length = 255)
+    /**
+     * Secure hash of the invitation token. Raw token is never stored.
+     */
+    @Column(name = "token_hash", nullable = false, unique = true, length = 255)
     private String tokenHash;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -63,6 +65,9 @@ public class UserInvitation {
     @Enumerated(EnumType.STRING)
     @Column(name = "platform_role", nullable = false, length = 30)
     private PlatformRole platformRole = PlatformRole.EMPLOYEE;
+
+    @Column(name = "invited_job_title", length = 255)
+    private String invitedJobTitle;
 
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
@@ -77,6 +82,7 @@ public class UserInvitation {
     @PrePersist
     protected void onCreate() {
         if (expiresAt == null) {
+            // Invitations are valid for 24 hours by default.
             expiresAt = Instant.now().plus(Duration.ofHours(24));
         }
     }
@@ -97,5 +103,13 @@ public class UserInvitation {
 
     public boolean isValid(Instant now) {
         return !isUsed() && !isExpired(now);
+    }
+
+    public String getJobTitle() {
+        return invitedJobTitle;
+    }
+
+    public void setJobTitle(String jobTitle) {
+        this.invitedJobTitle = jobTitle;
     }
 }

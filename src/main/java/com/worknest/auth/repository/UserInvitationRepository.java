@@ -16,6 +16,8 @@ public interface UserInvitationRepository extends JpaRepository<UserInvitation, 
 
     Optional<UserInvitation> findByTokenHash(String tokenHash);
 
+    Optional<UserInvitation> findByTokenHashAndUsedAtIsNull(String tokenHash);
+
     Optional<UserInvitation> findByTokenHashAndUsedAtIsNullAndExpiresAtAfter(String tokenHash, Instant now);
 
     boolean existsByCompanyIdAndEmailIgnoreCaseAndUsedAtIsNullAndExpiresAtAfter(
@@ -26,9 +28,21 @@ public interface UserInvitationRepository extends JpaRepository<UserInvitation, 
 
     Page<UserInvitation> findAllByCompanyId(UUID companyId, Pageable pageable);
 
+    List<UserInvitation> findAllByCompanyIdAndUsedAtIsNullAndExpiresAtAfter(UUID companyId, Instant now);
+
+    List<UserInvitation> findAllByCompanyIdAndUsedAtIsNull(UUID companyId);
+
     List<UserInvitation> findAllByEmailIgnoreCaseAndUsedAtIsNullAndExpiresAtAfter(String email, Instant now);
 
+    List<UserInvitation> findAllByEmailIgnoreCaseAndUsedAtIsNull(String email);
+
     Optional<UserInvitation> findByCompanyIdAndEmailIgnoreCase(UUID companyId, String email);
+
+    Optional<UserInvitation> findByCompanyIdAndEmailIgnoreCaseAndUsedAtIsNullAndExpiresAtAfter(
+            UUID companyId,
+            String email,
+            Instant now
+    );
 
     @Modifying
     @Query("UPDATE UserInvitation ui SET ui.usedAt = :usedAt WHERE ui.id = :id")

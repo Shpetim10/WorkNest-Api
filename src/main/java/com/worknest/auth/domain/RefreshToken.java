@@ -42,7 +42,7 @@ public class RefreshToken {
     private User user;
 
     // Store only token hash, never raw token.
-    @Column(name = "token_hash", nullable = false, length = 255)
+    @Column(name = "token_hash", nullable = false, unique = true, length = 255)
     private String tokenHash;
 
     @ManyToOne(fetch = FetchType.LAZY)

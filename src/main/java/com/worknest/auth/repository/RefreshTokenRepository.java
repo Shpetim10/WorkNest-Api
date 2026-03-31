@@ -16,7 +16,11 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
 
     Optional<RefreshToken> findByTokenHashAndRevokedAtIsNullAndExpiresAtAfter(String tokenHash, Instant now);
 
+    Optional<RefreshToken> findByTokenHashAndRevokedAtIsNull(String tokenHash);
+
     List<RefreshToken> findAllByUserIdAndRevokedAtIsNullAndExpiresAtAfter(UUID userId, Instant now);
+
+    List<RefreshToken> findAllByUserIdAndRevokedAtIsNull(UUID userId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
