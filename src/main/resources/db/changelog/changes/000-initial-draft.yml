@@ -1,0 +1,14 @@
+databaseChangeLog:
+- changeSet:
+    id: 1775001589496-1
+    author: shaba (generated)
+    changes:
+    - dropTable:
+        tableName: audit_logs
+- changeSet:
+    id: 1775001589496-2
+    author: shaba (generated)
+    changes:
+    - dropTable:
+        tableName: platform_events
+

@@ -1,6 +1,7 @@
 package com.worknest.security.config;
 
 import com.worknest.security.filter.JwtAuthenticationFilter;
+import com.worknest.security.filter.TenantContextFilter;
 import com.worknest.security.web.RestAccessDeniedHandler;
 import com.worknest.security.web.RestAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class SecurityConfig {
 
     private final AppSecurityProperties appSecurityProperties;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final TenantContextFilter tenantContextFilter;
     private final RestAuthenticationEntryPoint authenticationEntryPoint;
     private final RestAccessDeniedHandler accessDeniedHandler;
 
@@ -50,6 +52,7 @@ public class SecurityConfig {
                 );
 
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterAfter(tenantContextFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }

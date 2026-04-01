@@ -2,6 +2,8 @@ package com.worknest.auth.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -48,6 +50,10 @@ public class RefreshToken {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "active_role_assignment_id")
     private RoleAssignment activeRoleAssignment;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "platform_access", nullable = false, length = 10)
+    private PlatformAccess platformAccess;
 
     @Column(name = "issued_at", nullable = false)
     private Instant issuedAt;

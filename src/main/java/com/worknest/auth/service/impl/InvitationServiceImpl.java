@@ -29,8 +29,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.BeanWrapper;
-import org.springframework.beans.PropertyAccessorFactory;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -96,9 +94,9 @@ public class InvitationServiceImpl implements InvitationService {
         invitation.setTokenHash(tokenHash);
         invitation.setInvitedBy(invitedBy);
         invitation.setPlatformRole(request.platformRole());
+        invitation.setPlatformAccess(resolvedPlatformAccess);
         invitation.setInvitedJobTitle(invitedJobTitle);
         invitation.setExpiresAt(expiresAt);
-        applyPlatformAccess(invitation, resolvedPlatformAccess);
 
         UserInvitation savedInvitation = userInvitationRepository.save(invitation);
 
@@ -209,9 +207,8 @@ public class InvitationServiceImpl implements InvitationService {
     private PlatformAccess resolveInvitationPlatformAccess(PlatformRole platformRole, PlatformAccess requestedPlatformAccess) {
         return switch (platformRole) {
             case EMPLOYEE -> PlatformAccess.MOBILE;
-            case ADMIN -> PlatformAccess.WEB;
+            case ADMIN, SUPERADMIN -> PlatformAccess.WEB;
             case STAFF -> requestedPlatformAccess;
-            default -> requestedPlatformAccess;
         };
     }
 
@@ -220,13 +217,6 @@ public class InvitationServiceImpl implements InvitationService {
             throw new InvalidInvitationRequestException("invitedJobTitle is required for STAFF invitations");
         }
         return StringUtils.hasText(requestedJobTitle) ? requestedJobTitle.trim() : null;
-    }
-
-    private void applyPlatformAccess(Object target, PlatformAccess platformAccess) {
-        BeanWrapper beanWrapper = PropertyAccessorFactory.forBeanPropertyAccess(target);
-        if (beanWrapper.isWritableProperty("platformAccess")) {
-            beanWrapper.setPropertyValue("platformAccess", platformAccess);
-        }
     }
 
     private Map<String, Object> buildInvitationAuditDiff(UserInvitation invitation, PlatformAccess platformAccess) {

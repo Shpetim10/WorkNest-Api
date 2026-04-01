@@ -66,6 +66,10 @@ public class UserInvitation {
     @Column(name = "platform_role", nullable = false, length = 30)
     private PlatformRole platformRole = PlatformRole.EMPLOYEE;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "platform_access", nullable = false, length = 10)
+    private PlatformAccess platformAccess = PlatformAccess.MOBILE;
+
     @Column(name = "invited_job_title", length = 255)
     private String invitedJobTitle;
 

@@ -1,14 +1,17 @@
 package com.worknest.auth.dto;
 
+import com.worknest.auth.domain.PlatformAccess;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+/**
+ * Data Transfer Object for login attempts.
+ */
 public record LoginRequest(
         @NotBlank
         @Size(max = 100)
-        @Pattern(regexp = "^[a-z0-9-]+$", message = "companySlug must contain only lowercase letters, numbers, and hyphens")
         String companySlug,
 
         @NotBlank
@@ -18,6 +21,9 @@ public record LoginRequest(
 
         @NotBlank
         @Size(max = 255)
-        String password
+        String password,
+
+        @NotNull
+        PlatformAccess platformAccess
 ) {
 }

@@ -60,6 +60,13 @@ public class RoleAssignment {
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "platform_access", nullable = false, length = 10)
+    private PlatformAccess platformAccess;
+
+    @Column(name = "mobile_feature_scope", length = 50)
+    private String mobileFeatureScope;
+
     @Column(name = "activated_at", nullable = false)
     private Instant activatedAt;
 
@@ -84,6 +91,18 @@ public class RoleAssignment {
         if (role == PlatformRole.STAFF && !StringUtils.hasText(jobTitle)) {
             throw new IllegalStateException("jobTitle is required for STAFF role assignments");
         }
+
+        // Platform-specific role constraints
+        if (platformAccess == PlatformAccess.WEB) {
+            if (role == PlatformRole.EMPLOYEE) {
+                throw new IllegalStateException("EMPLOYEE role cannot have WEB access");
+            }
+        } else if (platformAccess == PlatformAccess.MOBILE) {
+            if (role == PlatformRole.ADMIN || role == PlatformRole.SUPERADMIN) {
+                throw new IllegalStateException("ADMIN/SUPERADMIN roles cannot have MOBILE access");
+            }
+        }
+
         if (activatedAt == null) {
             activatedAt = Instant.now();
         }

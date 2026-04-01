@@ -28,7 +28,7 @@
         <liquibase.hibernate.version>4.29.2</liquibase.hibernate.version>
         <liquibase.changeLogFile>src/main/resources/db/changelog/db.changelog-master.yml</liquibase.changeLogFile>
         <liquibase.draftChangeLogFile>src/main/resources/db/changelog/changes/000-initial-draft.yml</liquibase.draftChangeLogFile>
-        <liquibase.url>jdbc:postgresql://localhost:5432/worknest_db</liquibase.url>
+        <liquibase.url>jdbc:postgresql://localhost:5432/worknest_db?currentSchema=public</liquibase.url>
         <liquibase.username>root</liquibase.username>
         <liquibase.password>root</liquibase.password>
         <postgresql.version>42.7.4</postgresql.version>
@@ -207,6 +207,7 @@
                     <url>${liquibase.url}</url>
                     <username>${liquibase.username}</username>
                     <password>${liquibase.password}</password>
+                    <driver>org.postgresql.Driver</driver>
                     <promptOnNonLocalDatabase>true</promptOnNonLocalDatabase>
                 </configuration>
             </plugin>
@@ -217,7 +218,7 @@
         <!--
           Draft generation only (Hibernate -> Liquibase changelog).
           Example:
-          mvn -Pliquibase-diff liquibase:diffChangeLog
+          mvn -Pliquibase-diff liquibase:diff
         -->
         <profile>
             <id>liquibase-diff</id>
@@ -228,11 +229,14 @@
                         <artifactId>liquibase-maven-plugin</artifactId>
                         <version>${liquibase.plugin.version}</version>
                         <configuration>
-                            <changeLogFile>${liquibase.draftChangeLogFile}</changeLogFile>
-                            <referenceUrl>hibernate:spring:com.worknest?dialect=org.hibernate.dialect.PostgreSQLDialect&amp;hibernate.physical_naming_strategy=org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy&amp;hibernate.implicit_naming_strategy=org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy</referenceUrl>
+                            <diffChangeLogFile>${liquibase.draftChangeLogFile}</diffChangeLogFile>
+
+                            <referenceUrl>hibernate:spring:com.worknest?hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect&amp;hibernate.physical_naming_strategy=org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy&amp;hibernate.implicit_naming_strategy=org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy</referenceUrl>
                             <url>${liquibase.url}</url>
                             <username>${liquibase.username}</username>
                             <password>${liquibase.password}</password>
+                            <driver>org.postgresql.Driver</driver>
+                            <defaultSchemaName>public</defaultSchemaName>
                             <diffTypes>tables,columns,indexes,primaryKeys,foreignKeys,uniqueConstraints</diffTypes>
                             <promptOnNonLocalDatabase>true</promptOnNonLocalDatabase>
                         </configuration>
@@ -246,6 +250,16 @@
                                 <groupId>org.postgresql</groupId>
                                 <artifactId>postgresql</artifactId>
                                 <version>${postgresql.version}</version>
+                            </dependency>
+                            <dependency>
+                                <groupId>org.springframework.boot</groupId>
+                                <artifactId>spring-boot-starter-data-jpa</artifactId>
+                                <version>3.4.1</version>
+                            </dependency>
+                            <dependency>
+                                <groupId>org.hibernate.validator</groupId>
+                                <artifactId>hibernate-validator</artifactId>
+                                <version>8.0.1.Final</version>
                             </dependency>
                         </dependencies>
                     </plugin>
@@ -269,8 +283,60 @@
                         <configuration>
                             <changeLogFile>${liquibase.changeLogFile}</changeLogFile>
                             <url>${liquibase.url}</url>
+
                             <username>${liquibase.username}</username>
                             <password>${liquibase.password}</password>
+                            <defaultSchemaName>public</defaultSchemaName>
+                            <promptOnNonLocalDatabase>true</promptOnNonLocalDatabase>
+                        </configuration>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.postgresql</groupId>
+                                <artifactId>postgresql</artifactId>
+                                <version>${postgresql.version}</version>
+                            </dependency>
+
+                            <dependency>
+                                <groupId>org.liquibase.ext</groupId>
+                                <artifactId>liquibase-hibernate6</artifactId> <version>${liquibase.plugin.version}</version>
+                            </dependency>
+
+                            <dependency>
+                                <groupId>org.springframework.boot</groupId>
+                                <artifactId>spring-boot-starter-data-jpa</artifactId>
+                                <version>3.4.1</version>
+                            </dependency>
+
+                            <dependency>
+                                <groupId>org.hibernate.validator</groupId>
+                                <artifactId>hibernate-validator</artifactId>
+                                <version>8.0.1.Final</version>
+                            </dependency>
+                        </dependencies>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!--
+          Mark all changes in the changelog as 'executed' in the database.
+          Use this when the database already matches the changelog (Baselining).
+          Example:
+          mvn -Pliquibase-baseline liquibase:changelogSync
+        -->
+        <profile>
+            <id>liquibase-baseline</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.liquibase</groupId>
+                        <artifactId>liquibase-maven-plugin</artifactId>
+                        <version>${liquibase.plugin.version}</version>
+                        <configuration>
+                            <changeLogFile>${liquibase.changeLogFile}</changeLogFile>
+                            <url>${liquibase.url}</url>
+                            <username>${liquibase.username}</username>
+                            <password>${liquibase.password}</password>
+                            <defaultSchemaName>public</defaultSchemaName>
                             <promptOnNonLocalDatabase>true</promptOnNonLocalDatabase>
                         </configuration>
                         <dependencies>

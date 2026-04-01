@@ -25,8 +25,6 @@ import com.worknest.auth.utility.Sha256TokenHashUtility;
 import java.time.Instant;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.BeanWrapper;
-import org.springframework.beans.PropertyAccessorFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,7 +74,7 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
         user.setDisplayName(resolveDisplayName(request.firstName(), request.lastName(), request.displayName()));
         User savedUser = userRepository.save(user);
 
-        PlatformAccess platformAccess = resolveInvitationPlatformAccess(invitation);
+        PlatformAccess platformAccess = invitation.getPlatformAccess();
         RoleAssignment roleAssignment = new RoleAssignment();
         roleAssignment.setCompany(invitation.getCompany());
         roleAssignment.setUser(savedUser);
@@ -85,7 +83,7 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
         roleAssignment.setIsActive(true);
         roleAssignment.setActivatedAt(now);
         roleAssignment.setCreatedBy(invitation.getInvitedBy());
-        applyPlatformAccess(roleAssignment, platformAccess);
+        roleAssignment.setPlatformAccess(platformAccess);
         RoleAssignment savedRoleAssignment = roleAssignmentRepository.save(roleAssignment);
 
         invitation.setUsedAt(now);
@@ -176,29 +174,5 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
             return requestedDisplayName.trim();
         }
         return (firstName.trim() + " " + lastName.trim()).trim();
-    }
-
-    private PlatformAccess resolveInvitationPlatformAccess(UserInvitation invitation) {
-        BeanWrapper beanWrapper = PropertyAccessorFactory.forBeanPropertyAccess(invitation);
-        if (beanWrapper.isReadableProperty("platformAccess")) {
-            Object value = beanWrapper.getPropertyValue("platformAccess");
-            if (value instanceof PlatformAccess platformAccess) {
-                return platformAccess;
-            }
-        }
-
-        return switch (invitation.getPlatformRole()) {
-            case EMPLOYEE -> PlatformAccess.MOBILE;
-            case ADMIN -> PlatformAccess.WEB;
-            case STAFF -> PlatformAccess.WEB;
-            default -> PlatformAccess.WEB;
-        };
-    }
-
-    private void applyPlatformAccess(RoleAssignment roleAssignment, PlatformAccess platformAccess) {
-        BeanWrapper beanWrapper = PropertyAccessorFactory.forBeanPropertyAccess(roleAssignment);
-        if (beanWrapper.isWritableProperty("platformAccess")) {
-            beanWrapper.setPropertyValue("platformAccess", platformAccess);
-        }
     }
 }

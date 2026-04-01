@@ -23,8 +23,6 @@ import com.worknest.auth.repository.UserRepository;
 import java.time.Instant;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.BeanWrapper;
-import org.springframework.beans.PropertyAccessorFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -111,7 +109,7 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
         adminRoleAssignment.setIsActive(true);
         adminRoleAssignment.setActivatedAt(Instant.now());
         adminRoleAssignment.setCreatedBy(null);
-        applyPlatformAccess(adminRoleAssignment, PlatformAccess.WEB);
+        adminRoleAssignment.setPlatformAccess(PlatformAccess.WEB);
 
         RoleAssignment savedRoleAssignment = roleAssignmentRepository.save(adminRoleAssignment);
 
@@ -197,12 +195,5 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
 
     private String buildDisplayName(String firstName, String lastName) {
         return (firstName.trim() + " " + lastName.trim()).trim();
-    }
-
-    private void applyPlatformAccess(RoleAssignment roleAssignment, PlatformAccess platformAccess) {
-        BeanWrapper beanWrapper = PropertyAccessorFactory.forBeanPropertyAccess(roleAssignment);
-        if (beanWrapper.isWritableProperty("platformAccess")) {
-            beanWrapper.setPropertyValue("platformAccess", platformAccess);
-        }
     }
 }
