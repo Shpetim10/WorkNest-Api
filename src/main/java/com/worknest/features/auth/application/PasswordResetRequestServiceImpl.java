@@ -12,9 +12,11 @@ import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.auth.application.PasswordResetRequestService;
 import com.worknest.features.auth.utility.SecureTokenGenerator;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
+import com.worknest.features.notification.email.service.PasswordResetEmailService;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -31,6 +33,10 @@ public class PasswordResetRequestServiceImpl implements PasswordResetRequestServ
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final SecureTokenGenerator secureTokenGenerator;
     private final Sha256TokenHashUtility sha256TokenHashUtility;
+    private final PasswordResetEmailService passwordResetEmailService;
+
+    @Value("${app.frontend.reset-password-link-base:https://app.worknest.local/reset-password}")
+    private String resetPasswordLinkBase;
 
     @Override
     @Transactional
@@ -46,10 +52,10 @@ public class PasswordResetRequestServiceImpl implements PasswordResetRequestServ
 
         companyRepository.findBySlugIgnoreCase(normalizedCompanySlug)
                 .filter(this::isCompanyActive)
-                .flatMap(company -> findActiveUser(company, normalizedEmail))
-                .ifPresent(this::createResetToken);
+                .ifPresent(company -> findActiveUser(company, normalizedEmail)
+                        .ifPresent(user -> createResetToken(company, user)));
 
-        // TODO: Publish password-reset-requested audit/platform event and hand off raw token to notification flow.
+        // TODO: Publish password-reset-requested audit/platform event.
     }
 
     private java.util.Optional<User> findActiveUser(Company company, String normalizedEmail) {
@@ -61,8 +67,10 @@ public class PasswordResetRequestServiceImpl implements PasswordResetRequestServ
         return company.getStatus() == CompanyStatus.ACTIVE && company.getDeletedAt() == null;
     }
 
-    private void createResetToken(User user) {
+    private void createResetToken(Company company, User user) {
         Instant now = Instant.now();
+        invalidateOutstandingTokens(user, now);
+
         String rawToken = secureTokenGenerator.generateToken();
 
         PasswordResetToken resetToken = new PasswordResetToken();
@@ -70,5 +78,13 @@ public class PasswordResetRequestServiceImpl implements PasswordResetRequestServ
         resetToken.setTokenHash(sha256TokenHashUtility.hash(rawToken));
         resetToken.setExpiresAt(now.plusSeconds(PASSWORD_RESET_EXPIRY_SECONDS));
         passwordResetTokenRepository.save(resetToken);
+
+        String resetLink = resetPasswordLinkBase + "?token=" + rawToken;
+        passwordResetEmailService.sendPasswordResetEmail(company, user, resetLink);
+    }
+
+    private void invalidateOutstandingTokens(User user, Instant now) {
+        passwordResetTokenRepository.findAllByUserIdAndUsedAtIsNull(user.getId())
+                .forEach(token -> token.setUsedAt(now));
     }
 }

@@ -58,10 +58,15 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         validatePassword(request.newPassword(), user.getEmail());
 
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        user.setFailedLoginCount((short) 0);
+        user.setLockedUntil(null);
         userRepository.save(user);
 
         resetToken.setUsedAt(now);
         passwordResetTokenRepository.save(resetToken);
+
+        passwordResetTokenRepository.findAllByUserIdAndUsedAtIsNull(user.getId())
+                .forEach(token -> token.setUsedAt(now));
 
         refreshTokenRepository.revokeAllActiveByUserId(user.getId(), now, PASSWORD_RESET_REVOKE_REASON);
 

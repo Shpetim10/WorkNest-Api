@@ -66,6 +66,7 @@ springdoc:
 app:
   frontend:
     activation-link-base: ${APP_FRONTEND_ACTIVATION_LINK_BASE:https://app.worknest.local/activate-invitation}
+    reset-password-link-base: ${APP_FRONTEND_RESET_PASSWORD_LINK_BASE:https://app.worknest.local/reset-password}
   media:
     local-root: ${APP_MEDIA_LOCAL_ROOT:storage/media}
   mail:

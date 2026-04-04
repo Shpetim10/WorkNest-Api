@@ -26,6 +26,9 @@ public record RefreshTokenResponse(
         TenantContextDto tenantContext,
 
         @Schema(description = "Expiration timestamp of the new access token")
-        Instant expiresAt
+        Instant accessTokenExpiresAt,
+
+        @Schema(description = "Expiration timestamp of the new refresh token")
+        Instant refreshTokenExpiresAt
 ) {
 }

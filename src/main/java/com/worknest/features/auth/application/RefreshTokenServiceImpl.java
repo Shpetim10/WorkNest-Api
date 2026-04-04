@@ -96,6 +96,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                 activeRoleAssignment.getId(),
                 existingToken.getPlatformAccess(),
                 toTenantContext(activeRoleAssignment.getCompany()),
+                accessTokenExpiresAt,
                 refreshTokenExpiresAt
         );
     }
