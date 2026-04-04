@@ -1,0 +1,26 @@
+package com.worknest.features.media.application;
+
+import com.worknest.domain.enums.MediaCategory;
+import com.worknest.features.media.dto.MediaUploadResponse;
+import java.util.UUID;
+import org.springframework.web.multipart.MultipartFile;
+
+public interface MediaStorageService {
+
+    MediaUploadResponse upload(
+            UUID companyId,
+            UUID userId,
+            MediaCategory category,
+            MultipartFile file
+    );
+
+    MediaUploadResponse uploadPublic(
+            MediaCategory category,
+            MultipartFile file
+    );
+
+    MediaUploadResponse promoteLogo(
+            String logoKey,
+            UUID companyId
+    );
+}

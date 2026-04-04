@@ -1,9 +1,9 @@
 package com.worknest.security.service;
 
-import com.worknest.auth.domain.PlatformAccess;
-import com.worknest.auth.domain.PlatformRole;
-import com.worknest.auth.domain.RoleAssignment;
-import com.worknest.auth.domain.User;
+import com.worknest.domain.enums.PlatformAccess;
+import com.worknest.domain.enums.PlatformRole;
+import com.worknest.domain.entities.RoleAssignment;
+import com.worknest.domain.entities.User;
 import com.worknest.security.AuthSessionPrincipal;
 import io.jsonwebtoken.Claims;
 import com.worknest.security.config.JwtProperties;

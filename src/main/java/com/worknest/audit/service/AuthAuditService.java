@@ -2,8 +2,8 @@ package com.worknest.audit.service;
 
 import com.worknest.audit.service.model.AuthAuditActorContext;
 import com.worknest.audit.service.model.AuthSessionContext;
-import com.worknest.auth.domain.PlatformAccess;
-import com.worknest.auth.domain.PlatformRole;
+import com.worknest.domain.enums.PlatformAccess;
+import com.worknest.domain.enums.PlatformRole;
 import java.time.Instant;
 import java.util.UUID;
 

@@ -1,0 +1,112 @@
+package com.worknest.domain.entities;
+
+import com.worknest.domain.enums.*;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
+import lombok.Getter;
+import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import org.springframework.util.StringUtils;
+
+@Getter
+@Setter
+@Entity
+@Table(
+        name = "role_assignments",
+        indexes = {
+                @Index(name = "idx_role_assignments_user_active", columnList = "user_id,is_active"),
+                @Index(name = "idx_role_assignments_company_role_active", columnList = "company_id,role,is_active")
+        }
+)
+@EntityListeners(AuditingEntityListener.class)
+public class RoleAssignment {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "id", nullable = false, updatable = false)
+    private UUID id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role", nullable = false, length = 30)
+    private PlatformRole role;
+
+    @Column(name = "job_title", length = 255)
+    private String jobTitle;
+
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "platform_access", nullable = false, length = 10)
+    private PlatformAccess platformAccess;
+
+    @Column(name = "mobile_feature_scope", length = 50)
+    private String mobileFeatureScope;
+
+    @Column(name = "activated_at", nullable = false)
+    private Instant activatedAt;
+
+    @Column(name = "deactivated_at")
+    private Instant deactivatedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by")
+    private User createdBy;
+
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    @PrePersist
+    @PreUpdate
+    void validateBusinessRules() {
+        if (role == PlatformRole.STAFF && !StringUtils.hasText(jobTitle)) {
+            throw new IllegalStateException("jobTitle is required for STAFF role assignments");
+        }
+
+        // Platform-specific role constraints
+        if (platformAccess == PlatformAccess.WEB) {
+            if (role == PlatformRole.EMPLOYEE) {
+                throw new IllegalStateException("EMPLOYEE role cannot have WEB access");
+            }
+        } else if (platformAccess == PlatformAccess.MOBILE) {
+            if (role == PlatformRole.ADMIN || role == PlatformRole.SUPERADMIN) {
+                throw new IllegalStateException("ADMIN/SUPERADMIN roles cannot have MOBILE access");
+            }
+        }
+
+        if (activatedAt == null) {
+            activatedAt = Instant.now();
+        }
+    }
+}

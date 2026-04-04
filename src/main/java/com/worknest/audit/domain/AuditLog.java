@@ -1,6 +1,6 @@
 package com.worknest.audit.domain;
 
-import com.worknest.auth.domain.PlatformRole;
+import com.worknest.domain.enums.PlatformRole;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

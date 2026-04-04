@@ -1,7 +1,7 @@
 package com.worknest.tenant;
 
-import com.worknest.auth.domain.PlatformAccess;
-import com.worknest.auth.domain.PlatformRole;
+import com.worknest.domain.enums.PlatformAccess;
+import com.worknest.domain.enums.PlatformRole;
 import java.util.UUID;
 
 public record TenantSessionContext(

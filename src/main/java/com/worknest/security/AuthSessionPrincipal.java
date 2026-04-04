@@ -1,7 +1,7 @@
 package com.worknest.security;
 
-import com.worknest.auth.domain.PlatformAccess;
-import com.worknest.auth.domain.PlatformRole;
+import com.worknest.domain.enums.PlatformAccess;
+import com.worknest.domain.enums.PlatformRole;
 import com.worknest.tenant.TenantSessionContext;
 import java.security.Principal;
 import java.util.UUID;
