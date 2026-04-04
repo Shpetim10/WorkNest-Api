@@ -12,5 +12,9 @@ public enum PlatformAccess {
     /**
      * Access via web applications.
      */
-    WEB
+    WEB,
+    /**
+     * Access via both.
+     */
+    BOTH;
 }

@@ -45,6 +45,11 @@ public class PasswordResetController {
             description = "Invalid request format (e.g., invalid email pattern)",
             content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
     )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "500",
+            description = "Internal server error during password reset request",
+            content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
+    )
     public ResponseEntity<ApiResponse<GenericMessageResponse>> forgotPassword(
             @RequestBody @Valid ForgotPasswordRequest request,
             HttpServletRequest servletRequest
@@ -69,6 +74,11 @@ public class PasswordResetController {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "400",
             description = "Token is invalid, expired, or has already been used. Also returned if the new password does not meet security requirements.",
+            content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "500",
+            description = "Internal server error during password reset execution",
             content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
     )
     public ResponseEntity<ApiResponse<GenericMessageResponse>> resetPassword(

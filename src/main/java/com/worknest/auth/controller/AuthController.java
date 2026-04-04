@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
-@Tag(name = "Authentication", description = "Endpoints for managing user sessions, including primary login and multi-role selection.")
+@Tag(name = "Authentication", description = "Endpoints for user session management, including login, role selection, and token rotation.")
 public class AuthController {
 
     private final AuthLoginService authLoginService;
@@ -42,6 +42,11 @@ public class AuthController {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "400",
             description = "Validation failure (e.g., malformed email)",
+            content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "500",
+            description = "Internal server error during authentication",
             content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
     )
     public ResponseEntity<ApiResponse<LoginResponse>> login(

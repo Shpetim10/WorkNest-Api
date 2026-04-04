@@ -33,6 +33,7 @@ build/
 .project
 .settings/
 .sts4-cache
+.m2repo
 
 # VS Code
 .vscode/

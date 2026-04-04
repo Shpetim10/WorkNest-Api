@@ -6,23 +6,32 @@ import com.worknest.audit.service.AuditLogService;
 import com.worknest.audit.service.PlatformEventService;
 import com.worknest.auth.domain.Company;
 import com.worknest.auth.domain.CompanyStatus;
+import com.worknest.auth.domain.InvitationKind;
 import com.worknest.auth.domain.PlatformAccess;
 import com.worknest.auth.domain.PlatformRole;
 import com.worknest.auth.domain.RoleAssignment;
+import com.worknest.auth.domain.SubscriptionPlan;
+import com.worknest.auth.domain.SubscriptionStatus;
 import com.worknest.auth.domain.User;
+import com.worknest.auth.domain.UserInvitation;
 import com.worknest.auth.domain.UserStatus;
 import com.worknest.auth.dto.CompanyRegistrationRequest;
 import com.worknest.auth.dto.CompanyRegistrationResponse;
-import com.worknest.auth.service.CompanyRegistrationService;
 import com.worknest.auth.exception.AdminEmailAlreadyExistsException;
 import com.worknest.auth.exception.CompanySlugAlreadyExistsException;
 import com.worknest.auth.exception.InvalidRegistrationDataException;
 import com.worknest.auth.repository.CompanyRepository;
 import com.worknest.auth.repository.RoleAssignmentRepository;
+import com.worknest.auth.repository.UserInvitationRepository;
 import com.worknest.auth.repository.UserRepository;
+import com.worknest.auth.service.CompanyRegistrationService;
+import com.worknest.auth.service.InvitationEmailService;
+import com.worknest.auth.utility.SecureTokenGenerator;
+import com.worknest.auth.utility.Sha256TokenHashUtility;
 import java.time.Instant;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -37,11 +46,17 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
     private static final String DEFAULT_DATE_FORMAT = "DD/MM/YYYY";
     private static final String DEFAULT_COUNTRY_CODE = "AL";
     private static final String DEFAULT_PREFERRED_LANGUAGE = "sq";
-    private static final String DEFAULT_SUBSCRIPTION_STATUS = "trial";
+
+    @Value("${app.frontend.activation-link-base:https://app.worknest.local/activate-invitation}")
+    private String activationLinkBase;
 
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
+    private final UserInvitationRepository userInvitationRepository;
+    private final SecureTokenGenerator secureTokenGenerator;
+    private final Sha256TokenHashUtility sha256TokenHashUtility;
+    private final InvitationEmailService invitationEmailService;
     private final AuditLogService auditLogService;
     private final PlatformEventService platformEventService;
 
@@ -52,34 +67,34 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
 
         String normalizedSlug = request.slug().trim().toLowerCase();
         String normalizedAdminEmail = request.adminEmail().trim().toLowerCase();
-        String normalizedPrimaryEmail = normalizeRequiredEmail(request.primaryEmail());
+        String normalizedPrimaryEmail = request.primaryEmail().trim().toLowerCase();
 
+        // Uniqueness checks
         if (companyRepository.existsBySlugIgnoreCaseAndDeletedAtIsNull(normalizedSlug)) {
             throw new CompanySlugAlreadyExistsException(normalizedSlug);
         }
 
+        // 1. Persist Company (PENDING until admin activates invitation)
         Company company = new Company();
         company.setName(request.companyName().trim());
-        company.setLegalName(trimToNull(request.legalName()));
         company.setSlug(normalizedSlug);
-        company.setStatus(CompanyStatus.ACTIVE);
+        company.setStatus(CompanyStatus.PENDING);
         company.setNipt(trimToNull(request.nipt()));
-        company.setRegistrationNumber(trimToNull(request.registrationNumber()));
-        company.setVatNumber(trimToNull(request.vatNumber()));
-        company.setPrimaryEmail(normalizedPrimaryEmail);
-        company.setPrimaryPhone(trimToNull(request.primaryPhone()));
-        company.setWebsite(trimToNull(request.website()));
+        company.setEmail(normalizedPrimaryEmail);
+        company.setPhoneNumber(trimToNull(request.primaryPhone()));
         company.setCountryCode(defaultIfBlank(request.countryCode(), DEFAULT_COUNTRY_CODE).toUpperCase());
         company.setTimezone(defaultIfBlank(request.timezone(), DEFAULT_TIMEZONE));
         company.setLocale(defaultIfBlank(request.locale(), DEFAULT_LOCALE));
         company.setCurrency(defaultIfBlank(request.currency(), DEFAULT_CURRENCY));
         company.setDateFormat(defaultIfBlank(request.dateFormat(), DEFAULT_DATE_FORMAT));
         company.setOnboardingCompletedAt(null);
-        company.setSubscriptionStatus(DEFAULT_SUBSCRIPTION_STATUS);
+        company.setSubscriptionPlan(SubscriptionPlan.BASIC);
+        company.setSubscriptionStatus(SubscriptionStatus.TRIAL);
         company.setDataRetentionDays(90);
 
         Company savedCompany = companyRepository.save(company);
 
+        // 2. Create admin User (no password — awaiting invitation activation)
         if (userRepository.existsByCompanyIdAndEmailIgnoreCase(savedCompany.getId(), normalizedAdminEmail)) {
             throw new AdminEmailAlreadyExistsException(normalizedAdminEmail);
         }
@@ -89,9 +104,10 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
         adminUser.setEmail(normalizedAdminEmail);
         adminUser.setPasswordHash(null);
         adminUser.setStatus(UserStatus.PENDING);
-        adminUser.setFirstName(request.adminFirstName().trim());
-        adminUser.setLastName(request.adminLastName().trim());
+        adminUser.setFirstName(trimToEmpty(request.adminFirstName()));
+        adminUser.setLastName(trimToEmpty(request.adminLastName()));
         adminUser.setDisplayName(buildDisplayName(request.adminFirstName(), request.adminLastName()));
+        adminUser.setPhoneNumber(trimToNull(request.adminPhoneNumber()));
         adminUser.setPreferredLanguage(defaultIfBlank(request.preferredLanguage(), DEFAULT_PREFERRED_LANGUAGE));
         adminUser.setTimezoneOverride(null);
         adminUser.setFailedLoginCount((short) 0);
@@ -99,26 +115,48 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
 
         User savedAdminUser = userRepository.save(adminUser);
 
-        savedCompany.setOwnerUserId(savedAdminUser.getId());
-        savedCompany = companyRepository.save(savedCompany);
-
+        // 3. Create RoleAssignment for ADMIN
         RoleAssignment adminRoleAssignment = new RoleAssignment();
         adminRoleAssignment.setCompany(savedCompany);
         adminRoleAssignment.setUser(savedAdminUser);
         adminRoleAssignment.setRole(PlatformRole.ADMIN);
-        adminRoleAssignment.setIsActive(true);
-        adminRoleAssignment.setActivatedAt(Instant.now());
-        adminRoleAssignment.setCreatedBy(null);
+        adminRoleAssignment.setIsActive(false);
         adminRoleAssignment.setPlatformAccess(PlatformAccess.WEB);
 
         RoleAssignment savedRoleAssignment = roleAssignmentRepository.save(adminRoleAssignment);
 
+        // 4. Issue INITIAL_ADMIN_ACTIVATION invitation
+        String rawActivationToken = secureTokenGenerator.generateToken();
+        UserInvitation adminInvitation = new UserInvitation();
+        adminInvitation.setCompany(savedCompany);
+        adminInvitation.setUser(savedAdminUser);
+        adminInvitation.setEmail(normalizedAdminEmail);
+        adminInvitation.setTokenHash(sha256TokenHashUtility.hash(rawActivationToken));
+        adminInvitation.setInvitedBy(null);
+        adminInvitation.setPlatformRole(PlatformRole.ADMIN);
+        adminInvitation.setPlatformAccess(PlatformAccess.WEB);
+        adminInvitation.setInvitationKind(InvitationKind.INITIAL_ADMIN_ACTIVATION);
+        adminInvitation.setInvitedJobTitle(null);
+
+        UserInvitation savedInvitation = userInvitationRepository.save(adminInvitation);
+
+        // The raw token is dispatched via email — not returned in the response body.
+        String activationLink = activationLinkBase + "?token=" + rawActivationToken;
+        invitationEmailService.sendInvitationEmail(
+                savedCompany,
+                normalizedAdminEmail,
+                savedAdminUser.getDisplayName(),
+                PlatformRole.ADMIN,
+                InvitationKind.INITIAL_ADMIN_ACTIVATION,
+                activationLink);
+
+        // ── 5. Emit platform events & audit ───────────────────────────────────────
         platformEventService.publishEvent(new PlatformEvent(
                 "COMPANY_REGISTERED",
                 savedCompany.getId(),
                 savedCompany.getName(),
                 savedAdminUser.getId(),
-                "Company workspace registered and initial admin account prepared for activation"
+                "Company workspace registered — admin activation invitation dispatched"
         ));
 
         auditLogService.logAction(new AuditLog(
@@ -139,7 +177,9 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
                 Map.of(
                         "adminUserId", savedAdminUser.getId(),
                         "adminRoleAssignmentId", savedRoleAssignment.getId(),
-                        "workspaceCreated", true
+                        "adminInvitationId", savedInvitation.getId(),
+                        "workspaceCreated", true,
+                        "activationEmailDispatched", true
                 ),
                 null
         ));
@@ -148,11 +188,15 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
                 savedCompany.getId(),
                 savedAdminUser.getId(),
                 savedRoleAssignment.getId(),
+                savedInvitation.getId(),
                 savedCompany.getStatus(),
-                savedCompany.getOnboardingCompletedAt() != null,
-                "Company registered successfully"
+                false,
+                true,
+                "Company registered successfully. An activation invitation has been sent to " + normalizedAdminEmail + "."
         );
     }
+
+    // ── Validation ────────────────────────────────────────────────────────────────
 
     private void validateRequest(CompanyRegistrationRequest request) {
         if (request == null) {
@@ -167,11 +211,11 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
         if (!request.slug().trim().matches("^[a-z0-9-]+$")) {
             throw new InvalidRegistrationDataException("slug must contain only lowercase letters, numbers, and hyphens");
         }
-        if (!StringUtils.hasText(request.adminEmail())) {
-            throw new InvalidRegistrationDataException("adminEmail is required");
-        }
         if (!StringUtils.hasText(request.primaryEmail())) {
             throw new InvalidRegistrationDataException("primaryEmail is required");
+        }
+        if (!StringUtils.hasText(request.adminEmail())) {
+            throw new InvalidRegistrationDataException("adminEmail is required");
         }
         if (!StringUtils.hasText(request.adminFirstName())) {
             throw new InvalidRegistrationDataException("adminFirstName is required");
@@ -181,19 +225,21 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
         }
     }
 
+    // ── Helpers ───────────────────────────────────────────────────────────────────
+
     private String defaultIfBlank(String value, String defaultValue) {
         return StringUtils.hasText(value) ? value.trim() : defaultValue;
-    }
-
-    private String normalizeRequiredEmail(String email) {
-        return email.trim().toLowerCase();
     }
 
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 
+    private String trimToEmpty(String value) {
+        return StringUtils.hasText(value) ? value.trim() : "";
+    }
+
     private String buildDisplayName(String firstName, String lastName) {
-        return (firstName.trim() + " " + lastName.trim()).trim();
+        return (trimToEmpty(firstName) + " " + trimToEmpty(lastName)).trim();
     }
 }

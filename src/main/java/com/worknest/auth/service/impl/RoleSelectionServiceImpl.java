@@ -20,6 +20,7 @@ import com.worknest.auth.utility.Sha256TokenHashUtility;
 import com.worknest.security.config.JwtProperties;
 import com.worknest.security.service.JwtService;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -55,11 +56,11 @@ public class RoleSelectionServiceImpl implements RoleSelectionService {
                 request.platformAccess()
         );
 
-        User user = userRepository.findById(userUuid)
+        User user = userRepository.findById(Objects.requireNonNull(userUuid))
                 .orElseThrow(() -> new AuthenticationFailedException("USER_NOT_FOUND", "Authenticated user was not found"));
         validateUser(user);
 
-        RoleAssignment assignment = roleAssignmentRepository.findById(request.roleAssignmentId())
+        RoleAssignment assignment = roleAssignmentRepository.findById(Objects.requireNonNull(request.roleAssignmentId()))
                 .orElseThrow(() -> new AuthenticationFailedException("ROLE_ASSIGNMENT_NOT_FOUND", "Role assignment was not found"));
 
         validateAssignmentOwnership(assignment, userUuid);

@@ -3,6 +3,7 @@ package com.worknest.auth.repository;
 import com.worknest.auth.domain.User;
 import com.worknest.auth.domain.UserStatus;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -48,4 +49,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     boolean existsByCompany_SlugIgnoreCaseAndEmailIgnoreCase(String companySlug, String email);
 
     boolean existsByCompany_SlugIgnoreCaseAndUsernameIgnoreCase(String companySlug, String username);
+
+    List<User> findAllByCompanyIdAndIdIn(UUID companyId, Collection<UUID> userIds);
 }

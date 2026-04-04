@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
-@Tag(name = "Authentication")
+@Tag(name = "Authentication", description = "Endpoints for user session management, including login, role selection, and token rotation.")
 public class RefreshTokenController {
 
     private final RefreshTokenService refreshTokenService;
@@ -41,6 +41,11 @@ public class RefreshTokenController {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "400",
             description = "Malformed refresh request",
+            content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "500",
+            description = "Internal server error during token rotation",
             content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
     )
     public ResponseEntity<ApiResponse<RefreshTokenResponse>> refresh(

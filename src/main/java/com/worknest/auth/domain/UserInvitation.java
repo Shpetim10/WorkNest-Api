@@ -33,6 +33,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         },
         indexes = {
                 @Index(name = "idx_user_invitations_company_email", columnList = "company_id,email"),
+                @Index(name = "idx_user_invitations_user", columnList = "user_id"),
                 @Index(name = "idx_user_invitations_expires_at", columnList = "expires_at"),
                 @Index(name = "idx_user_invitations_used_at", columnList = "used_at")
         }
@@ -48,6 +49,10 @@ public class UserInvitation {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 
     @Column(name = "email", nullable = false, length = 255)
     private String email;
@@ -69,6 +74,10 @@ public class UserInvitation {
     @Enumerated(EnumType.STRING)
     @Column(name = "platform_access", nullable = false, length = 10)
     private PlatformAccess platformAccess = PlatformAccess.MOBILE;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "invitation_kind", nullable = false, length = 50)
+    private InvitationKind invitationKind = InvitationKind.EMPLOYEE_INVITATION;
 
     @Column(name = "invited_job_title", length = 255)
     private String invitedJobTitle;

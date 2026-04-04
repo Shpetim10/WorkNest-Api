@@ -72,17 +72,14 @@ public class User {
     @Column(name = "display_name", length = 150)
     private String displayName;
 
-    @Column(name = "profile_image_s3_key", length = 500)
-    private String profileImageS3Key;
+    @Column(name = "profile_image_key", length = 500)
+    private String profileImageKey;
 
-    @Column(name = "phone_primary", length = 50)
-    private String phonePrimary;
+    @Column(name = "profile_image_path", length = 1000)
+    private String profileImagePath;
 
-    @Column(name = "phone_secondary", length = 50)
-    private String phoneSecondary;
-
-    @Column(name = "personal_email", length = 255)
-    private String personalEmail;
+    @Column(name = "phone_number", length = 50)
+    private String phoneNumber;
 
     @Column(name = "preferred_language", nullable = false, length = 10)
     private String preferredLanguage = "sq";

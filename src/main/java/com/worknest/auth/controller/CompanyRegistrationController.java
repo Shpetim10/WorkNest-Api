@@ -20,25 +20,46 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/companies")
 @RequiredArgsConstructor
-@Tag(name = "Company Registration", description = "Endpoints for onboarding new companies and their initial settings")
+@Tag(name = "Company Registration", description = "Step 1 of the business onboarding flow")
 public class CompanyRegistrationController {
 
     private final CompanyRegistrationService companyRegistrationService;
 
     @PostMapping("/register")
     @Operation(
-            summary = "Register a new company",
-            description = "Creates a new company and its initial administrator user. This is the first step in onboarding."
+            summary = "Register a new company workspace",
+            description = """
+                    **Step 1 of 2 in the business onboarding flow.**
+
+                    Creates the company workspace and an initial admin user, both in `PENDING` status.
+                    A secure activation invitation is dispatched via e-mail to `adminEmail`.
+
+                    The admin must complete Step 2 (`POST /api/v1/auth/invitations/activate`) to:
+                    - set their account password
+                    - accept the Terms of Service / GDPR consent
+                    - transition the company to `ACTIVE`
+
+                    The raw activation token is **never** returned in this response body —
+                    it travels exclusively via the invitation e-mail.
+                    """
     )
-    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Company registered successfully")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "201",
+            description = "Company workspace created and activation invitation dispatched"
+    )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "400",
-            description = "Invalid registration data",
+            description = "Validation error — missing or invalid fields",
             content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "409",
-            description = "Company with this email or name already exists",
+            description = "A company with this slug already exists",
+            content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "500",
+            description = "Internal server error during company registration",
             content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
     )
     public ResponseEntity<ApiResponse<CompanyRegistrationResponse>> registerCompany(

@@ -4,6 +4,7 @@ import com.worknest.auth.dto.SelectRoleRequest;
 import com.worknest.auth.dto.SelectRoleResponse;
 import com.worknest.auth.service.RoleSelectionService;
 import com.worknest.common.api.ApiResponse;
+import com.worknest.security.AuthSessionPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -21,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
-@Tag(name = "Authentication")
+@Tag(name = "Authentication", description = "Endpoints for user session management, including login, role selection, and token rotation.")
 public class RoleSelectionController {
 
     private final RoleSelectionService roleSelectionService;
@@ -44,15 +45,25 @@ public class RoleSelectionController {
             description = "Invalid role selection or context (e.g., user is not associated with the requested company)",
             content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
     )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "500",
+            description = "Internal server error during role selection",
+            content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
+    )
     public ResponseEntity<ApiResponse<SelectRoleResponse>> selectRole(
             @RequestBody @Valid SelectRoleRequest request,
             Principal principal,
             HttpServletRequest servletRequest
     ) {
-        String userId = principal.getName();
+        AuthSessionPrincipal sessionPrincipal = (AuthSessionPrincipal) principal;
         String ipAddress = servletRequest.getRemoteAddr();
         String userAgent = servletRequest.getHeader("User-Agent");
-        SelectRoleResponse response = roleSelectionService.selectRole(request, userId, ipAddress, userAgent);
+        SelectRoleResponse response = roleSelectionService.selectRole(
+                request,
+                sessionPrincipal.userId().toString(),
+                ipAddress,
+                userAgent
+        );
         return ResponseEntity.ok(ApiResponse.success("Role selected successfully", response));
     }
 }

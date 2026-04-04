@@ -4,19 +4,15 @@ import com.worknest.audit.domain.AuditLog;
 import com.worknest.audit.domain.PlatformEvent;
 import com.worknest.audit.service.AuditLogService;
 import com.worknest.audit.service.PlatformEventService;
-import com.worknest.auth.domain.PlatformAccess;
-import com.worknest.auth.domain.PlatformRole;
-import com.worknest.auth.domain.RoleAssignment;
-import com.worknest.auth.domain.User;
-import com.worknest.auth.domain.UserInvitation;
-import com.worknest.auth.domain.UserStatus;
+import com.worknest.auth.domain.*;
 import com.worknest.auth.dto.ActivateInvitationRequest;
 import com.worknest.auth.dto.ActivateInvitationResponse;
+import com.worknest.auth.exception.InvalidRegistrationDataException;
 import com.worknest.auth.exception.InvitationAlreadyUsedException;
-import com.worknest.auth.exception.InvalidInvitationRequestException;
 import com.worknest.auth.exception.InvitationTokenExpiredException;
 import com.worknest.auth.exception.InvitationTokenInvalidException;
 import com.worknest.auth.exception.WeakPasswordException;
+import com.worknest.auth.repository.CompanyRepository;
 import com.worknest.auth.repository.RoleAssignmentRepository;
 import com.worknest.auth.repository.UserInvitationRepository;
 import com.worknest.auth.repository.UserRepository;
@@ -36,6 +32,7 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
 
     private final UserInvitationRepository userInvitationRepository;
     private final UserRepository userRepository;
+    private final CompanyRepository companyRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final Sha256TokenHashUtility sha256TokenHashUtility;
     private final PasswordEncoder passwordEncoder;
@@ -44,11 +41,12 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
 
     @Override
     @Transactional
-    public ActivateInvitationResponse activateInvitation(ActivateInvitationRequest request) {
+    public ActivateInvitationResponse activateInvitation(ActivateInvitationRequest request, String clientIp) {
         validateRequest(request);
 
         Instant now = Instant.now();
         String tokenHash = sha256TokenHashUtility.hash(request.token());
+
         UserInvitation invitation = userInvitationRepository.findByTokenHash(tokenHash)
                 .orElseThrow(InvitationTokenInvalidException::new);
 
@@ -59,36 +57,54 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
             throw new InvitationTokenExpiredException();
         }
 
-        User user = userRepository.findByCompanyIdAndEmailIgnoreCase(
-                        invitation.getCompany().getId(),
-                        invitation.getEmail()
-                )
-                .orElseThrow(InvitationTokenInvalidException::new);
+        boolean isInitialAdminActivation = InvitationKind.INITIAL_ADMIN_ACTIVATION
+                .equals(invitation.getInvitationKind());
+
+        // GDPR consent is mandatory for the initial admin (accepting on behalf of the company)
+        if (isInitialAdminActivation && !Boolean.TRUE.equals(request.gdprConsent())) {
+            throw new InvalidRegistrationDataException(
+                    "GDPR / Terms of Service consent is required to complete company registration");
+        }
+
+        User user = invitation.getUser();
 
         validatePassword(request.password(), user.getEmail());
 
+        // Activate user
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setStatus(UserStatus.ACTIVE);
-        user.setFirstName(request.firstName().trim());
-        user.setLastName(request.lastName().trim());
-        user.setDisplayName(resolveDisplayName(request.firstName(), request.lastName(), request.displayName()));
+        user.setPreferredLanguage(resolveLanguage(request.preferredLanguage(), user.getPreferredLanguage()));
+        user.setPhoneNumber(trimToNull(request.phoneNumber()));
+        user.setProfileImageKey(trimToNull(request.profileImageStorageKey()));
+        user.setProfileImagePath(trimToNull(request.profileImageStoragePath()));
+
+        // Record GDPR consent when provided
+        if (Boolean.TRUE.equals(request.gdprConsent())) {
+            user.setGdprConsentAt(now);
+            user.setGdprConsentIp(trimToNull(clientIp));
+        }
+
         User savedUser = userRepository.save(user);
 
-        PlatformAccess platformAccess = invitation.getPlatformAccess();
-        RoleAssignment roleAssignment = new RoleAssignment();
-        roleAssignment.setCompany(invitation.getCompany());
-        roleAssignment.setUser(savedUser);
-        roleAssignment.setRole(invitation.getPlatformRole());
-        roleAssignment.setJobTitle(resolveJobTitle(invitation));
-        roleAssignment.setIsActive(true);
-        roleAssignment.setActivatedAt(now);
-        roleAssignment.setCreatedBy(invitation.getInvitedBy());
-        roleAssignment.setPlatformAccess(platformAccess);
-        RoleAssignment savedRoleAssignment = roleAssignmentRepository.save(roleAssignment);
+        // Resolve role assignment
+        RoleAssignment savedRoleAssignment = roleAssignmentRepository
+                .findFirstByUserIdAndCompanyIdAndIsActiveTrue(savedUser.getId(), invitation.getCompany().getId())
+                .orElseGet(() -> activateExistingRoleAssignmentOrCreate(invitation, savedUser, now));
 
+        // Activate company on initial admin setup
+        if (isInitialAdminActivation) {
+            Company company = invitation.getCompany();
+            if (CompanyStatus.PENDING.equals(company.getStatus())) {
+                company.setStatus(CompanyStatus.ACTIVE);
+                companyRepository.save(company);
+            }
+        }
+
+        // Mark invitation as used
         invitation.setUsedAt(now);
         userInvitationRepository.save(invitation);
 
+        // Events & audit
         platformEventService.publishEvent(new PlatformEvent(
                 "INVITATION_ACTIVATED",
                 invitation.getCompany().getId(),
@@ -109,11 +125,14 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
                 Map.of(
                         "status", savedUser.getStatus().name(),
                         "roleAssignmentId", savedRoleAssignment.getId(),
-                        "platformAccess", platformAccess.name()
+                        "platformAccess", invitation.getPlatformAccess().name(),
+                        "gdprConsentRecorded", Boolean.TRUE.equals(request.gdprConsent()),
+                        "companyActivated", isInitialAdminActivation
                 ),
                 Map.of(
                         "invitationId", invitation.getId(),
-                        "platformRole", invitation.getPlatformRole().name()
+                        "platformRole", invitation.getPlatformRole().name(),
+                        "invitationKind", invitation.getInvitationKind().name()
                 ),
                 null
         ));
@@ -122,12 +141,13 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
                 savedUser.getId(),
                 savedRoleAssignment.getId(),
                 savedRoleAssignment.getRole(),
-                platformAccess,
+                invitation.getPlatformAccess(),
                 savedUser.getStatus(),
                 "Invitation activated successfully"
         );
     }
 
+    // Validation
     private void validateRequest(ActivateInvitationRequest request) {
         if (request == null) {
             throw new InvitationTokenInvalidException();
@@ -137,12 +157,6 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
         }
         if (!StringUtils.hasText(request.password())) {
             throw new WeakPasswordException("Password is required");
-        }
-        if (!StringUtils.hasText(request.firstName())) {
-            throw new InvalidInvitationRequestException("firstName is required");
-        }
-        if (!StringUtils.hasText(request.lastName())) {
-            throw new InvalidInvitationRequestException("lastName is required");
         }
     }
 
@@ -157,22 +171,55 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
             throw new WeakPasswordException("Password must contain at least one number");
         }
         if (password.equalsIgnoreCase(userEmail)) {
-            throw new WeakPasswordException("Password must not be equal to user email");
+            throw new WeakPasswordException("Password must not match the user email");
         }
     }
 
-    private String resolveJobTitle(UserInvitation invitation) {
-        String invitedJobTitle = invitation.getInvitedJobTitle();
-        if (invitation.getPlatformRole() == PlatformRole.STAFF && !StringUtils.hasText(invitedJobTitle)) {
-            throw new InvalidInvitationRequestException("invitedJobTitle is required for STAFF role assignment");
-        }
-        return StringUtils.hasText(invitedJobTitle) ? invitedJobTitle.trim() : null;
+    // ── Helpers ───────────────────────────────────────────────────────────────────
+
+    private RoleAssignment createRoleAssignmentFromInvitation(
+            UserInvitation invitation, User user, Instant now) {
+        RoleAssignment ra = new RoleAssignment();
+        ra.setCompany(invitation.getCompany());
+        ra.setUser(user);
+        ra.setRole(invitation.getPlatformRole());
+        ra.setJobTitle(StringUtils.hasText(invitation.getInvitedJobTitle())
+                ? invitation.getInvitedJobTitle().trim() : null);
+        ra.setIsActive(true);
+        ra.setActivatedAt(now);
+        ra.setCreatedBy(invitation.getInvitedBy());
+        ra.setPlatformAccess(invitation.getPlatformAccess());
+        return roleAssignmentRepository.save(ra);
     }
 
-    private String resolveDisplayName(String firstName, String lastName, String requestedDisplayName) {
-        if (StringUtils.hasText(requestedDisplayName)) {
-            return requestedDisplayName.trim();
+    private RoleAssignment activateExistingRoleAssignmentOrCreate(
+            UserInvitation invitation, User user, Instant now) {
+        return roleAssignmentRepository
+                .findFirstByUserIdAndCompanyIdOrderByCreatedAtAsc(user.getId(), invitation.getCompany().getId())
+                .map(existingRoleAssignment -> activateExistingRoleAssignment(existingRoleAssignment, invitation, now))
+                .orElseGet(() -> createRoleAssignmentFromInvitation(invitation, user, now));
+    }
+
+    private RoleAssignment activateExistingRoleAssignment(
+            RoleAssignment roleAssignment, UserInvitation invitation, Instant now) {
+        roleAssignment.setRole(invitation.getPlatformRole());
+        roleAssignment.setJobTitle(StringUtils.hasText(invitation.getInvitedJobTitle())
+                ? invitation.getInvitedJobTitle().trim() : null);
+        roleAssignment.setIsActive(true);
+        roleAssignment.setActivatedAt(now);
+        roleAssignment.setDeactivatedAt(null);
+        roleAssignment.setPlatformAccess(invitation.getPlatformAccess());
+        if (roleAssignment.getCreatedBy() == null) {
+            roleAssignment.setCreatedBy(invitation.getInvitedBy());
         }
-        return (firstName.trim() + " " + lastName.trim()).trim();
+        return roleAssignmentRepository.save(roleAssignment);
+    }
+
+    private String resolveLanguage(String requested, String existing) {
+        return StringUtils.hasText(requested) ? requested.trim() : existing;
+    }
+
+    private String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 }

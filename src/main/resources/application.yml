@@ -1,6 +1,6 @@
 spring:
-  classformat:
-    ignore: true
+  config:
+    import: "optional:file:.env[.properties]"
   application:
     name: worknest-api
   datasource:
@@ -26,21 +26,25 @@ spring:
     time-zone: UTC
     serialization:
       write-dates-as-timestamps: false
-#  mail:
-#    host: ${MAIL_HOST}
-#    port: ${MAIL_PORT:587}
-#    username: ${MAIL_USERNAME}
-#    password: ${MAIL_PASSWORD}
-#    protocol: ${MAIL_PROTOCOL:smtp}
-#    properties:
-#      mail:
-#        smtp:
-#          auth: ${MAIL_SMTP_AUTH:true}
-#          starttls:
-#            enable: ${MAIL_SMTP_STARTTLS_ENABLE:true}
-#          connectiontimeout: ${MAIL_SMTP_CONNECTION_TIMEOUT_MS:5000}
-#          timeout: ${MAIL_SMTP_TIMEOUT_MS:5000}
-#          writetimeout: ${MAIL_SMTP_WRITE_TIMEOUT_MS:5000}
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:admin@example.com}
+    password: ${MAIL_PASSWORD:password}
+    protocol: ${MAIL_PROTOCOL:smtp}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS_ENABLE:true}
+          connectiontimeout: ${MAIL_SMTP_CONNECTION_TIMEOUT_MS:5000}
+          timeout: ${MAIL_SMTP_TIMEOUT_MS:5000}
+          writetimeout: ${MAIL_SMTP_WRITE_TIMEOUT_MS:5000}
 
 server:
   port: ${APP_PORT:8080}
@@ -60,6 +64,10 @@ springdoc:
     path: /swagger-ui.html
 
 app:
+  frontend:
+    activation-link-base: ${APP_FRONTEND_ACTIVATION_LINK_BASE:https://app.worknest.local/activate-invitation}
+  media:
+    local-root: ${APP_MEDIA_LOCAL_ROOT:storage/media}
   mail:
     from-address: ${MAIL_FROM_ADDRESS:info@worknest.com}
     from-name: ${MAIL_FROM_NAME:WorkNest}

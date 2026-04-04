@@ -6,9 +6,12 @@ import com.worknest.audit.service.AuditLogService;
 import com.worknest.audit.service.PlatformEventService;
 import com.worknest.auth.domain.Company;
 import com.worknest.auth.domain.CompanyStatus;
+import com.worknest.auth.domain.InvitationKind;
+import com.worknest.auth.domain.Permission;
 import com.worknest.auth.domain.PlatformAccess;
 import com.worknest.auth.domain.PlatformRole;
 import com.worknest.auth.domain.RoleAssignment;
+import com.worknest.auth.domain.RoleAssignmentPermission;
 import com.worknest.auth.domain.User;
 import com.worknest.auth.domain.UserInvitation;
 import com.worknest.auth.domain.UserStatus;
@@ -18,17 +21,22 @@ import com.worknest.auth.exception.InvalidInvitationRequestException;
 import com.worknest.auth.exception.InvitationAlreadyExistsException;
 import com.worknest.auth.exception.UserAlreadyActiveException;
 import com.worknest.auth.repository.CompanyRepository;
+import com.worknest.auth.repository.PermissionRepository;
+import com.worknest.auth.repository.RoleAssignmentPermissionRepository;
 import com.worknest.auth.repository.RoleAssignmentRepository;
 import com.worknest.auth.repository.UserInvitationRepository;
 import com.worknest.auth.repository.UserRepository;
+import com.worknest.auth.service.InvitationEmailService;
 import com.worknest.auth.service.InvitationService;
 import com.worknest.auth.utility.SecureTokenGenerator;
 import com.worknest.auth.utility.Sha256TokenHashUtility;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.UUID;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -45,34 +53,47 @@ public class InvitationServiceImpl implements InvitationService {
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
+    private final RoleAssignmentPermissionRepository roleAssignmentPermissionRepository;
+    private final PermissionRepository permissionRepository;
     private final UserInvitationRepository userInvitationRepository;
     private final SecureTokenGenerator secureTokenGenerator;
     private final Sha256TokenHashUtility sha256TokenHashUtility;
+    private final InvitationEmailService invitationEmailService;
     private final AuditLogService auditLogService;
     private final PlatformEventService platformEventService;
+
+    @Value("${app.frontend.activation-link-base:https://app.worknest.local/activate-invitation}")
+    private String activationLinkBase;
 
     @Override
     @Transactional
     public CreateInvitationResponse createInvitation(CreateInvitationRequest request) {
+        // validate
         validateRequest(request);
 
-        Company company = companyRepository.findById(request.companyId())
-                .filter(savedCompany -> savedCompany.getDeletedAt() == null)
+        // Find company
+        Company company = companyRepository.findById(Objects.requireNonNull(request.companyId()))
+                .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new InvalidInvitationRequestException("Company does not exist"));
 
+        // check if active
         if (company.getStatus() != CompanyStatus.ACTIVE) {
             throw new InvalidInvitationRequestException("Invitations can only be created for active companies");
         }
 
+        // find user that initialized invitation
+        User invitedBy = resolveCurrentAuthenticatedUser(company.getId());
+        // find role assignment
+        RoleAssignment inviterRoleAssignment = resolveActiveRoleAssignment(invitedBy.getId(), company.getId());
+        validateInviterAuthorization(inviterRoleAssignment);
+
         String normalizedEmail = request.email().trim().toLowerCase();
         PlatformAccess resolvedPlatformAccess = resolveInvitationPlatformAccess(request.platformRole(), request.platformAccess());
-        String invitedJobTitle = resolveInvitedJobTitle(request.platformRole(), request.invitedJobTitle());
+        InvitationKind invitationKind = resolveInvitationKind(request.platformRole());
 
+        // check if the invitation exists
         if (userInvitationRepository.existsByCompanyIdAndEmailIgnoreCaseAndUsedAtIsNullAndExpiresAtAfter(
-                company.getId(),
-                normalizedEmail,
-                Instant.now()
-        )) {
+                company.getId(), normalizedEmail, Instant.now())) {
             throw new InvitationAlreadyExistsException(normalizedEmail);
         }
 
@@ -80,9 +101,11 @@ public class InvitationServiceImpl implements InvitationService {
                 .map(existingUser -> validateExistingUser(existingUser, normalizedEmail))
                 .orElseGet(() -> createPendingUser(company, normalizedEmail));
 
-        User invitedBy = resolveCurrentAuthenticatedUser(company.getId());
-        RoleAssignment inviterRoleAssignment = resolveActiveRoleAssignment(invitedBy.getId());
-        validateInviterAuthorization(inviterRoleAssignment);
+        applySharedIdentityFields(user, request);
+        User savedUser = Objects.requireNonNull(userRepository.save(user));
+
+        RoleAssignment roleAssignment = upsertRoleAssignment(savedUser, company, request, resolvedPlatformAccess, invitedBy);
+        synchronizePermissions(roleAssignment, inviterRoleAssignment, request);
 
         String rawToken = secureTokenGenerator.generateToken();
         String tokenHash = sha256TokenHashUtility.hash(rawToken);
@@ -90,15 +113,24 @@ public class InvitationServiceImpl implements InvitationService {
 
         UserInvitation invitation = new UserInvitation();
         invitation.setCompany(company);
+        invitation.setUser(savedUser);
         invitation.setEmail(normalizedEmail);
         invitation.setTokenHash(tokenHash);
         invitation.setInvitedBy(invitedBy);
         invitation.setPlatformRole(request.platformRole());
         invitation.setPlatformAccess(resolvedPlatformAccess);
-        invitation.setInvitedJobTitle(invitedJobTitle);
+        invitation.setInvitationKind(invitationKind);
+        invitation.setInvitedJobTitle(resolveInvitedJobTitle(request.platformRole(), request.invitedJobTitle()));
         invitation.setExpiresAt(expiresAt);
 
         UserInvitation savedInvitation = userInvitationRepository.save(invitation);
+        invitationEmailService.sendInvitationEmail(
+                company,
+                normalizedEmail,
+                savedUser.getDisplayName(),
+                savedInvitation.getPlatformRole(),
+                savedInvitation.getInvitationKind(),
+                buildActivationLink(rawToken));
 
         platformEventService.publishEvent(new PlatformEvent(
                 "USER_INVITED",
@@ -111,29 +143,36 @@ public class InvitationServiceImpl implements InvitationService {
         auditLogService.logAction(new AuditLog(
                 company.getId(),
                 invitedBy.getId(),
-                inviterRoleAssignment != null ? inviterRoleAssignment.getId() : null,
-                inviterRoleAssignment != null ? inviterRoleAssignment.getRole() : null,
-                inviterRoleAssignment != null ? inviterRoleAssignment.getJobTitle() : null,
+                inviterRoleAssignment.getId(),
+                inviterRoleAssignment.getRole(),
+                inviterRoleAssignment.getJobTitle(),
                 "INVITATION_CREATED",
                 "UserInvitation",
                 savedInvitation.getId(),
-                buildInvitationAuditDiff(savedInvitation, resolvedPlatformAccess),
+                buildInvitationAuditDiff(savedInvitation, request, resolvedPlatformAccess),
                 Map.of(
                         "companyId", company.getId(),
-                        "invitedByUserId", invitedBy.getId()
+                        "invitedByUserId", invitedBy.getId(),
+                        "userId", savedUser.getId(),
+                        "roleAssignmentId", roleAssignment.getId()
                 ),
                 null
         ));
 
         return new CreateInvitationResponse(
                 savedInvitation.getId(),
+                savedUser.getId(),
+                roleAssignment.getId(),
                 savedInvitation.getEmail(),
                 savedInvitation.getPlatformRole(),
                 resolvedPlatformAccess,
                 savedInvitation.getExpiresAt(),
+                rawToken,
                 "Invitation created successfully"
         );
     }
+
+    // Validation
 
     private void validateRequest(CreateInvitationRequest request) {
         if (request == null) {
@@ -141,6 +180,12 @@ public class InvitationServiceImpl implements InvitationService {
         }
         if (request.companyId() == null) {
             throw new InvalidInvitationRequestException("companyId is required");
+        }
+        if (!StringUtils.hasText(request.firstName())) {
+            throw new InvalidInvitationRequestException("firstName is required");
+        }
+        if (!StringUtils.hasText(request.lastName())) {
+            throw new InvalidInvitationRequestException("lastName is required");
         }
         if (!StringUtils.hasText(request.email())) {
             throw new InvalidInvitationRequestException("email is required");
@@ -151,7 +196,12 @@ public class InvitationServiceImpl implements InvitationService {
         if (request.platformAccess() == null) {
             throw new InvalidInvitationRequestException("platformAccess is required");
         }
+        if (request.platformRole() == PlatformRole.STAFF && !StringUtils.hasText(request.invitedJobTitle())) {
+            throw new InvalidInvitationRequestException("invitedJobTitle is required for STAFF invitations");
+        }
     }
+
+    // User helpers
 
     private User validateExistingUser(User existingUser, String email) {
         if (existingUser.getStatus() == UserStatus.ACTIVE) {
@@ -171,63 +221,158 @@ public class InvitationServiceImpl implements InvitationService {
         return userRepository.save(user);
     }
 
-    private User resolveCurrentAuthenticatedUser(UUID companyId) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || authentication instanceof AnonymousAuthenticationToken) {
-            throw new InvalidInvitationRequestException("Authenticated inviter could not be resolved");
+    private void applySharedIdentityFields(User user, CreateInvitationRequest request) {
+        user.setFirstName(request.firstName().trim());
+        user.setLastName(request.lastName().trim());
+        user.setDisplayName((request.firstName().trim() + " " + request.lastName().trim()).trim());
+        user.setPhoneNumber(trimToNull(request.phoneNumber()));
+        if (!StringUtils.hasText(user.getPreferredLanguage())) {
+            user.setPreferredLanguage(DEFAULT_PREFERRED_LANGUAGE);
+        }
+    }
+
+    // Role assignment
+
+    private RoleAssignment upsertRoleAssignment(
+            User user, Company company, CreateInvitationRequest request,
+            PlatformAccess platformAccess, User invitedBy) {
+
+        RoleAssignment ra = roleAssignmentRepository
+                .findFirstByUserIdAndCompanyIdAndIsActiveTrue(user.getId(), company.getId())
+                .orElseGet(RoleAssignment::new);
+
+        ra.setCompany(company);
+        ra.setUser(user);
+        ra.setRole(request.platformRole());
+        ra.setJobTitle(resolveInvitedJobTitle(request.platformRole(), request.invitedJobTitle()));
+        ra.setIsActive(true);
+        ra.setPlatformAccess(platformAccess);
+        ra.setCreatedBy(invitedBy);
+        if (ra.getActivatedAt() == null) {
+            ra.setActivatedAt(Instant.now());
         }
 
+        return roleAssignmentRepository.save(ra);
+    }
+
+    // Permission synchronization
+
+    private void synchronizePermissions(
+            RoleAssignment roleAssignment,
+            RoleAssignment inviterRoleAssignment,
+            CreateInvitationRequest request) {
+
+        roleAssignmentPermissionRepository.deleteAllByRoleAssignmentId(roleAssignment.getId());
+
+        if (request.platformRole() != PlatformRole.STAFF) {
+            return;
+        }
+
+        List<String> codes = request.permissionCodes() == null
+                ? List.of()
+                : request.permissionCodes().stream()
+                        .filter(StringUtils::hasText)
+                        .map(String::trim)
+                        .distinct()
+                        .toList();
+
+        if (codes.isEmpty()) {
+            return;
+        }
+
+        List<Permission> permissions = permissionRepository.findAllByCodeIn(codes);
+        if (permissions.size() != codes.size()) {
+            throw new InvalidInvitationRequestException("One or more permission codes are invalid");
+        }
+
+        for (Permission permission : permissions) {
+            RoleAssignmentPermission rap = new RoleAssignmentPermission();
+            rap.setRoleAssignment(roleAssignment);
+            rap.setPermission(permission);
+            rap.setIsGranted(true);
+            rap.setGrantedBy(inviterRoleAssignment.getUser());
+            roleAssignmentPermissionRepository.save(rap);
+        }
+    }
+
+    // Auth resolution
+
+    private User resolveCurrentAuthenticatedUser(java.util.UUID companyId) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
+            throw new InvalidInvitationRequestException("Authenticated inviter could not be resolved");
+        }
         String principal = authentication.getName();
         if (!StringUtils.hasText(principal)) {
             throw new InvalidInvitationRequestException("Authenticated inviter could not be resolved");
         }
-
         return userRepository.findByCompanyIdAndEmailIgnoreCase(companyId, principal.trim().toLowerCase())
                 .orElseThrow(() -> new InvalidInvitationRequestException(
-                        "Authenticated inviter does not belong to the target company"
-                ));
+                        "Authenticated inviter does not belong to the target company"));
     }
 
-    private RoleAssignment resolveActiveRoleAssignment(UUID userId) {
-        return roleAssignmentRepository.findAllByUserIdAndIsActiveTrue(userId)
-                .stream()
-                .findFirst()
-                .orElse(null);
+    private RoleAssignment resolveActiveRoleAssignment(java.util.UUID userId, java.util.UUID companyId) {
+        return roleAssignmentRepository.findFirstByUserIdAndCompanyIdAndIsActiveTrue(userId, companyId)
+                .orElseThrow(() -> new InvalidInvitationRequestException("Inviter must have an active role assignment"));
     }
 
     private void validateInviterAuthorization(RoleAssignment inviterRoleAssignment) {
-        if (inviterRoleAssignment == null) {
-            throw new InvalidInvitationRequestException("Inviter must have an active role assignment");
-        }
-        if (inviterRoleAssignment.getRole() == PlatformRole.EMPLOYEE) {
-            throw new InvalidInvitationRequestException("Inviter is not authorized to send invitations");
+        if (inviterRoleAssignment.getRole() != PlatformRole.ADMIN
+                && inviterRoleAssignment.getRole() != PlatformRole.SUPERADMIN) {
+            throw new InvalidInvitationRequestException("Only admins can send invitations");
         }
     }
 
-    private PlatformAccess resolveInvitationPlatformAccess(PlatformRole platformRole, PlatformAccess requestedPlatformAccess) {
-        return switch (platformRole) {
+    // Resolvers / helpers
+
+    private PlatformAccess resolveInvitationPlatformAccess(PlatformRole role, PlatformAccess requested) {
+        return switch (role) {
             case EMPLOYEE -> PlatformAccess.MOBILE;
             case ADMIN, SUPERADMIN -> PlatformAccess.WEB;
-            case STAFF -> requestedPlatformAccess;
+            case STAFF -> requested;
         };
     }
 
-    private String resolveInvitedJobTitle(PlatformRole platformRole, String requestedJobTitle) {
-        if (platformRole == PlatformRole.STAFF && !StringUtils.hasText(requestedJobTitle)) {
+    private InvitationKind resolveInvitationKind(PlatformRole role) {
+        return switch (role) {
+            case STAFF -> InvitationKind.STAFF_INVITATION;
+            case EMPLOYEE -> InvitationKind.EMPLOYEE_INVITATION;
+            case ADMIN, SUPERADMIN -> InvitationKind.INITIAL_ADMIN_ACTIVATION;
+        };
+    }
+
+    private String resolveInvitedJobTitle(PlatformRole role, String requestedJobTitle) {
+        if (role == PlatformRole.STAFF && !StringUtils.hasText(requestedJobTitle)) {
             throw new InvalidInvitationRequestException("invitedJobTitle is required for STAFF invitations");
         }
         return StringUtils.hasText(requestedJobTitle) ? requestedJobTitle.trim() : null;
     }
 
-    private Map<String, Object> buildInvitationAuditDiff(UserInvitation invitation, PlatformAccess platformAccess) {
+    private Map<String, Object> buildInvitationAuditDiff(
+            UserInvitation invitation, CreateInvitationRequest request, PlatformAccess platformAccess) {
         Map<String, Object> diff = new LinkedHashMap<>();
         diff.put("email", invitation.getEmail());
         diff.put("platformRole", invitation.getPlatformRole().name());
         diff.put("platformAccess", platformAccess.name());
+        diff.put("invitationKind", invitation.getInvitationKind().name());
         diff.put("expiresAt", invitation.getExpiresAt().toString());
+        diff.put("firstName", request.firstName().trim());
+        diff.put("lastName", request.lastName().trim());
         if (StringUtils.hasText(invitation.getInvitedJobTitle())) {
             diff.put("invitedJobTitle", invitation.getInvitedJobTitle());
         }
+        if (request.permissionCodes() != null && !request.permissionCodes().isEmpty()) {
+            diff.put("permissionCodes", request.permissionCodes());
+        }
         return diff;
+    }
+
+    private String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String buildActivationLink(String rawToken) {
+        return activationLinkBase + "?token=" + rawToken;
     }
 }

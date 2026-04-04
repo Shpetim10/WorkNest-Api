@@ -24,4 +24,8 @@ public interface RoleAssignmentRepository extends JpaRepository<RoleAssignment, 
     Optional<RoleAssignment> findActiveAdminByCompanyId(@Param("companyId") UUID companyId);
 
     List<RoleAssignment> findAllByUserIdAndIsActive(UUID userId, Boolean isActive);
+
+    Optional<RoleAssignment> findFirstByUserIdAndCompanyIdAndIsActiveTrue(UUID userId, UUID companyId);
+
+    Optional<RoleAssignment> findFirstByUserIdAndCompanyIdOrderByCreatedAtAsc(UUID userId, UUID companyId);
 }
