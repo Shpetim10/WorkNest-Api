@@ -1,9 +1,8 @@
 package com.worknest.features.invitation.application;
 
-import com.worknest.audit.domain.AuditLog;
-import com.worknest.audit.domain.PlatformEvent;
-import com.worknest.audit.service.AuditLogService;
-import com.worknest.audit.service.PlatformEventService;
+import com.worknest.audit.service.AuthAuditService;
+import com.worknest.audit.service.model.AuthAuditActorContext;
+import com.worknest.audit.service.model.AuthSessionContext;
 import com.worknest.domain.entities.*;
 import com.worknest.domain.enums.*;
 import com.worknest.common.i18n.Language;
@@ -18,10 +17,9 @@ import com.worknest.features.company.repository.CompanyRepository;
 import com.worknest.features.auth.repository.RoleAssignmentRepository;
 import com.worknest.features.invitation.repository.UserInvitationRepository;
 import com.worknest.features.auth.repository.UserRepository;
-import com.worknest.features.invitation.application.InvitationActivationService;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import java.time.Instant;
-import java.util.Map;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -38,8 +36,7 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final Sha256TokenHashUtility sha256TokenHashUtility;
     private final PasswordEncoder passwordEncoder;
-    private final AuditLogService auditLogService;
-    private final PlatformEventService platformEventService;
+    private final AuthAuditService authAuditService;
 
     @Override
     @Transactional
@@ -107,37 +104,25 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
         userInvitationRepository.save(invitation);
 
         // Events & audit
-        platformEventService.publishEvent(new PlatformEvent(
-                "INVITATION_ACTIVATED",
+        // Emit platform events & audit
+        AuthAuditActorContext actorContext = new AuthAuditActorContext(
                 invitation.getCompany().getId(),
                 invitation.getCompany().getName(),
-                savedUser.getId(),
-                "Invitation activated for " + savedUser.getEmail()
-        ));
-
-        auditLogService.logAction(new AuditLog(
-                invitation.getCompany().getId(),
                 savedUser.getId(),
                 savedRoleAssignment.getId(),
                 savedRoleAssignment.getRole(),
                 savedRoleAssignment.getJobTitle(),
-                "INVITATION_ACTIVATED",
-                "User",
+                clientIp
+        );
+
+        AuthSessionContext sessionContext = new AuthSessionContext(
                 savedUser.getId(),
-                Map.of(
-                        "status", savedUser.getStatus().name(),
-                        "roleAssignmentId", savedRoleAssignment.getId(),
-                        "platformAccess", invitation.getPlatformAccess().name(),
-                        "gdprConsentRecorded", Boolean.TRUE.equals(request.gdprConsent()),
-                        "companyActivated", isInitialAdminActivation
-                ),
-                Map.of(
-                        "invitationId", invitation.getId(),
-                        "platformRole", invitation.getPlatformRole().name(),
-                        "invitationKind", invitation.getInvitationKind().name()
-                ),
-                null
-        ));
+                savedRoleAssignment.getId(),
+                savedRoleAssignment.getRole(),
+                invitation.getPlatformAccess()
+        );
+
+        authAuditService.appendInvitationActivated(actorContext, invitation.getId(), savedUser.getId(), sessionContext);
 
         return new ActivateInvitationResponse(
                 savedUser.getId(),
@@ -177,7 +162,7 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
         }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────────
+    // Helpers
 
     private RoleAssignment createRoleAssignmentFromInvitation(
             UserInvitation invitation, User user, Instant now) {

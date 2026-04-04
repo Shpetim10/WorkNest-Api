@@ -264,6 +264,68 @@ public class AuthAuditServiceImpl implements AuthAuditService {
         ));
     }
 
+    @Override
+    public void appendPasswordResetRequested(
+            UUID companyId,
+            String companyName,
+            UUID userId,
+            String email,
+            String ipAddress
+    ) {
+        auditLogService.logAction(new AuditLog(
+                companyId,
+                null,
+                null,
+                null,
+                null,
+                "PASSWORD_RESET_REQUESTED",
+                "User",
+                userId,
+                mapOf("email", email),
+                Map.of(),
+                ipAddress
+        ));
+
+        platformEventService.publishEvent(new PlatformEvent(
+                "PASSWORD_RESET_REQUESTED",
+                companyId,
+                companyName,
+                null,
+                "Password reset link requested for " + email
+        ));
+    }
+
+    @Override
+    public void appendPasswordResetSuccess(
+            UUID companyId,
+            String companyName,
+            UUID userId,
+            String email,
+            String ipAddress
+    ) {
+        auditLogService.logAction(new AuditLog(
+                companyId,
+                null,
+                null,
+                null,
+                null,
+                "PASSWORD_RESET_SUCCESS",
+                "User",
+                userId,
+                mapOf("email", email),
+                Map.of(),
+                ipAddress
+        ));
+
+        platformEventService.publishEvent(new PlatformEvent(
+                "PASSWORD_RESET_SUCCESS",
+                companyId,
+                companyName,
+                userId,
+                "Password reset completed successfully"
+        ));
+    }
+
     private AuditLog buildAuditLog(
             AuthAuditActorContext actorContext,
             String action,

@@ -13,6 +13,7 @@ import com.worknest.features.auth.application.PasswordResetRequestService;
 import com.worknest.features.auth.utility.SecureTokenGenerator;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import com.worknest.features.notification.email.service.PasswordResetEmailService;
+import com.worknest.audit.service.AuthAuditService;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,7 @@ public class PasswordResetRequestServiceImpl implements PasswordResetRequestServ
     private final SecureTokenGenerator secureTokenGenerator;
     private final Sha256TokenHashUtility sha256TokenHashUtility;
     private final PasswordResetEmailService passwordResetEmailService;
+    private final AuthAuditService authAuditService;
 
     @Value("${app.frontend.reset-password-link-base:https://app.worknest.local/reset-password}")
     private String resetPasswordLinkBase;
@@ -53,9 +55,16 @@ public class PasswordResetRequestServiceImpl implements PasswordResetRequestServ
         companyRepository.findBySlugIgnoreCase(normalizedCompanySlug)
                 .filter(this::isCompanyActive)
                 .ifPresent(company -> findActiveUser(company, normalizedEmail)
-                        .ifPresent(user -> createResetToken(company, user)));
-
-        // TODO: Publish password-reset-requested audit/platform event.
+                        .ifPresent(user -> {
+                            createResetToken(company, user);
+                            authAuditService.appendPasswordResetRequested(
+                                    company.getId(),
+                                    company.getName(),
+                                    user.getId(),
+                                    user.getEmail(),
+                                    ipAddress
+                            );
+                        }));
     }
 
     private java.util.Optional<User> findActiveUser(Company company, String normalizedEmail) {

@@ -17,6 +17,15 @@ import com.worknest.features.auth.exception.InvalidCredentialsException;
 import com.worknest.features.auth.exception.NoPlatformAccessException;
 import com.worknest.features.company.repository.CompanyRepository;
 import com.worknest.features.auth.repository.RefreshTokenRepository;
+import com.worknest.features.auth.dto.AvailableLoginContextDto;
+import com.worknest.features.auth.dto.LoginRequest;
+import com.worknest.features.auth.dto.LoginResponse;
+import com.worknest.features.auth.dto.TenantContextDto;
+import com.worknest.features.auth.exception.AuthenticationFailedException;
+import com.worknest.features.auth.exception.InvalidCredentialsException;
+import com.worknest.features.auth.exception.NoPlatformAccessException;
+import com.worknest.features.company.repository.CompanyRepository;
+import com.worknest.features.auth.repository.RefreshTokenRepository;
 import com.worknest.features.auth.repository.RoleAssignmentRepository;
 import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.auth.application.AuthLoginService;
@@ -24,6 +33,9 @@ import com.worknest.features.auth.utility.SecureTokenGenerator;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import com.worknest.security.config.JwtProperties;
 import com.worknest.security.service.JwtService;
+import com.worknest.audit.service.AuthAuditService;
+import com.worknest.audit.service.model.AuthAuditActorContext;
+import com.worknest.audit.service.model.AuthSessionContext;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -51,6 +63,7 @@ public class AuthLoginServiceImpl implements AuthLoginService {
     private final Sha256TokenHashUtility sha256TokenHashUtility;
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
+    private final AuthAuditService authAuditService;
 
     @Value("${app.security.auth.failed-login-lock-duration:PT15M}")
     private Duration failedLoginLockDuration;
@@ -67,15 +80,27 @@ public class AuthLoginServiceImpl implements AuthLoginService {
         log.info("Attempting login for user: {} in company slug: {}", normalizedEmail, normalizedSlug);
 
         Company company = companyRepository.findBySlugIgnoreCase(normalizedSlug)
-                .orElseThrow(InvalidCredentialsException::new);
-        validateCompany(company);
+                .orElseThrow(() -> {
+                    authAuditService.appendLoginFailure(
+                            null, null, normalizedSlug,
+                            normalizedEmail, request.platformAccess(), "COMPANY_NOT_FOUND", ipAddress
+                    );
+                    return new InvalidCredentialsException();
+                });
+        validateCompany(company, normalizedEmail, request.platformAccess(), ipAddress);
 
         User user = userRepository.findByCompanyIdAndEmailIgnoreCase(company.getId(), normalizedEmail)
-                .orElseThrow(InvalidCredentialsException::new);
-        validateUserBeforePasswordCheck(user, now);
+                .orElseThrow(() -> {
+                    authAuditService.appendLoginFailure(
+                            company.getId(), company.getName(), normalizedSlug,
+                            normalizedEmail, request.platformAccess(), "USER_NOT_FOUND", ipAddress
+                    );
+                    return new InvalidCredentialsException();
+                });
+        validateUserBeforePasswordCheck(user, normalizedEmail, request.platformAccess(), ipAddress, now);
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            handleFailedLogin(user, now);
+            handleFailedLogin(user, normalizedEmail, request.platformAccess(), ipAddress, now);
             throw new InvalidCredentialsException();
         }
 
@@ -86,6 +111,10 @@ public class AuthLoginServiceImpl implements AuthLoginService {
                 .toList();
 
         if (validAssignments.isEmpty()) {
+            authAuditService.appendLoginFailure(
+                    company.getId(), company.getName(), normalizedSlug,
+                    normalizedEmail, request.platformAccess(), "NO_PLATFORM_ACCESS", ipAddress
+            );
             throw new NoPlatformAccessException(request.platformAccess().name());
         }
 
@@ -139,7 +168,25 @@ public class AuthLoginServiceImpl implements AuthLoginService {
             );
         }
 
-        // TODO: Publish login audit/platform event
+        // 5. Emit platform events & audit
+        AuthAuditActorContext actorContext = new AuthAuditActorContext(
+                company.getId(),
+                company.getName(),
+                user.getId(),
+                sessionRoleAssignment.getId(),
+                sessionRoleAssignment.getRole(),
+                sessionRoleAssignment.getJobTitle(),
+                ipAddress
+        );
+
+        AuthSessionContext sessionContext = new AuthSessionContext(
+                user.getId(),
+                sessionRoleAssignment.getId(),
+                sessionRoleAssignment.getRole(),
+                request.platformAccess()
+        );
+
+        authAuditService.appendLoginSuccess(actorContext, sessionContext, normalizedEmail, userAgent);
 
         return new LoginResponse(
                 true,
@@ -169,39 +216,76 @@ public class AuthLoginServiceImpl implements AuthLoginService {
         }
     }
 
-    private void validateCompany(Company company) {
+    private void validateCompany(Company company, String email, PlatformAccess platformAccess, String ipAddress) {
         if (company.getStatus() == CompanyStatus.SUSPENDED) {
+            authAuditService.appendLoginFailure(
+                    company.getId(), company.getName(), company.getSlug(),
+                    email, platformAccess, "COMPANY_SUSPENDED", ipAddress
+            );
             throw new AuthenticationFailedException("COMPANY_SUSPENDED", "Company access is suspended");
         }
         if (company.getStatus() == CompanyStatus.DELETED || company.getDeletedAt() != null) {
+            authAuditService.appendLoginFailure(
+                    company.getId(), company.getName(), company.getSlug(),
+                    email, platformAccess, "COMPANY_DELETED", ipAddress
+            );
             throw new AuthenticationFailedException("COMPANY_DELETED", "Company account is deleted");
         }
     }
 
-    private void validateUserBeforePasswordCheck(User user, Instant now) {
+    private void validateUserBeforePasswordCheck(User user, String email, PlatformAccess platformAccess, String ipAddress, Instant now) {
         if (user.getStatus() == UserStatus.PENDING) {
+            authAuditService.appendLoginFailure(
+                    user.getCompany().getId(), user.getCompany().getName(), user.getCompany().getSlug(),
+                    email, platformAccess, "USER_PENDING", ipAddress
+            );
             throw new AuthenticationFailedException("USER_PENDING", "User account is pending activation");
         }
         if (user.getStatus() == UserStatus.SUSPENDED) {
+            authAuditService.appendLoginFailure(
+                    user.getCompany().getId(), user.getCompany().getName(), user.getCompany().getSlug(),
+                    email, platformAccess, "USER_SUSPENDED", ipAddress
+            );
             throw new AuthenticationFailedException("USER_SUSPENDED", "User account is suspended");
         }
         if (user.getStatus() == UserStatus.DEACTIVATED) {
+            authAuditService.appendLoginFailure(
+                    user.getCompany().getId(), user.getCompany().getName(), user.getCompany().getSlug(),
+                    email, platformAccess, "USER_DEACTIVATED", ipAddress
+            );
             throw new AuthenticationFailedException("USER_DEACTIVATED", "User account is deactivated");
         }
         if (!StringUtils.hasText(user.getPasswordHash())) {
+            authAuditService.appendLoginFailure(
+                    user.getCompany().getId(), user.getCompany().getName(), user.getCompany().getSlug(),
+                    email, platformAccess, "MISSING_PASSWORD", ipAddress
+            );
             throw new InvalidCredentialsException();
         }
         if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(now)) {
+            authAuditService.appendLoginFailure(
+                    user.getCompany().getId(), user.getCompany().getName(), user.getCompany().getSlug(),
+                    email, platformAccess, "ACCOUNT_LOCKED", ipAddress
+            );
             throw new AuthenticationFailedException("ACCOUNT_LOCKED", "Account is temporarily locked");
         }
     }
 
-    private void handleFailedLogin(User user, Instant now) {
+    private void handleFailedLogin(User user, String email, PlatformAccess platformAccess, String ipAddress, Instant now) {
         short failedAttempts = (short) (user.getFailedLoginCount() + 1);
         user.setFailedLoginCount(failedAttempts);
+
+        String failureReason = "INVALID_CREDENTIALS";
         if (failedAttempts >= MAX_FAILED_LOGIN_ATTEMPTS) {
             user.setLockedUntil(now.plus(failedLoginLockDuration));
+            failureReason = "MAX_ATTEMPTS_REACHED";
         }
+
+        authAuditService.appendLoginFailure(
+                user.getCompany().getId(), user.getCompany().getName(), user.getCompany().getSlug(),
+                email, platformAccess, failureReason, ipAddress
+        );
+
         userRepository.save(user);
     }
 

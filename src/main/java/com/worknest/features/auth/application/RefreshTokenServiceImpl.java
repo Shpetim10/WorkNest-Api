@@ -16,6 +16,9 @@ import com.worknest.features.auth.utility.SecureTokenGenerator;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import com.worknest.security.config.JwtProperties;
 import com.worknest.security.service.JwtService;
+import com.worknest.audit.service.AuthAuditService;
+import com.worknest.audit.service.model.AuthAuditActorContext;
+import com.worknest.audit.service.model.AuthSessionContext;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +38,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     private final JwtProperties jwtProperties;
     private final SecureTokenGenerator secureTokenGenerator;
     private final Sha256TokenHashUtility sha256TokenHashUtility;
+    private final AuthAuditService authAuditService;
 
     @Override
     @Transactional
@@ -88,7 +92,25 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         rotatedToken.setUserAgent(trimToNull(userAgent));
         refreshTokenRepository.save(rotatedToken);
 
-        // TODO: Publish refresh-token rotation audit/platform event once auth audit flow is finalized.
+        // 5. Emit platform events & audit
+        AuthAuditActorContext actorContext = new AuthAuditActorContext(
+                user.getCompany().getId(),
+                user.getCompany().getName(),
+                user.getId(),
+                activeRoleAssignment.getId(),
+                activeRoleAssignment.getRole(),
+                activeRoleAssignment.getJobTitle(),
+                ipAddress
+        );
+
+        AuthSessionContext sessionContext = new AuthSessionContext(
+                user.getId(),
+                activeRoleAssignment.getId(),
+                activeRoleAssignment.getRole(),
+                rotatedToken.getPlatformAccess()
+        );
+
+        authAuditService.appendTokenRefreshed(actorContext, sessionContext, existingToken.getId());
 
         return new RefreshTokenResponse(
                 accessToken,

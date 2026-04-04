@@ -14,12 +14,17 @@ import com.worknest.features.auth.exception.AuthenticationFailedException;
 import com.worknest.features.auth.exception.NoPlatformAccessException;
 import com.worknest.features.auth.repository.RefreshTokenRepository;
 import com.worknest.features.auth.repository.RoleAssignmentRepository;
+import com.worknest.features.auth.repository.RefreshTokenRepository;
+import com.worknest.features.auth.repository.RoleAssignmentRepository;
 import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.invitation.application.RoleSelectionService;
 import com.worknest.features.auth.utility.SecureTokenGenerator;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import com.worknest.security.config.JwtProperties;
 import com.worknest.security.service.JwtService;
+import com.worknest.audit.service.AuthAuditService;
+import com.worknest.audit.service.model.AuthAuditActorContext;
+import com.worknest.audit.service.model.AuthSessionContext;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -41,6 +46,7 @@ public class RoleSelectionServiceImpl implements RoleSelectionService {
     private final Sha256TokenHashUtility sha256TokenHashUtility;
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
+    private final AuthAuditService authAuditService;
 
     @Override
     @Transactional
@@ -86,7 +92,25 @@ public class RoleSelectionServiceImpl implements RoleSelectionService {
         refreshToken.setPlatformAccess(request.platformAccess());
         refreshTokenRepository.save(refreshToken);
 
-        // TODO: Publish role-selection audit/platform event once the auth audit flow is finalized.
+        // Emit platform events & audit
+        AuthAuditActorContext actorContext = new AuthAuditActorContext(
+                assignment.getCompany().getId(),
+                assignment.getCompany().getName(),
+                user.getId(),
+                assignment.getId(),
+                assignment.getRole(),
+                assignment.getJobTitle(),
+                ipAddress
+        );
+
+        AuthSessionContext sessionContext = new AuthSessionContext(
+                user.getId(),
+                assignment.getId(),
+                assignment.getRole(),
+                request.platformAccess()
+        );
+
+        authAuditService.appendRoleSelected(actorContext, sessionContext, userAgent);
 
         return new SelectRoleResponse(
                 assignment.getId(),

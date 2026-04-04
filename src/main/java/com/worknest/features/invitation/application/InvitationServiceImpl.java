@@ -1,9 +1,7 @@
 package com.worknest.features.invitation.application;
 
-import com.worknest.audit.domain.AuditLog;
-import com.worknest.audit.domain.PlatformEvent;
-import com.worknest.audit.service.AuditLogService;
-import com.worknest.audit.service.PlatformEventService;
+import com.worknest.audit.service.AuthAuditService;
+import com.worknest.audit.service.model.AuthAuditActorContext;
 import com.worknest.domain.entities.Company;
 import com.worknest.domain.enums.CompanyStatus;
 import com.worknest.domain.enums.InvitationKind;
@@ -28,13 +26,10 @@ import com.worknest.features.auth.repository.RoleAssignmentRepository;
 import com.worknest.features.invitation.repository.UserInvitationRepository;
 import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.notification.email.service.InvitationEmailService;
-import com.worknest.features.invitation.application.InvitationService;
 import com.worknest.features.auth.utility.SecureTokenGenerator;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -58,8 +53,7 @@ public class InvitationServiceImpl implements InvitationService {
     private final SecureTokenGenerator secureTokenGenerator;
     private final Sha256TokenHashUtility sha256TokenHashUtility;
     private final InvitationEmailService invitationEmailService;
-    private final AuditLogService auditLogService;
-    private final PlatformEventService platformEventService;
+    private final AuthAuditService authAuditService;
 
     @Value("${app.frontend.activation-link-base:https://app.worknest.local/activate-invitation}")
     private String activationLinkBase;
@@ -97,8 +91,12 @@ public class InvitationServiceImpl implements InvitationService {
         }
 
         User user = userRepository.findByCompanyIdAndEmailIgnoreCase(company.getId(), normalizedEmail)
-                .map(existingUser -> validateExistingUser(existingUser, normalizedEmail))
                 .orElseGet(() -> createPendingUser(company, normalizedEmail));
+        
+        // Final check on user status (moved from map to separate check for clarity/safety)
+        if (user.getStatus() == UserStatus.ACTIVE) {
+            throw new UserAlreadyActiveException(normalizedEmail);
+        }
 
         applySharedIdentityFields(user, request);
         User savedUser = Objects.requireNonNull(userRepository.save(user));
@@ -132,32 +130,26 @@ public class InvitationServiceImpl implements InvitationService {
                 buildActivationLink(rawToken),
                 savedUser.getPreferredLanguage().getCode());
 
-        platformEventService.publishEvent(new PlatformEvent(
-                "USER_INVITED",
+        // Emit platform events & audit
+        AuthAuditActorContext actorContext = new AuthAuditActorContext(
                 company.getId(),
                 company.getName(),
-                invitedBy.getId(),
-                "User invitation created for " + normalizedEmail
-        ));
-
-        auditLogService.logAction(new AuditLog(
-                company.getId(),
                 invitedBy.getId(),
                 inviterRoleAssignment.getId(),
                 inviterRoleAssignment.getRole(),
                 inviterRoleAssignment.getJobTitle(),
-                "INVITATION_CREATED",
-                "UserInvitation",
+                null // IP address not available in this context
+        );
+
+        authAuditService.appendInvitationCreated(
+                actorContext,
                 savedInvitation.getId(),
-                buildInvitationAuditDiff(savedInvitation, request, resolvedPlatformAccess),
-                Map.of(
-                        "companyId", company.getId(),
-                        "invitedByUserId", invitedBy.getId(),
-                        "userId", savedUser.getId(),
-                        "roleAssignmentId", roleAssignment.getId()
-                ),
-                null
-        ));
+                normalizedEmail,
+                request.platformRole(),
+                resolvedPlatformAccess,
+                savedInvitation.getInvitedJobTitle(),
+                expiresAt
+        );
 
         return new CreateInvitationResponse(
                 savedInvitation.getId(),
@@ -202,13 +194,6 @@ public class InvitationServiceImpl implements InvitationService {
     }
 
     // User helpers
-
-    private User validateExistingUser(User existingUser, String email) {
-        if (existingUser.getStatus() == UserStatus.ACTIVE) {
-            throw new UserAlreadyActiveException(email);
-        }
-        return existingUser;
-    }
 
     private User createPendingUser(Company company, String email) {
         User user = new User();
@@ -346,25 +331,6 @@ public class InvitationServiceImpl implements InvitationService {
             throw new InvalidInvitationRequestException("invitedJobTitle is required for STAFF invitations");
         }
         return StringUtils.hasText(requestedJobTitle) ? requestedJobTitle.trim() : null;
-    }
-
-    private Map<String, Object> buildInvitationAuditDiff(
-            UserInvitation invitation, CreateInvitationRequest request, PlatformAccess platformAccess) {
-        Map<String, Object> diff = new LinkedHashMap<>();
-        diff.put("email", invitation.getEmail());
-        diff.put("platformRole", invitation.getPlatformRole().name());
-        diff.put("platformAccess", platformAccess.name());
-        diff.put("invitationKind", invitation.getInvitationKind().name());
-        diff.put("expiresAt", invitation.getExpiresAt().toString());
-        diff.put("firstName", request.firstName().trim());
-        diff.put("lastName", request.lastName().trim());
-        if (StringUtils.hasText(invitation.getInvitedJobTitle())) {
-            diff.put("invitedJobTitle", invitation.getInvitedJobTitle());
-        }
-        if (request.permissionCodes() != null && !request.permissionCodes().isEmpty()) {
-            diff.put("permissionCodes", request.permissionCodes());
-        }
-        return diff;
     }
 
     private String trimToNull(String value) {

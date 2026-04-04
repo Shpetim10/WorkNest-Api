@@ -68,4 +68,20 @@ public interface AuthAuditService {
             AuthSessionContext sessionContext,
             UUID previousRefreshTokenId
     );
+
+    void appendPasswordResetRequested(
+            UUID companyId,
+            String companyName,
+            UUID userId,
+            String email,
+            String ipAddress
+    );
+
+    void appendPasswordResetSuccess(
+            UUID companyId,
+            String companyName,
+            UUID userId,
+            String email,
+            String ipAddress
+    );
 }

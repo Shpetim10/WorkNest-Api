@@ -1,9 +1,7 @@
 package com.worknest.features.company.application;
 
-import com.worknest.audit.domain.AuditLog;
-import com.worknest.audit.domain.PlatformEvent;
-import com.worknest.audit.service.AuditLogService;
-import com.worknest.audit.service.PlatformEventService;
+import com.worknest.audit.service.AuthAuditService;
+import com.worknest.audit.service.model.AuthAuditActorContext;
 import com.worknest.domain.entities.Company;
 import com.worknest.domain.enums.CompanyStatus;
 import com.worknest.domain.enums.InvitationKind;
@@ -25,20 +23,20 @@ import com.worknest.features.company.repository.CompanyRepository;
 import com.worknest.features.auth.repository.RoleAssignmentRepository;
 import com.worknest.features.invitation.repository.UserInvitationRepository;
 import com.worknest.features.auth.repository.UserRepository;
-import com.worknest.features.company.application.CompanyRegistrationService;
 import com.worknest.features.notification.email.service.InvitationEmailService;
 import com.worknest.features.auth.utility.SecureTokenGenerator;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import com.worknest.features.media.application.MediaStorageService;
 import com.worknest.features.media.dto.MediaUploadResponse;
-import java.time.Instant;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CompanyRegistrationServiceImpl implements CompanyRegistrationService {
@@ -58,8 +56,7 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
     private final SecureTokenGenerator secureTokenGenerator;
     private final Sha256TokenHashUtility sha256TokenHashUtility;
     private final InvitationEmailService invitationEmailService;
-    private final AuditLogService auditLogService;
-    private final PlatformEventService platformEventService;
+    private final AuthAuditService authAuditService;
     private final MediaStorageService mediaStorageService;
 
     @Override
@@ -157,13 +154,7 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
                 companyRepository.save(savedCompany);
             } catch (Exception e) {
                 // Log but don't fail registration if logo promotion fails
-                platformEventService.publishEvent(new PlatformEvent(
-                        "COMPANY_LOGO_PROMOTION_FAILED",
-                        savedCompany.getId(),
-                        savedCompany.getName(),
-                        savedAdminUser.getId(),
-                        "Failed to promote registration logo: " + e.getMessage()
-                ));
+                log.error("Failed to promote registration logo for company {}: {}", savedCompany.getId(), e.getMessage());
             }
         }
 
@@ -178,39 +169,24 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
                 activationLink,
                 request.preferredLanguage());
 
-        // ── 5. Emit platform events & audit ───────────────────────────────────────
-        platformEventService.publishEvent(new PlatformEvent(
-                "COMPANY_REGISTERED",
+        // 6. Emit platform events & audit
+        AuthAuditActorContext actorContext = new AuthAuditActorContext(
                 savedCompany.getId(),
                 savedCompany.getName(),
-                savedAdminUser.getId(),
-                "Company workspace registered — admin activation invitation dispatched"
-        ));
-
-        auditLogService.logAction(new AuditLog(
-                savedCompany.getId(),
                 savedAdminUser.getId(),
                 savedRoleAssignment.getId(),
                 PlatformRole.ADMIN,
                 null,
-                "COMPANY_REGISTERED",
-                "Company",
+                null // IP address not available in this context
+        );
+
+        authAuditService.appendCompanyRegistered(
+                actorContext,
                 savedCompany.getId(),
-                Map.of(
-                        "companyName", savedCompany.getName(),
-                        "slug", savedCompany.getSlug(),
-                        "status", savedCompany.getStatus().name(),
-                        "subscriptionStatus", savedCompany.getSubscriptionStatus()
-                ),
-                Map.of(
-                        "adminUserId", savedAdminUser.getId(),
-                        "adminRoleAssignmentId", savedRoleAssignment.getId(),
-                        "adminInvitationId", savedInvitation.getId(),
-                        "workspaceCreated", true,
-                        "activationEmailDispatched", true
-                ),
-                null
-        ));
+                savedAdminUser.getId(),
+                savedRoleAssignment.getId(),
+                savedCompany.getSubscriptionStatus().name()
+        );
 
         return new CompanyRegistrationResponse(
                 savedCompany.getId(),
@@ -224,7 +200,7 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
         );
     }
 
-    // ── Validation ────────────────────────────────────────────────────────────────
+    // Validation
 
     private void validateRequest(CompanyRegistrationRequest request) {
         if (request == null) {
@@ -253,7 +229,7 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
         }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────────
+    // Helpers
 
     private String defaultIfBlank(String value, String defaultValue) {
         return StringUtils.hasText(value) ? value.trim() : defaultValue;

@@ -13,6 +13,7 @@ import com.worknest.features.auth.repository.RefreshTokenRepository;
 import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.auth.application.PasswordResetService;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
+import com.worknest.audit.service.AuthAuditService;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +34,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     private final UserRepository userRepository;
     private final Sha256TokenHashUtility sha256TokenHashUtility;
     private final PasswordEncoder passwordEncoder;
+    private final AuthAuditService authAuditService;
 
     @Override
     @Transactional
@@ -70,7 +72,13 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
         refreshTokenRepository.revokeAllActiveByUserId(user.getId(), now, PASSWORD_RESET_REVOKE_REASON);
 
-        // TODO: Publish password-changed audit/platform event and security notification hook.
+        authAuditService.appendPasswordResetSuccess(
+                user.getCompany().getId(),
+                user.getCompany().getName(),
+                user.getId(),
+                user.getEmail(),
+                ipAddress
+        );
 
         return new GenericMessageResponse("Password reset successfully");
     }
