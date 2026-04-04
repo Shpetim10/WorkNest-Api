@@ -15,6 +15,7 @@ import com.worknest.auth.domain.SubscriptionStatus;
 import com.worknest.auth.domain.User;
 import com.worknest.auth.domain.UserInvitation;
 import com.worknest.auth.domain.UserStatus;
+import com.worknest.common.i18n.Language;
 import com.worknest.auth.dto.CompanyRegistrationRequest;
 import com.worknest.auth.dto.CompanyRegistrationResponse;
 import com.worknest.auth.exception.AdminEmailAlreadyExistsException;
@@ -28,6 +29,8 @@ import com.worknest.auth.service.CompanyRegistrationService;
 import com.worknest.auth.service.InvitationEmailService;
 import com.worknest.auth.utility.SecureTokenGenerator;
 import com.worknest.auth.utility.Sha256TokenHashUtility;
+import com.worknest.auth.service.MediaStorageService;
+import com.worknest.auth.dto.MediaUploadResponse;
 import java.time.Instant;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -41,11 +44,9 @@ import org.springframework.util.StringUtils;
 public class CompanyRegistrationServiceImpl implements CompanyRegistrationService {
 
     private static final String DEFAULT_TIMEZONE = "Europe/Tirane";
-    private static final String DEFAULT_LOCALE = "sq";
     private static final String DEFAULT_CURRENCY = "ALL";
     private static final String DEFAULT_DATE_FORMAT = "DD/MM/YYYY";
     private static final String DEFAULT_COUNTRY_CODE = "AL";
-    private static final String DEFAULT_PREFERRED_LANGUAGE = "sq";
 
     @Value("${app.frontend.activation-link-base:https://app.worknest.local/activate-invitation}")
     private String activationLinkBase;
@@ -59,6 +60,7 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
     private final InvitationEmailService invitationEmailService;
     private final AuditLogService auditLogService;
     private final PlatformEventService platformEventService;
+    private final MediaStorageService mediaStorageService;
 
     @Override
     @Transactional
@@ -84,13 +86,19 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
         company.setPhoneNumber(trimToNull(request.primaryPhone()));
         company.setCountryCode(defaultIfBlank(request.countryCode(), DEFAULT_COUNTRY_CODE).toUpperCase());
         company.setTimezone(defaultIfBlank(request.timezone(), DEFAULT_TIMEZONE));
-        company.setLocale(defaultIfBlank(request.locale(), DEFAULT_LOCALE));
+        company.setLocale(Language.fromCode(request.locale()));
         company.setCurrency(defaultIfBlank(request.currency(), DEFAULT_CURRENCY));
         company.setDateFormat(defaultIfBlank(request.dateFormat(), DEFAULT_DATE_FORMAT));
         company.setOnboardingCompletedAt(null);
         company.setSubscriptionPlan(SubscriptionPlan.BASIC);
         company.setSubscriptionStatus(SubscriptionStatus.TRIAL);
         company.setDataRetentionDays(90);
+
+        // Handle pre-uploaded logo during registration
+        if (StringUtils.hasText(request.logoKey())) {
+            company.setLogoKey(request.logoKey());
+            company.setLogoPath(request.logoPath());
+        }
 
         Company savedCompany = companyRepository.save(company);
 
@@ -108,7 +116,7 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
         adminUser.setLastName(trimToEmpty(request.adminLastName()));
         adminUser.setDisplayName(buildDisplayName(request.adminFirstName(), request.adminLastName()));
         adminUser.setPhoneNumber(trimToNull(request.adminPhoneNumber()));
-        adminUser.setPreferredLanguage(defaultIfBlank(request.preferredLanguage(), DEFAULT_PREFERRED_LANGUAGE));
+        adminUser.setPreferredLanguage(Language.fromCode(request.preferredLanguage()));
         adminUser.setTimezoneOverride(null);
         adminUser.setFailedLoginCount((short) 0);
         adminUser.setMfaEnabled(false);
@@ -140,6 +148,25 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
 
         UserInvitation savedInvitation = userInvitationRepository.save(adminInvitation);
 
+        // 5. If logo was provided, promote it from public/temp to company directory
+        if (StringUtils.hasText(request.logoKey())) {
+            try {
+                MediaUploadResponse promotion = mediaStorageService.promoteLogo(request.logoKey(), savedCompany.getId());
+                savedCompany.setLogoKey(promotion.storageKey());
+                savedCompany.setLogoPath(promotion.storagePath());
+                companyRepository.save(savedCompany);
+            } catch (Exception e) {
+                // Log but don't fail registration if logo promotion fails
+                platformEventService.publishEvent(new PlatformEvent(
+                        "COMPANY_LOGO_PROMOTION_FAILED",
+                        savedCompany.getId(),
+                        savedCompany.getName(),
+                        savedAdminUser.getId(),
+                        "Failed to promote registration logo: " + e.getMessage()
+                ));
+            }
+        }
+
         // The raw token is dispatched via email — not returned in the response body.
         String activationLink = activationLinkBase + "?token=" + rawActivationToken;
         invitationEmailService.sendInvitationEmail(
@@ -148,7 +175,8 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
                 savedAdminUser.getDisplayName(),
                 PlatformRole.ADMIN,
                 InvitationKind.INITIAL_ADMIN_ACTIVATION,
-                activationLink);
+                activationLink,
+                request.preferredLanguage());
 
         // ── 5. Emit platform events & audit ───────────────────────────────────────
         platformEventService.publishEvent(new PlatformEvent(

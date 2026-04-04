@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f7f6; }
+        .container { max-width: 600px; margin: 20px auto; background: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 { color: #2c3e50; font-size: 24px; }
+        .content { margin-bottom: 30px; }
+        .details { background-color: #f9f9f9; padding: 20px; border-radius: 6px; border-left: 4px solid #3498db; margin: 20px 0; }
+        .button-container { text-align: center; margin: 30px 0; }
+        .button { background-color: #3498db; color: #ffffff; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; transition: background-color 0.3s; }
+        .button:hover { background-color: #2980b9; }
+        .footer { font-size: 0.9em; color: #7f8c8d; text-align: center; margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 th:text="${invitationKind == 'INITIAL_ADMIN_ACTIVATION' ? #messages.msg('email.invitation.subject.initial_admin', companyName) : #messages.msg('email.invitation.subject.standard', companyName)}">Invitation</h1>
+        </div>
+        <div class="content">
+            <p th:text="${#messages.msg('email.invitation.greeting', recipientName)}">Hello,</p>
+            
+            <p th:text="${invitationKind == 'INITIAL_ADMIN_ACTIVATION' ? #messages.msg('email.invitation.intro.initial_admin') : #messages.msg('email.invitation.intro.standard')}">Intro text</p>
+            
+            <div class="details">
+                <p><strong th:text="${#messages.msg('email.invitation.details.company', companyName)}">Company:</strong></p>
+                <p><strong th:text="${#messages.msg('email.invitation.details.role', role)}">Role:</strong></p>
+            </div>
+            
+            <p th:text="${#messages.msg('email.invitation.cta')}">Call to action</p>
+            
+            <div class="button-container">
+                <a th:href="${activationLink}" class="button" th:text="${invitationKind == 'INITIAL_ADMIN_ACTIVATION' ? 'Activate Account' : 'Join Workspace'}">Action</a>
+            </div>
+        </div>
+        <div class="footer">
+            <p th:text="${#messages.msg('email.invitation.footer')}">Footer text</p>
+            <p>
+                <span th:text="${#messages.msg('email.invitation.signoff')}">Best regards,</span><br>
+                <strong th:text="${fromName}">WorkNest Team</strong>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

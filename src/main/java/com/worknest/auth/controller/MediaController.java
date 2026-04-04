@@ -6,11 +6,13 @@ import com.worknest.auth.dto.MediaUploadResponse;
 import com.worknest.auth.service.MediaStorageService;
 import com.worknest.common.api.ApiResponse;
 import com.worknest.security.AuthSessionPrincipal;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -72,6 +74,38 @@ public class MediaController {
                 category,
                 file
         );
-        return ResponseEntity.ok(ApiResponse.success(response.message(), response));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(response.message(), response));
+    }
+
+    @PostMapping(path = "/public/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+            summary = "Publicly upload a registration logo",
+            description = """
+                    **Public endpoint for Step 0 of company registration.**
+                    
+                    Allows unauthenticated users to upload a company logo file.
+                    Returns a `logoKey` and `logoPath` which must be included in the subsequent 
+                    `POST /api/v1/companies/register` request.
+                    
+                    Only `REGISTRATION_LOGO` category is permitted on this endpoint.
+                    """
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Logo uploaded successfully")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "400",
+            description = "Invalid category or file format",
+            content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
+    )
+    public ResponseEntity<ApiResponse<MediaUploadResponse>> publicUpload(
+            @RequestParam("category") MediaCategory category,
+            @RequestParam("file") MultipartFile file
+    ) {
+        if (category != MediaCategory.REGISTRATION_LOGO) {
+            throw new org.springframework.security.access.AccessDeniedException("Only REGISTRATION_LOGO is allowed for public uploads");
+        }
+        MediaUploadResponse response = mediaStorageService.uploadPublic(category, file);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(response.message(), response));
     }
 }

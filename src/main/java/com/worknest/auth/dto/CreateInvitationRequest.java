@@ -52,6 +52,10 @@ public record CreateInvitationRequest(
 
         @NotNull
         @Schema(description = "The primary platform this user is being invited to", example = "WEB_APP")
-        PlatformAccess platformAccess
+        PlatformAccess platformAccess,
+
+        @Size(max = 10)
+        @Schema(description = "The preferred language for the invitation email", example = "sq", defaultValue = "sq")
+        String preferredLanguage
 ) {
 }

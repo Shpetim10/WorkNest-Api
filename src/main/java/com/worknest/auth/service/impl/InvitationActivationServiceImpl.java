@@ -5,6 +5,7 @@ import com.worknest.audit.domain.PlatformEvent;
 import com.worknest.audit.service.AuditLogService;
 import com.worknest.audit.service.PlatformEventService;
 import com.worknest.auth.domain.*;
+import com.worknest.common.i18n.Language;
 import com.worknest.auth.dto.ActivateInvitationRequest;
 import com.worknest.auth.dto.ActivateInvitationResponse;
 import com.worknest.auth.exception.InvalidRegistrationDataException;
@@ -73,7 +74,7 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
         // Activate user
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setStatus(UserStatus.ACTIVE);
-        user.setPreferredLanguage(resolveLanguage(request.preferredLanguage(), user.getPreferredLanguage()));
+        user.setPreferredLanguage(Language.fromCode(request.preferredLanguage()));
         user.setPhoneNumber(trimToNull(request.phoneNumber()));
         user.setProfileImageKey(trimToNull(request.profileImageStorageKey()));
         user.setProfileImagePath(trimToNull(request.profileImageStoragePath()));
@@ -213,10 +214,6 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
             roleAssignment.setCreatedBy(invitation.getInvitedBy());
         }
         return roleAssignmentRepository.save(roleAssignment);
-    }
-
-    private String resolveLanguage(String requested, String existing) {
-        return StringUtils.hasText(requested) ? requested.trim() : existing;
     }
 
     private String trimToNull(String value) {

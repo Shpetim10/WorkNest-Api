@@ -13,4 +13,14 @@ public interface MediaStorageService {
             MediaCategory category,
             MultipartFile file
     );
+
+    MediaUploadResponse uploadPublic(
+            MediaCategory category,
+            MultipartFile file
+    );
+
+    MediaUploadResponse promoteLogo(
+            String logoKey,
+            UUID companyId
+    );
 }

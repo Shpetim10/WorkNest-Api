@@ -12,5 +12,6 @@ public interface InvitationEmailService {
             String recipientDisplayName,
             PlatformRole platformRole,
             InvitationKind invitationKind,
-            String activationLink);
+            String activationLink,
+            String preferredLanguage);
 }

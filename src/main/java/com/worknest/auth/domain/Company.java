@@ -1,5 +1,6 @@
 package com.worknest.auth.domain;
 
+import com.worknest.common.i18n.Language;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -54,10 +55,10 @@ public class Company {
     @Column(name = "industry", length = 100)
     private String industry;
 
-    @Column(name = "email", nullable = false, length = 255)
+    @Column(name = "email", nullable = false, unique = true, length = 255)
     private String email;
 
-    @Column(name = "phone_number", length = 50)
+    @Column(name = "phone_number", nullable = false, length = 50)
     private String phoneNumber;
 
     @Column(name = "country_code", nullable = false, length = 2)
@@ -72,8 +73,9 @@ public class Company {
     @Column(name = "timezone", nullable = false, length = 100)
     private String timezone = "Europe/Tirane";
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "locale", nullable = false, length = 10)
-    private String locale = "sq";
+    private Language locale = Language.SQ;
 
     @Column(name = "currency", nullable = false, length = 10)
     private String currency = "ALL";

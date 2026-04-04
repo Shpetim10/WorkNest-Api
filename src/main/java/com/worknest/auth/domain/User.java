@@ -1,5 +1,6 @@
 package com.worknest.auth.domain;
 
+import com.worknest.common.i18n.Language;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -81,8 +82,9 @@ public class User {
     @Column(name = "phone_number", length = 50)
     private String phoneNumber;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "preferred_language", nullable = false, length = 10)
-    private String preferredLanguage = "sq";
+    private Language preferredLanguage = Language.SQ;
 
     @Column(name = "timezone_override", length = 100)
     private String timezoneOverride;

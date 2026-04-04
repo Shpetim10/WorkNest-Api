@@ -15,6 +15,7 @@ import com.worknest.auth.domain.RoleAssignmentPermission;
 import com.worknest.auth.domain.User;
 import com.worknest.auth.domain.UserInvitation;
 import com.worknest.auth.domain.UserStatus;
+import com.worknest.common.i18n.Language;
 import com.worknest.auth.dto.CreateInvitationRequest;
 import com.worknest.auth.dto.CreateInvitationResponse;
 import com.worknest.auth.exception.InvalidInvitationRequestException;
@@ -47,8 +48,6 @@ import org.springframework.util.StringUtils;
 @Service
 @RequiredArgsConstructor
 public class InvitationServiceImpl implements InvitationService {
-
-    private static final String DEFAULT_PREFERRED_LANGUAGE = "sq";
 
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
@@ -130,7 +129,8 @@ public class InvitationServiceImpl implements InvitationService {
                 savedUser.getDisplayName(),
                 savedInvitation.getPlatformRole(),
                 savedInvitation.getInvitationKind(),
-                buildActivationLink(rawToken));
+                buildActivationLink(rawToken),
+                savedUser.getPreferredLanguage().getCode());
 
         platformEventService.publishEvent(new PlatformEvent(
                 "USER_INVITED",
@@ -216,7 +216,7 @@ public class InvitationServiceImpl implements InvitationService {
         user.setEmail(email);
         user.setPasswordHash(null);
         user.setStatus(UserStatus.PENDING);
-        user.setPreferredLanguage(DEFAULT_PREFERRED_LANGUAGE);
+        user.setPreferredLanguage(Language.SQ);
         user.setFailedLoginCount((short) 0);
         return userRepository.save(user);
     }
@@ -226,9 +226,8 @@ public class InvitationServiceImpl implements InvitationService {
         user.setLastName(request.lastName().trim());
         user.setDisplayName((request.firstName().trim() + " " + request.lastName().trim()).trim());
         user.setPhoneNumber(trimToNull(request.phoneNumber()));
-        if (!StringUtils.hasText(user.getPreferredLanguage())) {
-            user.setPreferredLanguage(DEFAULT_PREFERRED_LANGUAGE);
-        }
+        
+        user.setPreferredLanguage(Language.fromCode(request.preferredLanguage()));
     }
 
     // Role assignment

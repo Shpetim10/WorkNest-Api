@@ -92,6 +92,14 @@ public record CompanyRegistrationRequest(
 
         @Size(max = 10)
         @Schema(description = "User's preferred UI language", example = "en", defaultValue = "sq")
-        String preferredLanguage
+        String preferredLanguage,
+
+        @Size(max = 500)
+        @Schema(description = "Key of the pre-uploaded company logo", example = "public/registrations/logos/2026/04/uuid.png")
+        String logoKey,
+
+        @Size(max = 1000)
+        @Schema(description = "Path/URL of the pre-uploaded company logo", example = "storage/media/public/registrations/logos/2026/04/uuid.png")
+        String logoPath
 ) {
 }

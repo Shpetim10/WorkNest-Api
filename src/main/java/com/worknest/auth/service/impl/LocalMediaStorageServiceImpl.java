@@ -59,6 +59,14 @@ public class LocalMediaStorageServiceImpl implements MediaStorageService {
                     UUID.randomUUID(),
                     extension
             );
+            case REGISTRATION_LOGO -> String.format(
+                    Locale.ROOT,
+                    "public/registrations/logos/%04d/%02d/%s.%s",
+                    today.getYear(),
+                    today.getMonthValue(),
+                    UUID.randomUUID(),
+                    extension
+            );
         };
 
         Path target = storageRoot.resolve(key).normalize();
@@ -80,6 +88,56 @@ public class LocalMediaStorageServiceImpl implements MediaStorageService {
                 file.getContentType(),
                 file.getSize(),
                 "Media uploaded successfully"
+        );
+    }
+
+    @Override
+    public MediaUploadResponse uploadPublic(MediaCategory category, MultipartFile file) {
+        if (category != MediaCategory.REGISTRATION_LOGO) {
+            throw new InvalidConfigurationRequestException("Only REGISTRATION_LOGO is allowed for public uploads");
+        }
+        return upload(null, null, category, file);
+    }
+
+    @Override
+    public MediaUploadResponse promoteLogo(String logoKey, UUID companyId) {
+        if (!StringUtils.hasText(logoKey) || !logoKey.startsWith("public/registrations/logos/")) {
+            throw new InvalidConfigurationRequestException("Invalid registration logo key");
+        }
+
+        Path source = storageRoot.resolve(logoKey).normalize();
+        if (!Files.exists(source)) {
+            throw new InvalidConfigurationRequestException("Registration logo file not found");
+        }
+
+        LocalDate today = LocalDate.now();
+        String extension = logoKey.substring(logoKey.lastIndexOf('.') + 1);
+        String newKey = String.format(
+                Locale.ROOT,
+                "companies/%s/branding/logo/%04d/%02d/%s.%s",
+                companyId,
+                today.getYear(),
+                today.getMonthValue(),
+                UUID.randomUUID(),
+                extension
+        );
+
+        Path target = storageRoot.resolve(newKey).normalize();
+
+        try {
+            Files.createDirectories(target.getParent());
+            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException exception) {
+            throw new InvalidConfigurationRequestException("Failed to promote registration logo to company directory");
+        }
+
+        return new MediaUploadResponse(
+                newKey,
+                target.toString().replace('\\', '/'),
+                source.getFileName().toString(),
+                "image/" + extension, // Best effort
+                target.toFile().length(),
+                "Logo promoted successfully"
         );
     }
 
