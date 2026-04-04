@@ -22,6 +22,9 @@ public record RefreshTokenResponse(
         @Schema(description = "The session's authorized platform access")
         PlatformAccess platformAccess,
 
+        @Schema(description = "Resolved tenant context for the rotated session")
+        TenantContextDto tenantContext,
+
         @Schema(description = "Expiration timestamp of the new access token")
         Instant expiresAt
 ) {

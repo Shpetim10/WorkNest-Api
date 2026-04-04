@@ -16,6 +16,9 @@ public record AvailableLoginContextDto(
         @Schema(description = "Display name of the company")
         String companyName,
 
+        @Schema(description = "Tenant slug of the company")
+        String companySlug,
+
         @Schema(description = "The specific role assignment ID to initialize the session with")
         UUID roleAssignmentId,
 

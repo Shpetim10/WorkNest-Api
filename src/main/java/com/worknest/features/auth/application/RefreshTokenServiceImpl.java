@@ -8,6 +8,7 @@ import com.worknest.domain.entities.User;
 import com.worknest.domain.enums.UserStatus;
 import com.worknest.features.auth.dto.RefreshTokenRequest;
 import com.worknest.features.auth.dto.RefreshTokenResponse;
+import com.worknest.features.auth.dto.TenantContextDto;
 import com.worknest.features.auth.exception.AuthenticationFailedException;
 import com.worknest.features.auth.repository.RefreshTokenRepository;
 import com.worknest.features.auth.application.RefreshTokenService;
@@ -94,6 +95,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                 newRawRefreshToken,
                 activeRoleAssignment.getId(),
                 existingToken.getPlatformAccess(),
+                toTenantContext(activeRoleAssignment.getCompany()),
                 refreshTokenExpiresAt
         );
     }
@@ -141,5 +143,22 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private TenantContextDto toTenantContext(Company company) {
+        return new TenantContextDto(
+                company.getId(),
+                company.getName(),
+                company.getSlug(),
+                company.getStatus(),
+                company.getLogoPath(),
+                company.getTimezone(),
+                company.getLocale(),
+                company.getCurrency(),
+                company.getDateFormat(),
+                company.getOnboardingCompletedAt(),
+                company.getSubscriptionPlan(),
+                company.getSubscriptionStatus()
+        );
     }
 }

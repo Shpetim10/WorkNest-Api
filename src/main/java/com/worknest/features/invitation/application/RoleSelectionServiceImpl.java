@@ -9,6 +9,7 @@ import com.worknest.domain.entities.User;
 import com.worknest.domain.enums.UserStatus;
 import com.worknest.features.invitation.dto.SelectRoleRequest;
 import com.worknest.features.invitation.dto.SelectRoleResponse;
+import com.worknest.features.auth.dto.TenantContextDto;
 import com.worknest.features.auth.exception.AuthenticationFailedException;
 import com.worknest.features.auth.exception.NoPlatformAccessException;
 import com.worknest.features.auth.repository.RefreshTokenRepository;
@@ -93,6 +94,7 @@ public class RoleSelectionServiceImpl implements RoleSelectionService {
                 accessToken,
                 accessTokenExpiresAt,
                 rawRefreshToken,
+                toTenantContext(assignment.getCompany()),
                 refreshTokenExpiresAt
         );
     }
@@ -155,14 +157,47 @@ public class RoleSelectionServiceImpl implements RoleSelectionService {
     }
 
     private boolean isAssignmentValidForPlatform(RoleAssignment assignment, PlatformAccess requestedPlatformAccess) {
+        if (assignment.getPlatformAccess() == null || requestedPlatformAccess == null) {
+            return false;
+        }
+
         return switch (assignment.getRole()) {
-            case ADMIN, SUPERADMIN -> requestedPlatformAccess == PlatformAccess.WEB;
-            case EMPLOYEE -> requestedPlatformAccess == PlatformAccess.MOBILE;
-            case STAFF -> requestedPlatformAccess == assignment.getPlatformAccess();
+            case ADMIN, SUPERADMIN -> requestedPlatformAccess == PlatformAccess.WEB
+                    && supportsRequestedPlatform(assignment.getPlatformAccess(), requestedPlatformAccess);
+            case EMPLOYEE -> requestedPlatformAccess == PlatformAccess.MOBILE
+                    && supportsRequestedPlatform(assignment.getPlatformAccess(), requestedPlatformAccess);
+            case STAFF -> supportsRequestedPlatform(assignment.getPlatformAccess(), requestedPlatformAccess);
         };
     }
 
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private boolean supportsRequestedPlatform(PlatformAccess assignmentPlatformAccess, PlatformAccess requestedPlatformAccess) {
+        if (assignmentPlatformAccess == PlatformAccess.BOTH) {
+            return true;
+        }
+        if (requestedPlatformAccess == PlatformAccess.BOTH) {
+            return assignmentPlatformAccess == PlatformAccess.BOTH;
+        }
+        return assignmentPlatformAccess == requestedPlatformAccess;
+    }
+
+    private TenantContextDto toTenantContext(Company company) {
+        return new TenantContextDto(
+                company.getId(),
+                company.getName(),
+                company.getSlug(),
+                company.getStatus(),
+                company.getLogoPath(),
+                company.getTimezone(),
+                company.getLocale(),
+                company.getCurrency(),
+                company.getDateFormat(),
+                company.getOnboardingCompletedAt(),
+                company.getSubscriptionPlan(),
+                company.getSubscriptionStatus()
+        );
     }
 }

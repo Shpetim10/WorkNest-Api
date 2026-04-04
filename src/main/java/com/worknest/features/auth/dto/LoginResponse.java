@@ -39,6 +39,9 @@ public record LoginResponse(
         @Schema(description = "The platform access type (WEB_APP, MOBILE_APP, etc.) authorized for this session.")
         PlatformAccess platformAccess,
 
+        @Schema(description = "Resolved tenant context for the authenticated session.")
+        TenantContextDto tenantContext,
+
         @Schema(description = "List of all organizations and roles the user is associated with.")
         List<AvailableLoginContextDto> availableContexts,
 

@@ -18,7 +18,7 @@ public interface RoleAssignmentRepository extends JpaRepository<RoleAssignment, 
             select ra
             from RoleAssignment ra
             where ra.company.id = :companyId
-              and ra.role = com.worknest.auth.domain.PlatformRole.ADMIN
+              and ra.role = com.worknest.domain.enums.PlatformRole.ADMIN
               and ra.isActive = true
             """)
     Optional<RoleAssignment> findActiveAdminByCompanyId(@Param("companyId") UUID companyId);

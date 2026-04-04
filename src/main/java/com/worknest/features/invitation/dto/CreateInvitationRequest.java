@@ -51,7 +51,7 @@ public record CreateInvitationRequest(
         List<String> permissionCodes,
 
         @NotNull
-        @Schema(description = "The primary platform this user is being invited to", example = "WEB_APP")
+        @Schema(description = "The primary platform this user is being invited to", example = "WEB")
         PlatformAccess platformAccess,
 
         @Size(max = 10)

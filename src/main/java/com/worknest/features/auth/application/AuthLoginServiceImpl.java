@@ -3,6 +3,7 @@ package com.worknest.features.auth.application;
 import com.worknest.domain.entities.Company;
 import com.worknest.domain.enums.CompanyStatus;
 import com.worknest.domain.enums.PlatformAccess;
+import com.worknest.domain.enums.PlatformRole;
 import com.worknest.domain.entities.RefreshToken;
 import com.worknest.domain.entities.RoleAssignment;
 import com.worknest.domain.entities.User;
@@ -10,6 +11,7 @@ import com.worknest.domain.enums.UserStatus;
 import com.worknest.features.auth.dto.AvailableLoginContextDto;
 import com.worknest.features.auth.dto.LoginRequest;
 import com.worknest.features.auth.dto.LoginResponse;
+import com.worknest.features.auth.dto.TenantContextDto;
 import com.worknest.features.auth.exception.AuthenticationFailedException;
 import com.worknest.features.auth.exception.InvalidCredentialsException;
 import com.worknest.features.auth.exception.NoPlatformAccessException;
@@ -93,42 +95,49 @@ public class AuthLoginServiceImpl implements AuthLoginService {
         user.setLastLoginIp(trimToNull(ipAddress));
         userRepository.save(user);
 
-        if (validAssignments.size() > 1) {
-            return new LoginResponse(
-                    true,
-                    true,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    request.platformAccess(),
-                    validAssignments.stream()
-                            .map(assignment -> toAvailableContext(company, assignment, request.platformAccess()))
-                            .toList(),
-                    "Role selection required"
-            );
-        }
-
-        RoleAssignment activeRoleAssignment = validAssignments.get(0);
+        RoleAssignment sessionRoleAssignment = validAssignments.get(0);
         Instant accessTokenExpiresAt = now.plus(jwtProperties.getAccessTokenExpiry());
         Instant refreshTokenExpiresAt = now.plus(jwtProperties.getRefreshTokenExpiry());
 
-        String accessToken = jwtService.generateAccessToken(user, activeRoleAssignment, request.platformAccess(), now, accessTokenExpiresAt);
+        String accessToken = jwtService.generateAccessToken(
+                user,
+                sessionRoleAssignment,
+                request.platformAccess(),
+                now,
+                accessTokenExpiresAt
+        );
 
         String rawRefreshToken = secureTokenGenerator.generateToken();
 
         RefreshToken refreshToken = new RefreshToken();
         refreshToken.setUser(user);
         refreshToken.setTokenHash(sha256TokenHashUtility.hash(rawRefreshToken));
-        refreshToken.setActiveRoleAssignment(activeRoleAssignment);
+        refreshToken.setActiveRoleAssignment(sessionRoleAssignment);
         refreshToken.setPlatformAccess(request.platformAccess());
         refreshToken.setIssuedAt(now);
         refreshToken.setExpiresAt(refreshTokenExpiresAt);
         refreshToken.setIpAddress(trimToNull(ipAddress));
         refreshToken.setUserAgent(trimToNull(userAgent));
         refreshTokenRepository.save(refreshToken);
+
+        if (validAssignments.size() > 1) {
+            return new LoginResponse(
+                    true,
+                    true,
+                    accessToken,
+                    accessTokenExpiresAt,
+                    rawRefreshToken,
+                    refreshTokenExpiresAt,
+                    sessionRoleAssignment.getId(),
+                    sessionRoleAssignment.getRole(),
+                    request.platformAccess(),
+                    toTenantContext(sessionRoleAssignment.getCompany()),
+                    validAssignments.stream()
+                            .map(assignment -> toAvailableContext(company, assignment, request.platformAccess()))
+                            .toList(),
+                    "Role selection required"
+            );
+        }
 
         // TODO: Publish login audit/platform event
 
@@ -139,10 +148,11 @@ public class AuthLoginServiceImpl implements AuthLoginService {
                 accessTokenExpiresAt,
                 rawRefreshToken,
                 refreshTokenExpiresAt,
-                activeRoleAssignment.getId(),
-                activeRoleAssignment.getRole(),
+                sessionRoleAssignment.getId(),
+                sessionRoleAssignment.getRole(),
                 request.platformAccess(),
-                List.of(toAvailableContext(company, activeRoleAssignment, request.platformAccess())),
+                toTenantContext(sessionRoleAssignment.getCompany()),
+                List.of(toAvailableContext(company, sessionRoleAssignment, request.platformAccess())),
                 "Login successful"
         );
     }
@@ -199,8 +209,19 @@ public class AuthLoginServiceImpl implements AuthLoginService {
         if (!Boolean.TRUE.equals(assignment.getIsActive())) {
             return false;
         }
-        // Match the requested platform with the assignment's allowed platform
-        return assignment.getPlatformAccess() == requestedPlatformAccess;
+
+        PlatformAccess assignmentPlatformAccess = assignment.getPlatformAccess();
+        if (assignmentPlatformAccess == null || requestedPlatformAccess == null) {
+            return false;
+        }
+
+        return switch (assignment.getRole()) {
+            case ADMIN, SUPERADMIN -> requestedPlatformAccess == PlatformAccess.WEB
+                    && supportsRequestedPlatform(assignmentPlatformAccess, requestedPlatformAccess);
+            case EMPLOYEE -> requestedPlatformAccess == PlatformAccess.MOBILE
+                    && supportsRequestedPlatform(assignmentPlatformAccess, requestedPlatformAccess);
+            case STAFF -> supportsRequestedPlatform(assignmentPlatformAccess, requestedPlatformAccess);
+        };
     }
 
     private AvailableLoginContextDto toAvailableContext(
@@ -211,11 +232,39 @@ public class AuthLoginServiceImpl implements AuthLoginService {
         return new AvailableLoginContextDto(
                 company.getId(),
                 company.getName(),
+                company.getSlug(),
                 assignment.getId(),
                 assignment.getRole(),
                 assignment.getJobTitle(),
                 platformAccess
         );
+    }
+
+    private TenantContextDto toTenantContext(Company company) {
+        return new TenantContextDto(
+                company.getId(),
+                company.getName(),
+                company.getSlug(),
+                company.getStatus(),
+                company.getLogoPath(),
+                company.getTimezone(),
+                company.getLocale(),
+                company.getCurrency(),
+                company.getDateFormat(),
+                company.getOnboardingCompletedAt(),
+                company.getSubscriptionPlan(),
+                company.getSubscriptionStatus()
+        );
+    }
+
+    private boolean supportsRequestedPlatform(PlatformAccess assignmentPlatformAccess, PlatformAccess requestedPlatformAccess) {
+        if (assignmentPlatformAccess == PlatformAccess.BOTH) {
+            return true;
+        }
+        if (requestedPlatformAccess == PlatformAccess.BOTH) {
+            return assignmentPlatformAccess == PlatformAccess.BOTH;
+        }
+        return assignmentPlatformAccess == requestedPlatformAccess;
     }
 
     private String trimToNull(String value) {

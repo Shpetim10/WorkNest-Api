@@ -1,6 +1,7 @@
 package com.worknest.features.invitation.dto;
 
 import com.worknest.domain.enums.PlatformRole;
+import com.worknest.features.auth.dto.TenantContextDto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;
@@ -21,6 +22,9 @@ public record SelectRoleResponse(
 
         @Schema(description = "New long-lived refresh token")
         String refreshToken,
+
+        @Schema(description = "Resolved tenant context for the selected session")
+        TenantContextDto tenantContext,
 
         @Schema(description = "Expiration timestamp of the refresh token")
         Instant refreshTokenExpiresAt
