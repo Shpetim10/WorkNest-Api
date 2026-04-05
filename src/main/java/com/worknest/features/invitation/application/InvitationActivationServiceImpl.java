@@ -19,7 +19,7 @@ import com.worknest.features.invitation.repository.UserInvitationRepository;
 import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import java.time.Instant;
-import java.time.Instant;
+import java.util.Comparator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -66,12 +66,15 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
                     "GDPR / Terms of Service consent is required to complete company registration");
         }
 
-        User user = invitation.getUser();
+        User user = resolveCanonicalUser(invitation);
+        invitation.setUser(user);
 
-        validatePassword(request.password(), user.getEmail());
+        if (!StringUtils.hasText(user.getPasswordHash())) {
+            validatePassword(request.password(), user.getEmail());
+            user.setPasswordHash(passwordEncoder.encode(request.password()));
+        }
 
         // Activate user
-        user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setStatus(UserStatus.ACTIVE);
         user.setPreferredLanguage(Language.fromCode(request.preferredLanguage()));
         
@@ -157,7 +160,7 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
         if (!StringUtils.hasText(request.token())) {
             throw new InvitationTokenInvalidException();
         }
-        if (!StringUtils.hasText(request.password())) {
+        if (request.password() != null && request.password().isBlank()) {
             throw new WeakPasswordException("Password is required");
         }
     }
@@ -219,5 +222,16 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
 
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private User resolveCanonicalUser(UserInvitation invitation) {
+        return userRepository.findAllByEmailIgnoreCase(invitation.getEmail())
+                .stream()
+                .sorted(Comparator
+                        .comparing((User user) -> user.getStatus() == UserStatus.ACTIVE ? 0 : 1)
+                        .thenComparing(user -> StringUtils.hasText(user.getPasswordHash()) ? 0 : 1)
+                        .thenComparing(User::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                .findFirst()
+                .orElse(invitation.getUser());
     }
 }

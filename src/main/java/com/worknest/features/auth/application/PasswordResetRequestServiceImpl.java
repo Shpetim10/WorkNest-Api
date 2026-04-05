@@ -13,7 +13,9 @@ import com.worknest.features.auth.application.PasswordResetRequestService;
 import com.worknest.features.auth.utility.SecureTokenGenerator;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import com.worknest.features.notification.email.service.PasswordResetEmailService;
+import com.worknest.features.auth.repository.RoleAssignmentRepository;
 import com.worknest.audit.service.AuthAuditService;
+import com.worknest.domain.entities.RoleAssignment;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,8 +31,8 @@ public class PasswordResetRequestServiceImpl implements PasswordResetRequestServ
 
     private static final long PASSWORD_RESET_EXPIRY_SECONDS = 24 * 60 * 60L;
 
-    private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
+    private final RoleAssignmentRepository roleAssignmentRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final SecureTokenGenerator secureTokenGenerator;
     private final Sha256TokenHashUtility sha256TokenHashUtility;
@@ -43,36 +45,35 @@ public class PasswordResetRequestServiceImpl implements PasswordResetRequestServ
     @Override
     @Transactional
     public void requestPasswordReset(ForgotPasswordRequest request, String ipAddress) {
-        if (request == null || !StringUtils.hasText(request.companySlug()) || !StringUtils.hasText(request.email())) {
+        if (request == null || !StringUtils.hasText(request.email())) {
             return;
         }
 
-        String normalizedCompanySlug = request.companySlug().trim().toLowerCase();
         String normalizedEmail = request.email().trim().toLowerCase();
 
-        log.info("Processing forgot-password request for company {} and email {}", normalizedCompanySlug, normalizedEmail);
+        log.info("Processing global forgot-password request for email {}", normalizedEmail);
 
-        companyRepository.findBySlugIgnoreCase(normalizedCompanySlug)
-                .filter(this::isCompanyActive)
-                .ifPresent(company -> findActiveUser(company, normalizedEmail)
-                        .ifPresent(user -> {
-                            createResetToken(company, user);
-                            authAuditService.appendPasswordResetRequested(
-                                    company.getId(),
-                                    company.getName(),
-                                    user.getId(),
-                                    user.getEmail(),
-                                    ipAddress
-                            );
-                        }));
-    }
-
-    private java.util.Optional<User> findActiveUser(Company company, String normalizedEmail) {
-        return userRepository.findByCompanyIdAndEmailIgnoreCase(company.getId(), normalizedEmail)
-                .filter(user -> user.getStatus() == UserStatus.ACTIVE);
+        // Find the most appropriate active user identity for this email
+        userRepository.findAllByEmailIgnoreCase(normalizedEmail).stream()
+                .filter(user -> user.getStatus() == UserStatus.ACTIVE)
+                .findFirst()
+                .ifPresent(user -> {
+                    Company company = resolveCompanyForPasswordReset(user);
+                    if (isCompanyActive(company)) {
+                        createResetToken(company, user);
+                        authAuditService.appendPasswordResetRequested(
+                                company.getId(),
+                                company.getName(),
+                                user.getId(),
+                                user.getEmail(),
+                                ipAddress
+                        );
+                    }
+                });
     }
 
     private boolean isCompanyActive(Company company) {
+        if (company == null) return false;
         return company.getStatus() == CompanyStatus.ACTIVE && company.getDeletedAt() == null;
     }
 
@@ -95,5 +96,14 @@ public class PasswordResetRequestServiceImpl implements PasswordResetRequestServ
     private void invalidateOutstandingTokens(User user, Instant now) {
         passwordResetTokenRepository.findAllByUserIdAndUsedAtIsNull(user.getId())
                 .forEach(token -> token.setUsedAt(now));
+    }
+
+    private Company resolveCompanyForPasswordReset(User user) {
+        return roleAssignmentRepository.findAllByUserIdAndIsActiveTrue(user.getId())
+                .stream()
+                .map(RoleAssignment::getCompany)
+                .filter(this::isCompanyActive)
+                .findFirst()
+                .orElse(null);
     }
 }

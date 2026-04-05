@@ -8,15 +8,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
@@ -30,14 +26,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @Table(
         name = "users",
-        uniqueConstraints = {
-                @UniqueConstraint(name = "uk_users_company_email", columnNames = {"company_id", "email"}),
-                @UniqueConstraint(name = "uk_users_company_username", columnNames = {"company_id", "username"})
-        },
         indexes = {
-                @Index(name = "idx_users_company_email", columnList = "company_id,email"),
-                @Index(name = "idx_users_company_username", columnList = "company_id,username"),
-                @Index(name = "idx_users_company_status", columnList = "company_id,status"),
+                @Index(name = "idx_users_email", columnList = "email"),
+                @Index(name = "idx_users_username", columnList = "username"),
                 @Index(name = "idx_users_status", columnList = "status")
         }
 )
@@ -48,10 +39,6 @@ public class User {
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "company_id", nullable = false)
-    private Company company;
 
     @Column(name = "email", nullable = false, length = 255)
     private String email;

@@ -36,7 +36,7 @@ public record LoginResponse(
         @Schema(description = "The platform role associated with the current session context.")
         PlatformRole role,
 
-        @Schema(description = "The platform access type (WEB_APP, MOBILE_APP, etc.) authorized for this session.")
+        @Schema(description = "The platform access type (WEB, MOBILE, etc.) authorized for this session.")
         PlatformAccess platformAccess,
 
         @Schema(description = "Resolved tenant context for the authenticated session.")

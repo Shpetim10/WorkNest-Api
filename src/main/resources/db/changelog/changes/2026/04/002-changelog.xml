@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd"
+        objectQuotingStrategy="QUOTE_ONLY_RESERVED_WORDS">
+    <changeSet id="1775432499845-11" author="shaba">
+        <dropForeignKeyConstraint baseTableName="users" constraintName="fk_users_on_company"/>
+    </changeSet>
+    <changeSet id="1775432499845-8" author="shaba">
+        <addUniqueConstraint columnNames="email" constraintName="uc_companies_email" tableName="companies"/>
+    </changeSet>
+    <changeSet id="1775432499845-9" author="shaba">
+        <createIndex indexName="idx_users_email" tableName="users">
+            <column name="email"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1775432499845-10" author="shaba">
+        <createIndex indexName="idx_users_username" tableName="users">
+            <column name="username"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1775432499845-15" author="shaba">
+        <dropColumn columnName="company_id" tableName="users"/>
+    </changeSet>
+    <changeSet id="1775432499845-1" author="shaba">
+        <addNotNullConstraint columnDataType="VARCHAR(50)" columnName="phone_number" tableName="companies"
+                              validate="true"/>
+    </changeSet>
+
+</databaseChangeLog>

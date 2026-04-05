@@ -60,7 +60,7 @@ public class RoleSelectionController {
         String userAgent = servletRequest.getHeader("User-Agent");
         SelectRoleResponse response = roleSelectionService.selectRole(
                 request,
-                sessionPrincipal.userId().toString(),
+                sessionPrincipal.username(),
                 ipAddress,
                 userAgent
         );

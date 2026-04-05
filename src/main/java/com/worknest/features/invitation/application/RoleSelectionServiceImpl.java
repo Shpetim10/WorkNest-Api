@@ -14,10 +14,6 @@ import com.worknest.features.auth.exception.AuthenticationFailedException;
 import com.worknest.features.auth.exception.NoPlatformAccessException;
 import com.worknest.features.auth.repository.RefreshTokenRepository;
 import com.worknest.features.auth.repository.RoleAssignmentRepository;
-import com.worknest.features.auth.repository.RefreshTokenRepository;
-import com.worknest.features.auth.repository.RoleAssignmentRepository;
-import com.worknest.features.auth.repository.UserRepository;
-import com.worknest.features.invitation.application.RoleSelectionService;
 import com.worknest.features.auth.utility.SecureTokenGenerator;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import com.worknest.security.config.JwtProperties;
@@ -26,8 +22,6 @@ import com.worknest.audit.service.AuthAuditService;
 import com.worknest.audit.service.model.AuthAuditActorContext;
 import com.worknest.audit.service.model.AuthSessionContext;
 import java.time.Instant;
-import java.util.Objects;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -41,7 +35,6 @@ public class RoleSelectionServiceImpl implements RoleSelectionService {
 
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final RefreshTokenRepository refreshTokenRepository;
-    private final UserRepository userRepository;
     private final SecureTokenGenerator secureTokenGenerator;
     private final Sha256TokenHashUtility sha256TokenHashUtility;
     private final JwtService jwtService;
@@ -50,27 +43,28 @@ public class RoleSelectionServiceImpl implements RoleSelectionService {
 
     @Override
     @Transactional
-    public SelectRoleResponse selectRole(SelectRoleRequest request, String userId, String ipAddress, String userAgent) {
-        validateRequest(request, userId);
-
-        UUID userUuid = UUID.fromString(userId);
+    public SelectRoleResponse selectRole(
+            SelectRoleRequest request,
+            String authenticatedEmail,
+            String ipAddress,
+            String userAgent
+    ) {
+        validateRequest(request, authenticatedEmail);
         Instant now = Instant.now();
 
         log.info(
-                "User {} selecting role assignment {} for platform {}",
-                userId,
+                "Authenticated email {} selecting role assignment {} for platform {}",
+                authenticatedEmail,
                 request.roleAssignmentId(),
                 request.platformAccess()
         );
 
-        User user = userRepository.findById(Objects.requireNonNull(userUuid))
-                .orElseThrow(() -> new AuthenticationFailedException("USER_NOT_FOUND", "Authenticated user was not found"));
-        validateUser(user);
-
-        RoleAssignment assignment = roleAssignmentRepository.findById(Objects.requireNonNull(request.roleAssignmentId()))
+        RoleAssignment assignment = roleAssignmentRepository.findById(request.roleAssignmentId())
                 .orElseThrow(() -> new AuthenticationFailedException("ROLE_ASSIGNMENT_NOT_FOUND", "Role assignment was not found"));
 
-        validateAssignmentOwnership(assignment, userUuid);
+        User user = assignment.getUser();
+        validateUser(user);
+        validateAssignmentOwnership(assignment, authenticatedEmail);
         validateCompany(assignment.getCompany());
         validateAssignmentStatus(assignment);
         validatePlatformAccess(assignment, request.platformAccess());
@@ -123,11 +117,11 @@ public class RoleSelectionServiceImpl implements RoleSelectionService {
         );
     }
 
-    private void validateRequest(SelectRoleRequest request, String userId) {
+    private void validateRequest(SelectRoleRequest request, String authenticatedEmail) {
         if (request == null || request.roleAssignmentId() == null || request.platformAccess() == null) {
             throw new AuthenticationFailedException("INVALID_ROLE_SELECTION", "Role selection request is invalid");
         }
-        if (!StringUtils.hasText(userId)) {
+        if (!StringUtils.hasText(authenticatedEmail)) {
             throw new AuthenticationFailedException("INVALID_AUTH_CONTEXT", "Authenticated user context is missing");
         }
     }
@@ -153,17 +147,11 @@ public class RoleSelectionServiceImpl implements RoleSelectionService {
         }
     }
 
-    private void validateAssignmentOwnership(RoleAssignment assignment, UUID userId) {
-        if (!assignment.getUser().getId().equals(userId)) {
+    private void validateAssignmentOwnership(RoleAssignment assignment, String authenticatedEmail) {
+        if (!assignment.getUser().getEmail().equalsIgnoreCase(authenticatedEmail)) {
             throw new AuthenticationFailedException(
                     "ROLE_ASSIGNMENT_FORBIDDEN",
-                    "Selected role assignment does not belong to the authenticated user"
-            );
-        }
-        if (!assignment.getCompany().getId().equals(assignment.getUser().getCompany().getId())) {
-            throw new AuthenticationFailedException(
-                    "ROLE_ASSIGNMENT_COMPANY_MISMATCH",
-                    "Selected role assignment does not match the authenticated user's company"
+                    "Selected role assignment does not belong to the authenticated email"
             );
         }
     }

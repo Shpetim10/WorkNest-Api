@@ -12,7 +12,7 @@ public record SelectRoleRequest(
         UUID roleAssignmentId,
 
         @NotNull
-        @Schema(description = "The platform access level requested for this session", example = "WEB_APP")
+        @Schema(description = "The platform access level requested for this session", example = "WEB")
         PlatformAccess platformAccess
 ) {
 }

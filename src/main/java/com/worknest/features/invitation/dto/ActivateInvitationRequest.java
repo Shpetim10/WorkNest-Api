@@ -17,9 +17,8 @@ public record ActivateInvitationRequest(
         String token,
 
         /** Chosen password. Must be ≥ 8 characters, contain an uppercase letter and a digit. */
-        @NotBlank
-        @Size(min = 8, max = 255)
-        @Schema(description = "The user's new account password", example = "P@ssword123")
+        @Size(max = 255)
+        @Schema(description = "The user's new account password. Required only when the invited email does not already have a password.", example = "P@ssword123")
         String password,
 
         /**

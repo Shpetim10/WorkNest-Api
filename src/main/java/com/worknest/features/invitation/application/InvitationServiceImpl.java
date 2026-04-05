@@ -29,6 +29,7 @@ import com.worknest.features.notification.email.service.InvitationEmailService;
 import com.worknest.features.auth.utility.SecureTokenGenerator;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -90,11 +91,9 @@ public class InvitationServiceImpl implements InvitationService {
             throw new InvitationAlreadyExistsException(normalizedEmail);
         }
 
-        User user = userRepository.findByCompanyIdAndEmailIgnoreCase(company.getId(), normalizedEmail)
-                .orElseGet(() -> createPendingUser(company, normalizedEmail));
-        
-        // Final check on user status (moved from map to separate check for clarity/safety)
-        if (user.getStatus() == UserStatus.ACTIVE) {
+        User user = resolveOrCreateUser(company, normalizedEmail);
+
+        if (hasActiveAssignmentInCompany(user, company)) {
             throw new UserAlreadyActiveException(normalizedEmail);
         }
 
@@ -197,13 +196,24 @@ public class InvitationServiceImpl implements InvitationService {
 
     private User createPendingUser(Company company, String email) {
         User user = new User();
-        user.setCompany(company);
         user.setEmail(email);
         user.setPasswordHash(null);
         user.setStatus(UserStatus.PENDING);
         user.setPreferredLanguage(Language.SQ);
         user.setFailedLoginCount((short) 0);
         return userRepository.save(user);
+    }
+
+    private User resolveOrCreateUser(Company company, String email) {
+        return userRepository.findAllByEmailIgnoreCase(email)
+                .stream()
+                .sorted(userIdentityComparator())
+                .findFirst()
+                .orElseGet(() -> createPendingUser(company, email));
+    }
+
+    private boolean hasActiveAssignmentInCompany(User user, Company company) {
+        return roleAssignmentRepository.findFirstByUserIdAndCompanyIdAndIsActiveTrue(user.getId(), company.getId()).isPresent();
     }
 
     private void applySharedIdentityFields(User user, CreateInvitationRequest request) {
@@ -229,12 +239,11 @@ public class InvitationServiceImpl implements InvitationService {
         ra.setUser(user);
         ra.setRole(request.platformRole());
         ra.setJobTitle(resolveInvitedJobTitle(request.platformRole(), request.invitedJobTitle()));
-        ra.setIsActive(true);
+        ra.setIsActive(false);
         ra.setPlatformAccess(platformAccess);
         ra.setCreatedBy(invitedBy);
-        if (ra.getActivatedAt() == null) {
-            ra.setActivatedAt(Instant.now());
-        }
+        ra.setActivatedAt(null);
+        ra.setDeactivatedAt(null);
 
         return roleAssignmentRepository.save(ra);
     }
@@ -287,11 +296,11 @@ public class InvitationServiceImpl implements InvitationService {
                 || authentication instanceof AnonymousAuthenticationToken) {
             throw new InvalidInvitationRequestException("Authenticated inviter could not be resolved");
         }
-        String principal = authentication.getName();
-        if (!StringUtils.hasText(principal)) {
+        Object principal = authentication.getPrincipal();
+        if (!(principal instanceof com.worknest.security.AuthSessionPrincipal sessionPrincipal)) {
             throw new InvalidInvitationRequestException("Authenticated inviter could not be resolved");
         }
-        return userRepository.findByCompanyIdAndEmailIgnoreCase(companyId, principal.trim().toLowerCase())
+        return userRepository.findById(sessionPrincipal.userId())
                 .orElseThrow(() -> new InvalidInvitationRequestException(
                         "Authenticated inviter does not belong to the target company"));
     }
@@ -339,5 +348,12 @@ public class InvitationServiceImpl implements InvitationService {
 
     private String buildActivationLink(String rawToken) {
         return activationLinkBase + "?token=" + rawToken;
+    }
+
+    private Comparator<User> userIdentityComparator() {
+        return Comparator
+                .comparing((User user) -> user.getStatus() == UserStatus.ACTIVE ? 0 : 1)
+                .thenComparing(user -> StringUtils.hasText(user.getPasswordHash()) ? 0 : 1)
+                .thenComparing(User::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()));
     }
 }

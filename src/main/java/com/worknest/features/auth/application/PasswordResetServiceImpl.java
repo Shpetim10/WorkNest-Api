@@ -14,7 +14,12 @@ import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.auth.application.PasswordResetService;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import com.worknest.audit.service.AuthAuditService;
+import com.worknest.features.auth.repository.RoleAssignmentRepository;
+import com.worknest.domain.entities.Company;
+import com.worknest.domain.entities.RoleAssignment;
 import java.time.Instant;
+import java.util.UUID;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -32,6 +37,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
+    private final RoleAssignmentRepository roleAssignmentRepository;
     private final Sha256TokenHashUtility sha256TokenHashUtility;
     private final PasswordEncoder passwordEncoder;
     private final AuthAuditService authAuditService;
@@ -59,6 +65,10 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         User user = resetToken.getUser();
         validatePassword(request.newPassword(), user.getEmail());
 
+        Company auditCompany = resolveAuditCompany(user);
+        UUID auditCompanyId = auditCompany != null ? auditCompany.getId() : null;
+        String auditCompanyName = auditCompany != null ? auditCompany.getName() : null;
+
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         user.setFailedLoginCount((short) 0);
         user.setLockedUntil(null);
@@ -73,8 +83,8 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         refreshTokenRepository.revokeAllActiveByUserId(user.getId(), now, PASSWORD_RESET_REVOKE_REASON);
 
         authAuditService.appendPasswordResetSuccess(
-                user.getCompany().getId(),
-                user.getCompany().getName(),
+                auditCompanyId,
+                auditCompanyName,
                 user.getId(),
                 user.getEmail(),
                 ipAddress
@@ -105,5 +115,13 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         if (password.equalsIgnoreCase(userEmail)) {
             throw new WeakPasswordException("Password must not be equal to user email");
         }
+    }
+
+    private Company resolveAuditCompany(User user) {
+        return roleAssignmentRepository.findAllByUserIdAndIsActive(user.getId(), true)
+                .stream()
+                .map(RoleAssignment::getCompany)
+                .findFirst()
+                .orElse(null);
     }
 }

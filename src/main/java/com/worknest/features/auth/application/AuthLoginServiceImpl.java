@@ -1,13 +1,15 @@
 package com.worknest.features.auth.application;
 
-import com.worknest.domain.entities.Company;
-import com.worknest.domain.enums.CompanyStatus;
-import com.worknest.domain.enums.PlatformAccess;
-import com.worknest.domain.enums.PlatformRole;
 import com.worknest.domain.entities.RefreshToken;
 import com.worknest.domain.entities.RoleAssignment;
 import com.worknest.domain.entities.User;
+import com.worknest.domain.entities.Company;
+import com.worknest.domain.enums.CompanyStatus;
+import com.worknest.domain.enums.PlatformAccess;
 import com.worknest.domain.enums.UserStatus;
+import com.worknest.audit.service.AuthAuditService;
+import com.worknest.audit.service.model.AuthAuditActorContext;
+import com.worknest.audit.service.model.AuthSessionContext;
 import com.worknest.features.auth.dto.AvailableLoginContextDto;
 import com.worknest.features.auth.dto.LoginRequest;
 import com.worknest.features.auth.dto.LoginResponse;
@@ -15,30 +17,18 @@ import com.worknest.features.auth.dto.TenantContextDto;
 import com.worknest.features.auth.exception.AuthenticationFailedException;
 import com.worknest.features.auth.exception.InvalidCredentialsException;
 import com.worknest.features.auth.exception.NoPlatformAccessException;
-import com.worknest.features.company.repository.CompanyRepository;
-import com.worknest.features.auth.repository.RefreshTokenRepository;
-import com.worknest.features.auth.dto.AvailableLoginContextDto;
-import com.worknest.features.auth.dto.LoginRequest;
-import com.worknest.features.auth.dto.LoginResponse;
-import com.worknest.features.auth.dto.TenantContextDto;
-import com.worknest.features.auth.exception.AuthenticationFailedException;
-import com.worknest.features.auth.exception.InvalidCredentialsException;
-import com.worknest.features.auth.exception.NoPlatformAccessException;
-import com.worknest.features.company.repository.CompanyRepository;
 import com.worknest.features.auth.repository.RefreshTokenRepository;
 import com.worknest.features.auth.repository.RoleAssignmentRepository;
 import com.worknest.features.auth.repository.UserRepository;
-import com.worknest.features.auth.application.AuthLoginService;
 import com.worknest.features.auth.utility.SecureTokenGenerator;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import com.worknest.security.config.JwtProperties;
 import com.worknest.security.service.JwtService;
-import com.worknest.audit.service.AuthAuditService;
-import com.worknest.audit.service.model.AuthAuditActorContext;
-import com.worknest.audit.service.model.AuthSessionContext;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,7 +44,6 @@ public class AuthLoginServiceImpl implements AuthLoginService {
 
     private static final short MAX_FAILED_LOGIN_ATTEMPTS = 5;
 
-    private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -73,56 +62,30 @@ public class AuthLoginServiceImpl implements AuthLoginService {
     public LoginResponse login(LoginRequest request, String ipAddress, String userAgent) {
         validateRequest(request);
 
-        String normalizedSlug = request.companySlug().trim().toLowerCase();
         String normalizedEmail = request.email().trim().toLowerCase();
         Instant now = Instant.now();
 
-        log.info("Attempting login for user: {} in company slug: {}", normalizedEmail, normalizedSlug);
+        log.info("Attempting login for user: {} on platform {}", normalizedEmail, request.platformAccess());
 
-        Company company = companyRepository.findBySlugIgnoreCase(normalizedSlug)
-                .orElseThrow(() -> {
-                    authAuditService.appendLoginFailure(
-                            null, null, normalizedSlug,
-                            normalizedEmail, request.platformAccess(), "COMPANY_NOT_FOUND", ipAddress
-                    );
-                    return new InvalidCredentialsException();
-                });
-        validateCompany(company, normalizedEmail, request.platformAccess(), ipAddress);
+        AuthenticatedLoginScope loginScope = resolveLoginScope(request, normalizedEmail, ipAddress, now);
+        User user = loginScope.sessionUser();
 
-        User user = userRepository.findByCompanyIdAndEmailIgnoreCase(company.getId(), normalizedEmail)
-                .orElseThrow(() -> {
-                    authAuditService.appendLoginFailure(
-                            company.getId(), company.getName(), normalizedSlug,
-                            normalizedEmail, request.platformAccess(), "USER_NOT_FOUND", ipAddress
-                    );
-                    return new InvalidCredentialsException();
-                });
-        validateUserBeforePasswordCheck(user, normalizedEmail, request.platformAccess(), ipAddress, now);
-
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            handleFailedLogin(user, normalizedEmail, request.platformAccess(), ipAddress, now);
-            throw new InvalidCredentialsException();
-        }
-
-        List<RoleAssignment> validAssignments = roleAssignmentRepository
-                .findAllByUserIdAndCompanyIdAndIsActiveTrue(user.getId(), company.getId())
-                .stream()
-                .filter(assignment -> isAssignmentValidForPlatform(assignment, request.platformAccess()))
-                .toList();
+        List<RoleAssignment> validAssignments = loginScope.validAssignments();
 
         if (validAssignments.isEmpty()) {
+            Company auditCompany = resolveAuditCompany(user);
+            UUID companyId = auditCompany != null ? auditCompany.getId() : null;
+            String companyName = auditCompany != null ? auditCompany.getName() : null;
+            String companySlug = auditCompany != null ? auditCompany.getSlug() : null;
             authAuditService.appendLoginFailure(
-                    company.getId(), company.getName(), normalizedSlug,
+                    companyId, companyName, companySlug,
                     normalizedEmail, request.platformAccess(), "NO_PLATFORM_ACCESS", ipAddress
             );
             throw new NoPlatformAccessException(request.platformAccess().name());
         }
 
-        user.setFailedLoginCount((short) 0);
-        user.setLockedUntil(null);
-        user.setLastLoginAt(now);
-        user.setLastLoginIp(trimToNull(ipAddress));
-        userRepository.save(user);
+        loginScope.authenticatedUsers().forEach(authenticatedUser -> resetLoginTracking(authenticatedUser, now, ipAddress));
+        userRepository.saveAll(loginScope.authenticatedUsers());
 
         RoleAssignment sessionRoleAssignment = validAssignments.get(0);
         Instant accessTokenExpiresAt = now.plus(jwtProperties.getAccessTokenExpiry());
@@ -162,7 +125,7 @@ public class AuthLoginServiceImpl implements AuthLoginService {
                     request.platformAccess(),
                     toTenantContext(sessionRoleAssignment.getCompany()),
                     validAssignments.stream()
-                            .map(assignment -> toAvailableContext(company, assignment, request.platformAccess()))
+                            .map(assignment -> toAvailableContext(assignment, request.platformAccess()))
                             .toList(),
                     "Role selection required"
             );
@@ -170,8 +133,8 @@ public class AuthLoginServiceImpl implements AuthLoginService {
 
         // 5. Emit platform events & audit
         AuthAuditActorContext actorContext = new AuthAuditActorContext(
-                company.getId(),
-                company.getName(),
+                sessionRoleAssignment.getCompany().getId(),
+                sessionRoleAssignment.getCompany().getName(),
                 user.getId(),
                 sessionRoleAssignment.getId(),
                 sessionRoleAssignment.getRole(),
@@ -199,7 +162,7 @@ public class AuthLoginServiceImpl implements AuthLoginService {
                 sessionRoleAssignment.getRole(),
                 request.platformAccess(),
                 toTenantContext(sessionRoleAssignment.getCompany()),
-                List.of(toAvailableContext(company, sessionRoleAssignment, request.platformAccess())),
+                List.of(toAvailableContext(sessionRoleAssignment, request.platformAccess())),
                 "Login successful"
         );
     }
@@ -208,63 +171,105 @@ public class AuthLoginServiceImpl implements AuthLoginService {
         if (request == null) {
             throw new InvalidCredentialsException();
         }
-        if (!StringUtils.hasText(request.companySlug())
-                || !StringUtils.hasText(request.email())
+        if (!StringUtils.hasText(request.email())
                 || !StringUtils.hasText(request.password())
                 || request.platformAccess() == null) {
             throw new InvalidCredentialsException();
         }
     }
 
-    private void validateCompany(Company company, String email, PlatformAccess platformAccess, String ipAddress) {
-        if (company.getStatus() == CompanyStatus.SUSPENDED) {
+    private AuthenticatedLoginScope resolveLoginScope(LoginRequest request, String normalizedEmail, String ipAddress, Instant now) {
+        List<User> users = userRepository.findAllByEmailIgnoreCase(normalizedEmail);
+        if (users.isEmpty()) {
             authAuditService.appendLoginFailure(
-                    company.getId(), company.getName(), company.getSlug(),
-                    email, platformAccess, "COMPANY_SUSPENDED", ipAddress
+                    null, null, null,
+                    normalizedEmail, request.platformAccess(), "USER_NOT_FOUND", ipAddress
             );
-            throw new AuthenticationFailedException("COMPANY_SUSPENDED", "Company access is suspended");
+            throw new InvalidCredentialsException();
         }
-        if (company.getStatus() == CompanyStatus.DELETED || company.getDeletedAt() != null) {
-            authAuditService.appendLoginFailure(
-                    company.getId(), company.getName(), company.getSlug(),
-                    email, platformAccess, "COMPANY_DELETED", ipAddress
-            );
-            throw new AuthenticationFailedException("COMPANY_DELETED", "Company account is deleted");
+
+        List<User> passwordMatchedUsers = users.stream()
+                .filter(user -> StringUtils.hasText(user.getPasswordHash()))
+                .filter(user -> passwordEncoder.matches(request.password(), user.getPasswordHash()))
+                .peek(user -> validateUserBeforePasswordCheck(user, normalizedEmail, request.platformAccess(), ipAddress, now))
+                .toList();
+
+        if (passwordMatchedUsers.isEmpty()) {
+            User failedUser = users.get(0);
+            validateUserBeforePasswordCheck(failedUser, normalizedEmail, request.platformAccess(), ipAddress, now);
+            handleFailedLogin(failedUser, normalizedEmail, request.platformAccess(), ipAddress, now);
+            throw new InvalidCredentialsException();
         }
+
+        List<RoleAssignment> validAssignments = passwordMatchedUsers.stream()
+                .flatMap(user -> roleAssignmentRepository.findAllByUserIdAndIsActiveTrue(user.getId()).stream())
+                .filter(assignment -> isCompanyUsableForLogin(assignment.getCompany()))
+                .filter(assignment -> isAssignmentValidForPlatform(assignment, request.platformAccess()))
+                .sorted(Comparator
+                        .comparing((RoleAssignment assignment) -> assignment.getCompany().getName(), String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(assignment -> assignment.getRole().name())
+                        .thenComparing(RoleAssignment::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+
+        User sessionUser = validAssignments.isEmpty()
+                ? passwordMatchedUsers.get(0)
+                : validAssignments.get(0).getUser();
+
+        return new AuthenticatedLoginScope(sessionUser, passwordMatchedUsers, validAssignments);
+    }
+
+    private boolean isCompanyUsableForLogin(Company company) {
+        if (company == null) {
+            return false;
+        }
+        return company.getStatus() != CompanyStatus.SUSPENDED
+                && company.getStatus() != CompanyStatus.DELETED
+                && company.getDeletedAt() == null;
     }
 
     private void validateUserBeforePasswordCheck(User user, String email, PlatformAccess platformAccess, String ipAddress, Instant now) {
+        Company auditCompany = resolveAuditCompany(user);
         if (user.getStatus() == UserStatus.PENDING) {
             authAuditService.appendLoginFailure(
-                    user.getCompany().getId(), user.getCompany().getName(), user.getCompany().getSlug(),
+                    auditCompany != null ? auditCompany.getId() : null,
+                    auditCompany != null ? auditCompany.getName() : null,
+                    auditCompany != null ? auditCompany.getSlug() : null,
                     email, platformAccess, "USER_PENDING", ipAddress
             );
             throw new AuthenticationFailedException("USER_PENDING", "User account is pending activation");
         }
         if (user.getStatus() == UserStatus.SUSPENDED) {
             authAuditService.appendLoginFailure(
-                    user.getCompany().getId(), user.getCompany().getName(), user.getCompany().getSlug(),
+                    auditCompany != null ? auditCompany.getId() : null,
+                    auditCompany != null ? auditCompany.getName() : null,
+                    auditCompany != null ? auditCompany.getSlug() : null,
                     email, platformAccess, "USER_SUSPENDED", ipAddress
             );
             throw new AuthenticationFailedException("USER_SUSPENDED", "User account is suspended");
         }
         if (user.getStatus() == UserStatus.DEACTIVATED) {
             authAuditService.appendLoginFailure(
-                    user.getCompany().getId(), user.getCompany().getName(), user.getCompany().getSlug(),
+                    auditCompany != null ? auditCompany.getId() : null,
+                    auditCompany != null ? auditCompany.getName() : null,
+                    auditCompany != null ? auditCompany.getSlug() : null,
                     email, platformAccess, "USER_DEACTIVATED", ipAddress
             );
             throw new AuthenticationFailedException("USER_DEACTIVATED", "User account is deactivated");
         }
         if (!StringUtils.hasText(user.getPasswordHash())) {
             authAuditService.appendLoginFailure(
-                    user.getCompany().getId(), user.getCompany().getName(), user.getCompany().getSlug(),
+                    auditCompany != null ? auditCompany.getId() : null,
+                    auditCompany != null ? auditCompany.getName() : null,
+                    auditCompany != null ? auditCompany.getSlug() : null,
                     email, platformAccess, "MISSING_PASSWORD", ipAddress
             );
             throw new InvalidCredentialsException();
         }
         if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(now)) {
             authAuditService.appendLoginFailure(
-                    user.getCompany().getId(), user.getCompany().getName(), user.getCompany().getSlug(),
+                    auditCompany != null ? auditCompany.getId() : null,
+                    auditCompany != null ? auditCompany.getName() : null,
+                    auditCompany != null ? auditCompany.getSlug() : null,
                     email, platformAccess, "ACCOUNT_LOCKED", ipAddress
             );
             throw new AuthenticationFailedException("ACCOUNT_LOCKED", "Account is temporarily locked");
@@ -281,12 +286,22 @@ public class AuthLoginServiceImpl implements AuthLoginService {
             failureReason = "MAX_ATTEMPTS_REACHED";
         }
 
+        Company auditCompany = resolveAuditCompany(user);
         authAuditService.appendLoginFailure(
-                user.getCompany().getId(), user.getCompany().getName(), user.getCompany().getSlug(),
+                auditCompany != null ? auditCompany.getId() : null,
+                auditCompany != null ? auditCompany.getName() : null,
+                auditCompany != null ? auditCompany.getSlug() : null,
                 email, platformAccess, failureReason, ipAddress
         );
 
         userRepository.save(user);
+    }
+
+    private void resetLoginTracking(User user, Instant now, String ipAddress) {
+        user.setFailedLoginCount((short) 0);
+        user.setLockedUntil(null);
+        user.setLastLoginAt(now);
+        user.setLastLoginIp(trimToNull(ipAddress));
     }
 
     private boolean isAssignmentValidForPlatform(RoleAssignment assignment, PlatformAccess requestedPlatformAccess) {
@@ -308,11 +323,8 @@ public class AuthLoginServiceImpl implements AuthLoginService {
         };
     }
 
-    private AvailableLoginContextDto toAvailableContext(
-            Company company,
-            RoleAssignment assignment,
-            PlatformAccess platformAccess
-    ) {
+    private AvailableLoginContextDto toAvailableContext(RoleAssignment assignment, PlatformAccess platformAccess) {
+        Company company = assignment.getCompany();
         return new AvailableLoginContextDto(
                 company.getId(),
                 company.getName(),
@@ -353,5 +365,24 @@ public class AuthLoginServiceImpl implements AuthLoginService {
 
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private Company resolveAuditCompany(User user) {
+        return roleAssignmentRepository.findAllByUserIdAndIsActive(user.getId(), true)
+                .stream()
+                .map(RoleAssignment::getCompany)
+                .findFirst()
+                .orElseGet(() -> roleAssignmentRepository.findAllByUserIdAndIsActive(user.getId(), false)
+                        .stream()
+                        .map(RoleAssignment::getCompany)
+                        .findFirst()
+                        .orElse(null));
+    }
+
+    private record AuthenticatedLoginScope(
+            User sessionUser,
+            List<User> authenticatedUsers,
+            List<RoleAssignment> validAssignments
+    ) {
     }
 }

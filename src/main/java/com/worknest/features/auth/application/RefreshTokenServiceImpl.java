@@ -64,7 +64,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
         User user = existingToken.getUser();
         validateUser(user);
-        validateCompany(user.getCompany());
+        validateCompany(activeRoleAssignment.getCompany());
 
         Instant accessTokenExpiresAt = now.plus(jwtProperties.getAccessTokenExpiry());
         Instant refreshTokenExpiresAt = now.plus(jwtProperties.getRefreshTokenExpiry());
@@ -93,8 +93,8 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
         // 5. Emit platform events & audit
         AuthAuditActorContext actorContext = new AuthAuditActorContext(
-                user.getCompany().getId(),
-                user.getCompany().getName(),
+                activeRoleAssignment.getCompany().getId(),
+                activeRoleAssignment.getCompany().getName(),
                 user.getId(),
                 activeRoleAssignment.getId(),
                 activeRoleAssignment.getRole(),

@@ -28,6 +28,7 @@ import com.worknest.features.auth.utility.SecureTokenGenerator;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import com.worknest.features.media.application.MediaStorageService;
 import com.worknest.features.media.dto.MediaUploadResponse;
+import java.util.Comparator;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -101,32 +102,19 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
         Company savedCompany = companyRepository.save(company);
 
         // 2. Create admin User (no password — awaiting invitation activation)
-        if (userRepository.existsByCompanyIdAndEmailIgnoreCase(savedCompany.getId(), normalizedAdminEmail)) {
-            throw new AdminEmailAlreadyExistsException(normalizedAdminEmail);
-        }
-
-        User adminUser = new User();
-        adminUser.setCompany(savedCompany);
-        adminUser.setEmail(normalizedAdminEmail);
-        adminUser.setPasswordHash(null);
-        adminUser.setStatus(UserStatus.PENDING);
-        adminUser.setFirstName(trimToEmpty(request.adminFirstName()));
-        adminUser.setLastName(trimToEmpty(request.adminLastName()));
-        adminUser.setDisplayName(buildDisplayName(request.adminFirstName(), request.adminLastName()));
-        adminUser.setPhoneNumber(trimToNull(request.adminPhoneNumber()));
-        adminUser.setPreferredLanguage(Language.fromCode(request.preferredLanguage()));
-        adminUser.setTimezoneOverride(null);
-        adminUser.setFailedLoginCount((short) 0);
-        adminUser.setMfaEnabled(false);
-
+        User adminUser = resolveOrCreateAdminUser(savedCompany, normalizedAdminEmail, request);
         User savedAdminUser = userRepository.save(adminUser);
 
         // 3. Create RoleAssignment for ADMIN
-        RoleAssignment adminRoleAssignment = new RoleAssignment();
+        RoleAssignment adminRoleAssignment = roleAssignmentRepository
+                .findFirstByUserIdAndCompanyIdOrderByCreatedAtAsc(savedAdminUser.getId(), savedCompany.getId())
+                .orElseGet(RoleAssignment::new);
         adminRoleAssignment.setCompany(savedCompany);
         adminRoleAssignment.setUser(savedAdminUser);
         adminRoleAssignment.setRole(PlatformRole.ADMIN);
         adminRoleAssignment.setIsActive(false);
+        adminRoleAssignment.setActivatedAt(null);
+        adminRoleAssignment.setDeactivatedAt(null);
         adminRoleAssignment.setPlatformAccess(PlatformAccess.WEB);
 
         RoleAssignment savedRoleAssignment = roleAssignmentRepository.save(adminRoleAssignment);
@@ -246,5 +234,53 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
 
     private String buildDisplayName(String firstName, String lastName) {
         return (trimToEmpty(firstName) + " " + trimToEmpty(lastName)).trim();
+    }
+
+    private User resolveOrCreateAdminUser(
+            Company company,
+            String normalizedAdminEmail,
+            CompanyRegistrationRequest request
+    ) {
+        User user = userRepository.findAllByEmailIgnoreCase(normalizedAdminEmail)
+                .stream()
+                .sorted(userIdentityComparator())
+                .findFirst()
+                .orElseGet(() -> {
+                    User created = new User();
+                    created.setEmail(normalizedAdminEmail);
+                    created.setPasswordHash(null);
+                    created.setStatus(UserStatus.PENDING);
+                    created.setFailedLoginCount((short) 0);
+                    created.setMfaEnabled(false);
+                    return created;
+                });
+
+        if (roleAssignmentRepository.findFirstByUserIdAndCompanyIdAndIsActiveTrue(user.getId(), company.getId()).isPresent()) {
+            throw new AdminEmailAlreadyExistsException(normalizedAdminEmail);
+        }
+
+        user.setFirstName(trimToEmpty(request.adminFirstName()));
+        user.setLastName(trimToEmpty(request.adminLastName()));
+        user.setDisplayName(buildDisplayName(request.adminFirstName(), request.adminLastName()));
+        user.setPhoneNumber(trimToNull(request.adminPhoneNumber()));
+        user.setPreferredLanguage(Language.fromCode(request.preferredLanguage()));
+        user.setTimezoneOverride(null);
+        if (user.getStatus() == null) {
+            user.setStatus(UserStatus.PENDING);
+        }
+        if (user.getFailedLoginCount() == null) {
+            user.setFailedLoginCount((short) 0);
+        }
+        if (user.getMfaEnabled() == null) {
+            user.setMfaEnabled(false);
+        }
+        return user;
+    }
+
+    private Comparator<User> userIdentityComparator() {
+        return Comparator
+                .comparing((User user) -> user.getStatus() == UserStatus.ACTIVE ? 0 : 1)
+                .thenComparing(user -> StringUtils.hasText(user.getPasswordHash()) ? 0 : 1)
+                .thenComparing(User::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()));
     }
 }

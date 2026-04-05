@@ -13,11 +13,6 @@ import jakarta.validation.constraints.Size;
 @Schema(description = "Credentials for primary authentication")
 public record LoginRequest(
         @NotBlank
-        @Size(max = 100)
-        @Schema(description = "The unique identifier for the company workspace", example = "acme-corp")
-        String companySlug,
-
-        @NotBlank
         @Email
         @Size(max = 255)
         @Schema(description = "User's primary e-mail address", example = "john.doe@example.com")
@@ -29,7 +24,7 @@ public record LoginRequest(
         String password,
 
         @NotNull
-        @Schema(description = "The target platform access type", example = "WEB_APP")
+        @Schema(description = "The target platform access type", example = "WEB")
         PlatformAccess platformAccess
 ) {
 }
