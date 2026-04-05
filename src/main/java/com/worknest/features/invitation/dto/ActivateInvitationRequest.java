@@ -33,24 +33,12 @@ public record ActivateInvitationRequest(
         @Schema(description = "Preferred UI language code (BCP-47)", example = "sq", defaultValue = "sq")
         String preferredLanguage,
 
-        @Size(max = 50)
-        @Schema(description = "Contact phone number", example = "+355670000000")
-        String phoneNumber,
-
         @Size(max = 500)
         @Schema(description = "Storage key for the uploaded profile image")
         String profileImageStorageKey,
 
         @Size(max = 1000)
         @Schema(description = "Full storage path/URL for the profile image")
-        String profileImageStoragePath,
-
-        @Size(max = 150)
-        @Schema(description = "Name of an emergency contact person", example = "Jane Doe")
-        String emergencyContactName,
-
-        @Size(max = 50)
-        @Schema(description = "Phone number of the emergency contact", example = "+355690000000")
-        String emergencyContactPhone
+        String profileImageStoragePath
 ) {
 }

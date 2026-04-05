@@ -11,7 +11,6 @@ import com.worknest.features.auth.dto.RefreshTokenResponse;
 import com.worknest.features.auth.dto.TenantContextDto;
 import com.worknest.features.auth.exception.AuthenticationFailedException;
 import com.worknest.features.auth.repository.RefreshTokenRepository;
-import com.worknest.features.auth.application.RefreshTokenService;
 import com.worknest.features.auth.utility.SecureTokenGenerator;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import com.worknest.security.config.JwtProperties;

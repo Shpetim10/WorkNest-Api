@@ -86,6 +86,7 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
         company.setLocale(Language.fromCode(request.locale()));
         company.setCurrency(defaultIfBlank(request.currency(), DEFAULT_CURRENCY));
         company.setDateFormat(defaultIfBlank(request.dateFormat(), DEFAULT_DATE_FORMAT));
+        company.setIndustry(trimToNull(request.industry()));
         company.setOnboardingCompletedAt(null);
         company.setSubscriptionPlan(SubscriptionPlan.BASIC);
         company.setSubscriptionStatus(SubscriptionStatus.TRIAL);

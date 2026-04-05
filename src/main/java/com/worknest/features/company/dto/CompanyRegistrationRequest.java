@@ -66,6 +66,11 @@ public record CompanyRegistrationRequest(
         @Schema(description = "Preferred display date format", example = "DD/MM/YYYY", defaultValue = "DD/MM/YYYY")
         String dateFormat,
 
+        /** Business sector/industry */
+        @Size(max = 100)
+        @Schema(description = "Official industry classification", example = "technology")
+        String industry,
+
         // Initial administrator
 
         /** E-mail address of the initial ADMIN user. An invitation will be sent here. */

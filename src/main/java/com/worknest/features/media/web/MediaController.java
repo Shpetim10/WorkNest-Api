@@ -101,8 +101,8 @@ public class MediaController {
             @RequestParam("category") MediaCategory category,
             @RequestParam("file") MultipartFile file
     ) {
-        if (category != MediaCategory.REGISTRATION_LOGO) {
-            throw new org.springframework.security.access.AccessDeniedException("Only REGISTRATION_LOGO is allowed for public uploads");
+        if (category != MediaCategory.REGISTRATION_LOGO && category != MediaCategory.USER_PROFILE) {
+            throw new org.springframework.security.access.AccessDeniedException("Only REGISTRATION_LOGO and USER_PROFILE are allowed for public uploads");
         }
         MediaUploadResponse response = mediaStorageService.uploadPublic(category, file);
         return ResponseEntity.status(HttpStatus.CREATED)

@@ -23,4 +23,10 @@ public interface MediaStorageService {
             String logoKey,
             UUID companyId
     );
+
+    MediaUploadResponse promoteProfileImage(
+            String key,
+            UUID companyId,
+            UUID userId
+    );
 }

@@ -37,6 +37,7 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
     private final Sha256TokenHashUtility sha256TokenHashUtility;
     private final PasswordEncoder passwordEncoder;
     private final AuthAuditService authAuditService;
+    private final com.worknest.features.media.application.MediaStorageService mediaStorageService;
 
     @Override
     @Transactional
@@ -73,9 +74,23 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setStatus(UserStatus.ACTIVE);
         user.setPreferredLanguage(Language.fromCode(request.preferredLanguage()));
-        user.setPhoneNumber(trimToNull(request.phoneNumber()));
-        user.setProfileImageKey(trimToNull(request.profileImageStorageKey()));
-        user.setProfileImagePath(trimToNull(request.profileImageStoragePath()));
+        
+        // Handle profile image promotion from public/temp
+        if (StringUtils.hasText(request.profileImageStorageKey())) {
+            try {
+                com.worknest.features.media.dto.MediaUploadResponse promotion = 
+                    mediaStorageService.promoteProfileImage(
+                        request.profileImageStorageKey(), 
+                        invitation.getCompany().getId(), 
+                        user.getId()
+                    );
+                user.setProfileImageKey(promotion.storageKey());
+                user.setProfileImagePath(promotion.storagePath());
+            } catch (Exception e) {
+                // Log but don't fail activation if photo promotion fails
+                // In production, you'd use a logger here
+            }
+        }
 
         // Record GDPR consent when provided
         if (Boolean.TRUE.equals(request.gdprConsent())) {

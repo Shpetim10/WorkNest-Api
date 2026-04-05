@@ -49,7 +49,16 @@ public class LocalMediaStorageServiceImpl implements MediaStorageService {
                     UUID.randomUUID(),
                     extension
             );
-            case USER_PROFILE -> String.format(
+            case USER_PROFILE -> (companyId == null || userId == null) 
+                ? String.format(
+                    Locale.ROOT,
+                    "public/users/profile/%04d/%02d/%s.%s",
+                    today.getYear(),
+                    today.getMonthValue(),
+                    UUID.randomUUID(),
+                    extension
+                )
+                : String.format(
                     Locale.ROOT,
                     "companies/%s/users/%s/profile/%04d/%02d/%s.%s",
                     companyId,
@@ -58,7 +67,7 @@ public class LocalMediaStorageServiceImpl implements MediaStorageService {
                     today.getMonthValue(),
                     UUID.randomUUID(),
                     extension
-            );
+                );
             case REGISTRATION_LOGO -> String.format(
                     Locale.ROOT,
                     "public/registrations/logos/%04d/%02d/%s.%s",
@@ -93,8 +102,8 @@ public class LocalMediaStorageServiceImpl implements MediaStorageService {
 
     @Override
     public MediaUploadResponse uploadPublic(MediaCategory category, MultipartFile file) {
-        if (category != MediaCategory.REGISTRATION_LOGO) {
-            throw new InvalidConfigurationRequestException("Only REGISTRATION_LOGO is allowed for public uploads");
+        if (category != MediaCategory.REGISTRATION_LOGO && category != MediaCategory.USER_PROFILE) {
+            throw new InvalidConfigurationRequestException("Only REGISTRATION_LOGO and USER_PROFILE are allowed for public uploads");
         }
         return upload(null, null, category, file);
     }
@@ -138,6 +147,49 @@ public class LocalMediaStorageServiceImpl implements MediaStorageService {
                 "image/" + extension, // Best effort
                 target.toFile().length(),
                 "Logo promoted successfully"
+        );
+    }
+
+    @Override
+    public MediaUploadResponse promoteProfileImage(String key, UUID companyId, UUID userId) {
+        if (!StringUtils.hasText(key) || !key.contains("public/")) {
+            throw new InvalidConfigurationRequestException("Invalid temporary profile image key");
+        }
+
+        Path source = storageRoot.resolve(key).normalize();
+        if (!Files.exists(source)) {
+            throw new InvalidConfigurationRequestException("Profile image file not found");
+        }
+
+        LocalDate today = LocalDate.now();
+        String extension = key.substring(key.lastIndexOf('.') + 1);
+        String newKey = String.format(
+                Locale.ROOT,
+                "companies/%s/users/%s/profile/%04d/%02d/%s.%s",
+                companyId,
+                userId,
+                today.getYear(),
+                today.getMonthValue(),
+                UUID.randomUUID(),
+                extension
+        );
+
+        Path target = storageRoot.resolve(newKey).normalize();
+
+        try {
+            Files.createDirectories(target.getParent());
+            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException exception) {
+            throw new InvalidConfigurationRequestException("Failed to promote profile image to user directory");
+        }
+
+        return new MediaUploadResponse(
+                newKey,
+                target.toString().replace('\\', '/'),
+                source.getFileName().toString(),
+                "image/" + extension,
+                target.toFile().length(),
+                "Profile image promoted successfully"
         );
     }
 
