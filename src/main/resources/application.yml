@@ -84,7 +84,7 @@ app:
       # Placeholder CORS config for web + React Native (Expo) clients.
       allowed-origins: ${APP_SECURITY_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000,exp://127.0.0.1:19000}
       allowed-methods: ${APP_SECURITY_CORS_ALLOWED_METHODS:GET,POST,PUT,PATCH,DELETE,OPTIONS}
-      allowed-headers: ${APP_SECURITY_CORS_ALLOWED_HEADERS:Authorization,Content-Type,Accept,Origin,X-Requested-With}
+      allowed-headers: ${APP_SECURITY_CORS_ALLOWED_HEADERS:Authorization,Content-Type,Accept,Origin,X-Requested-With,X-Company-ID}
       exposed-headers: ${APP_SECURITY_CORS_EXPOSED_HEADERS:Authorization,Location}
       allow-credentials: ${APP_SECURITY_CORS_ALLOW_CREDENTIALS:true}
       max-age-seconds: ${APP_SECURITY_CORS_MAX_AGE_SECONDS:3600}

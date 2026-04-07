@@ -2,12 +2,14 @@ package com.worknest.common.exception;
 
 import com.worknest.common.api.ApiErrorResponse;
 import com.worknest.common.api.FieldValidationError;
+import com.worknest.features.company.exception.CompanySiteActivationBlockedException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
@@ -56,6 +58,44 @@ public class GlobalExceptionHandler {
     ) {
         return ResponseEntity.status(exception.getStatus()).body(
                 ApiErrorResponse.of(exception.getCode(), exception.getMessage(), request.getRequestURI(), List.of())
+        );
+    }
+
+    /**
+     * JPA optimistic-lock failure — surfaced when two admins edit the same site
+     * draft simultaneously and one "wins" the DB write.
+     *
+     * <p>The message is deliberately generic to prevent leaking entity type or ID
+     * details across tenant boundaries. The client-facing message matches the one
+     * documented in the plan: "Updated in another tab — please refresh."
+     */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiErrorResponse> handleOptimisticLock(
+            ObjectOptimisticLockingFailureException exception,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                ApiErrorResponse.of(
+                        "OPTIMISTIC_LOCK_CONFLICT",
+                        "Updated in another tab \u2014 please refresh and try again.",
+                        request.getRequestURI(),
+                        List.of()
+                )
+        );
+    }
+
+    @ExceptionHandler(CompanySiteActivationBlockedException.class)
+    public ResponseEntity<ApiErrorResponse> handleCompanySiteActivationBlocked(
+            CompanySiteActivationBlockedException exception,
+            HttpServletRequest request
+    ) {
+        List<FieldValidationError> fieldErrors = exception.getIssues()
+                .stream()
+                .map(issue -> new FieldValidationError(issue.field(), issue.message()))
+                .toList();
+
+        return ResponseEntity.status(exception.getStatus()).body(
+                ApiErrorResponse.of(exception.getCode(), exception.getMessage(), request.getRequestURI(), fieldErrors)
         );
     }
 

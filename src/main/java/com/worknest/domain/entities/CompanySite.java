@@ -18,6 +18,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -26,7 +27,6 @@ import lombok.Setter;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import org.springframework.util.StringUtils;
 
 @Getter
 @Setter
@@ -65,7 +65,16 @@ public class CompanySite {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
-    private SiteStatus status = SiteStatus.ACTIVE;
+    private SiteStatus status = SiteStatus.DRAFT;
+
+    /**
+     * Optimistic locking token. Incremented by JPA on every update.
+     * Callers that receive a 409 Conflict should surface:
+     * "Updated in another tab — please refresh."
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
 
     // Human-readable address
     @Column(name = "address_line_1", length = 255)
@@ -138,30 +147,34 @@ public class CompanySite {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /**
+     * Lifecycle callback that performs lightweight, non-blocking cleanup only.
+     *
+     * <p><strong>Strict geofence completeness validation has been intentionally removed
+     * from this hook.</strong> Draft saves must never be blocked by incomplete location
+     * data. Full validation (requiring a complete geofence when
+     * {@code locationRequired == true} and {@code status == ACTIVE}) is performed
+     * exclusively in the service-layer activation path.
+     *
+     * <p>The only work done here is clearing mutually-exclusive shape fields
+     * when the site is already ACTIVE and a shape type is set, so the DB row
+     * stays internally consistent after a confirmed location save.
+     */
     @PrePersist
     @PreUpdate
-    void validateConfiguration() {
-        if (Boolean.TRUE.equals(locationRequired)) {
-            if (geofenceShapeType == null) {
-                throw new IllegalStateException("geofenceShapeType is required when locationRequired is enabled");
-            }
-            if (geofenceShapeType == GeofenceShapeType.CIRCLE) {
-                if (latitude == null || longitude == null || geofenceRadiusMeters == null) {
-                    throw new IllegalStateException("Circle geofence requires latitude, longitude, and radius");
-                }
-                geofencePolygonGeoJson = null;
-            } else if (geofenceShapeType == GeofenceShapeType.POLYGON) {
-                if (!StringUtils.hasText(geofencePolygonGeoJson)) {
-                    throw new IllegalStateException("Polygon geofence requires polygon geojson");
-                }
-                geofenceRadiusMeters = null;
-                latitude = null;
-                longitude = null;
-            }
-        } else {
-            geofenceShapeType = null;
-            geofenceRadiusMeters = null;
+    void normalizeGeofenceFields() {
+        // Only clean up shape-specific fields when the site is ACTIVE and a shape
+        // is explicitly chosen. For DRAFT sites, all fields are left as-is so
+        // partial saves can be freely stored and later resumed.
+        if (status != SiteStatus.ACTIVE || geofenceShapeType == null) {
+            return;
+        }
+        if (geofenceShapeType == GeofenceShapeType.CIRCLE) {
+            // A CIRCLE geofence must not carry polygon data.
             geofencePolygonGeoJson = null;
+        } else if (geofenceShapeType == GeofenceShapeType.POLYGON) {
+            // A POLYGON geofence must not carry point/radius data.
+            geofenceRadiusMeters = null;
             latitude = null;
             longitude = null;
         }

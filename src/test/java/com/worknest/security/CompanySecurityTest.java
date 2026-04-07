@@ -79,9 +79,6 @@ class CompanySecurityTest {
         setAuthentication(PlatformRole.ADMIN);
         UUID otherCompanyId = UUID.randomUUID();
 
-        when(roleAssignmentRepository.findFirstByUserIdAndCompanyIdAndIsActiveTrue(userId, otherCompanyId))
-                .thenReturn(Optional.empty());
-
         assertFalse(companySecurity.hasCompanyRole(otherCompanyId, "ADMIN"));
     }
 

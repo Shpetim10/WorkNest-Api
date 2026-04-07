@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd"
+        objectQuotingStrategy="QUOTE_ONLY_RESERVED_WORDS">
+
+    <!--
+        004-site-setup-draft.xml
+        ========================
+        Persistence-layer foundation for the Company Site draft-to-activation wizard.
+
+        Design principles applied:
+          - All changesets are purely additive (no DROP / NOT NULL added to existing rows).
+          - New NOT NULL columns default to safe values so existing data is valid instantly.
+          - Idempotence: Liquibase tracks execution by changeSet id; re-running is safe.
+          - Setup-wizard STEP state is NOT stored here — it is computed from field presence
+            in service-layer DTOs.
+
+        Dependency: runs after 003-department.xml (enforced by includeAll alphabetical order).
+    -->
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         company_sites: optimistic-locking column
+         ────────────────────────────────────────────────────────────────
+         CompanySite now has @Version on the `version` column (mirrors the
+         existing pattern on `companies` and `site_trusted_networks`).
+
+         defaultValueNumeric="0" ensures every existing row gets version=0,
+         which is exactly what JPA expects for entities that have never been
+         through an optimistic-lock update.
+         ═══════════════════════════════════════════════════════════════════ -->
+    <changeSet id="004-1" author="shaba">
+        <addColumn tableName="company_sites">
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         company_sites: default status changed to DRAFT
+         ────────────────────────────────────────────────────────────────
+         Existing ACTIVE rows are untouched (no UPDATE run). Only net-new
+         rows created by the wizard will default to DRAFT because the Java
+         entity now carries `status = SiteStatus.DRAFT`. The DB column has
+         no DEFAULT — JPA always supplies the value explicitly at INSERT.
+
+         No migration data-backfill is needed: existing sites were manually
+         created and are legitimately ACTIVE.
+         ═══════════════════════════════════════════════════════════════════ -->
+    <!-- NOTE: No DDL change needed for the status column itself; the enum
+         expansion (adding DRAFT, DISABLED, ARCHIVED values) is purely
+         application-side. The column type VARCHAR(20) already fits the
+         longest new value ("DISABLED" = 8 chars). -->
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         site_trusted_networks: nullable expiry timestamp
+         ────────────────────────────────────────────────────────────────
+         NULL  = rule never expires (amber UI warning shown).
+         Past timestamp = logically expired; scheduled job emits audit event.
+         Future timestamp = rule will expire; UI shows countdown amber badge.
+
+         Column is intentionally nullable — saving a rule without an expiry
+         must never be blocked during the draft workflow.
+         ═══════════════════════════════════════════════════════════════════ -->
+    <changeSet id="004-2" author="shaba">
+        <addColumn tableName="site_trusted_networks">
+            <column name="expires_at" type="DATETIME">
+                <!-- nullable by omission; no <constraints> element needed -->
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <!-- Index to support the scheduled expiry-check job efficiently.
+         Filters: expires_at IS NOT NULL AND expires_at < NOW()            -->
+    <changeSet id="004-3" author="shaba">
+        <createIndex indexName="idx_site_trusted_networks_expires_at"
+                     tableName="site_trusted_networks">
+            <column name="expires_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

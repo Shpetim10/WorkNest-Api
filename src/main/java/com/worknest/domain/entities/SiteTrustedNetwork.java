@@ -76,6 +76,20 @@ public class SiteTrustedNetwork {
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
 
+    /**
+     * Optional expiry timestamp for this trusted-network rule.
+     *
+     * <p>A {@code null} value means the rule never expires and will trigger an
+     * amber warning in the setup wizard ("No expiry set — rule is permanent").
+     * A past timestamp means the rule has logically expired; a scheduled job
+     * should emit a {@code network_rule_expired} audit event and notify site admins.
+     *
+     * <p>This field is intentionally nullable. Saving a rule without an expiry
+     * is always allowed — blocking would contradict the draft-save contract.
+     */
+    @Column(name = "expires_at")
+    private Instant expiresAt;
+
     @Version
     @Column(name = "version", nullable = false)
     private Long version = 0L;
