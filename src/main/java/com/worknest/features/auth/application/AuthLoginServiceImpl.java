@@ -53,9 +53,17 @@ public class AuthLoginServiceImpl implements AuthLoginService {
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
     private final AuthAuditService authAuditService;
+    private final RefreshTokenService refreshTokenService;
 
     @Value("${app.security.auth.failed-login-lock-duration:PT15M}")
     private Duration failedLoginLockDuration;
+
+    @Override
+    @Transactional
+    public void logout(String refreshToken) {
+        log.info("Processing logout request for refresh token");
+        refreshTokenService.revoke(refreshToken);
+    }
 
     @Override
     @Transactional

@@ -14,4 +14,11 @@ public interface AuthLoginService {
      * @return A LoginResponse containing tokens and role context.
      */
     LoginResponse login(LoginRequest request, String ipAddress, String userAgent);
+
+    /**
+     * Ends a user session by revoking the provided refresh token.
+     *
+     * @param refreshToken The refresh token to revoke.
+     */
+    void logout(String refreshToken);
 }

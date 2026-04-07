@@ -16,4 +16,11 @@ public interface RefreshTokenService {
      * @return Fresh access token and related session details.
      */
     RefreshTokenResponse refresh(String rawRefreshToken, String ipAddress, String userAgent);
+
+    /**
+     * Revokes a refresh token (logout).
+     *
+     * @param rawRefreshToken The raw refresh token to revoke.
+     */
+    void revoke(String rawRefreshToken);
 }

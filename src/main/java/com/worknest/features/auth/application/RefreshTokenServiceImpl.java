@@ -122,6 +122,43 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         );
     }
 
+    @Override
+    @Transactional
+    public void revoke(String rawRefreshToken) {
+        if (!StringUtils.hasText(rawRefreshToken)) {
+            return;
+        }
+
+        String tokenHash = sha256TokenHashUtility.hash(rawRefreshToken);
+        RefreshToken token = refreshTokenRepository.findByTokenHash(tokenHash)
+                .orElse(null);
+
+        if (token != null && token.getRevokedAt() == null) {
+            Instant now = Instant.now();
+            refreshTokenRepository.revokeById(token.getId(), now, "logout");
+
+            AuthAuditActorContext actorContext = new AuthAuditActorContext(
+                    token.getActiveRoleAssignment().getCompany().getId(),
+                    token.getActiveRoleAssignment().getCompany().getName(),
+                    token.getUser().getId(),
+                    token.getActiveRoleAssignment().getId(),
+                    token.getActiveRoleAssignment().getRole(),
+                    token.getActiveRoleAssignment().getJobTitle(),
+                    token.getIpAddress()
+            );
+
+            AuthSessionContext sessionContext = new AuthSessionContext(
+                    token.getUser().getId(),
+                    token.getActiveRoleAssignment().getId(),
+                    token.getActiveRoleAssignment().getRole(),
+                    token.getPlatformAccess()
+            );
+
+            authAuditService.appendLogout(actorContext, sessionContext);
+            log.info("Revoked refresh token for user {} via logout", token.getUser().getEmail());
+        }
+    }
+
     @Transactional
     public RefreshTokenResponse refresh(RefreshTokenRequest request, String ipAddress, String userAgent) {
         if (request == null) {

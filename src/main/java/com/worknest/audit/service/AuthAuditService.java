@@ -84,4 +84,15 @@ public interface AuthAuditService {
             String email,
             String ipAddress
     );
+
+    /**
+     * Records a successful user logout event.
+     *
+     * @param actorContext   The security context of the user performing logout.
+     * @param sessionContext Details of the session that ended.
+     */
+    void appendLogout(
+            AuthAuditActorContext actorContext,
+            AuthSessionContext sessionContext
+    );
 }

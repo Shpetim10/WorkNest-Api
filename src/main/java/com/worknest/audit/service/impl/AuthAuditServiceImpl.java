@@ -326,6 +326,33 @@ public class AuthAuditServiceImpl implements AuthAuditService {
         ));
     }
 
+    @Override
+    public void appendLogout(
+            AuthAuditActorContext actorContext,
+            AuthSessionContext sessionContext
+    ) {
+        auditLogService.logAction(buildAuditLog(
+                actorContext,
+                "LOGOUT_SUCCESS",
+                "User",
+                sessionContext.userId(),
+                mapOf(
+                        "roleAssignmentId", sessionContext.roleAssignmentId(),
+                        "role", sessionContext.role() != null ? sessionContext.role().name() : null,
+                        "platformAccess", sessionContext.platformAccess() != null ? sessionContext.platformAccess().name() : null
+                ),
+                Map.of()
+        ));
+ 
+        platformEventService.publishEvent(new PlatformEvent(
+                "LOGOUT_SUCCESS",
+                actorContext.companyId(),
+                actorContext.companyName(),
+                actorContext.actorUserId(),
+                "User session ended successfully"
+        ));
+    }
+ 
     private AuditLog buildAuditLog(
             AuthAuditActorContext actorContext,
             String action,
