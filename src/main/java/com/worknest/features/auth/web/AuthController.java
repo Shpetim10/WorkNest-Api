@@ -16,9 +16,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
 import com.worknest.features.auth.dto.LogoutRequest;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
@@ -81,6 +82,11 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> logout(
             @RequestBody @Valid LogoutRequest request
     ) {
+        log.info("Received logout request. Token length: {}, Token starts with: {}", 
+                request.refreshToken() != null ? request.refreshToken().length() : 0,
+                (request.refreshToken() != null && request.refreshToken().length() > 10) ? 
+                        request.refreshToken().substring(0, 10) + "..." : "N/A");
+        
         authLoginService.logout(request.refreshToken());
         return ResponseEntity.ok(ApiResponse.success("Logout successful", null));
     }

@@ -61,7 +61,7 @@ public class AuthLoginServiceImpl implements AuthLoginService {
     @Override
     @Transactional
     public void logout(String refreshToken) {
-        log.info("Processing logout request for refresh token");
+        log.info("Processing logout request in AuthLoginService. Revoking refresh token...");
         refreshTokenService.revoke(refreshToken);
     }
 

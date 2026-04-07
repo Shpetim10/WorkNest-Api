@@ -126,37 +126,65 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     @Transactional
     public void revoke(String rawRefreshToken) {
         if (!StringUtils.hasText(rawRefreshToken)) {
+            log.warn("Logout attempt with empty refresh token.");
             return;
         }
 
         String tokenHash = sha256TokenHashUtility.hash(rawRefreshToken);
-        RefreshToken token = refreshTokenRepository.findByTokenHash(tokenHash)
+        log.debug("Hashed refresh token for lookup: {}", tokenHash);
+        
+        RefreshToken token = refreshTokenRepository.findByTokenHashWithAuditing(tokenHash)
                 .orElse(null);
 
-        if (token != null && token.getRevokedAt() == null) {
-            Instant now = Instant.now();
-            refreshTokenRepository.revokeById(token.getId(), now, "logout");
-
-            AuthAuditActorContext actorContext = new AuthAuditActorContext(
-                    token.getActiveRoleAssignment().getCompany().getId(),
-                    token.getActiveRoleAssignment().getCompany().getName(),
-                    token.getUser().getId(),
-                    token.getActiveRoleAssignment().getId(),
-                    token.getActiveRoleAssignment().getRole(),
-                    token.getActiveRoleAssignment().getJobTitle(),
-                    token.getIpAddress()
-            );
-
-            AuthSessionContext sessionContext = new AuthSessionContext(
-                    token.getUser().getId(),
-                    token.getActiveRoleAssignment().getId(),
-                    token.getActiveRoleAssignment().getRole(),
-                    token.getPlatformAccess()
-            );
-
-            authAuditService.appendLogout(actorContext, sessionContext);
-            log.info("Revoked refresh token for user {} via logout", token.getUser().getEmail());
+        if (token == null) {
+            log.warn("Logout attempt: Refresh token not found in database.");
+            return;
         }
+
+        if (token.getRevokedAt() != null) {
+            log.info("Logout attempt: Refresh token already revoked at {} with reason: {}", 
+                    token.getRevokedAt(), token.getRevokedReason());
+            return;
+        }
+
+        Instant now = Instant.now();
+        refreshTokenRepository.revokeById(token.getId(), now, "logout");
+        log.info("Refresh token {} successfully marked as revoked for logout.", token.getId());
+
+        try {
+            RoleAssignment assignment = token.getActiveRoleAssignment();
+            if (assignment != null) {
+                log.debug("Found active role assignment {} for token. Building audit context...", assignment.getId());
+                
+                AuthAuditActorContext actorContext = new AuthAuditActorContext(
+                        assignment.getCompany().getId(),
+                        assignment.getCompany().getName(),
+                        token.getUser().getId(),
+                        assignment.getId(),
+                        assignment.getRole(),
+                        assignment.getJobTitle(),
+                        token.getIpAddress()
+                );
+
+                AuthSessionContext sessionContext = new AuthSessionContext(
+                        token.getUser().getId(),
+                        assignment.getId(),
+                        assignment.getRole(),
+                        token.getPlatformAccess()
+                );
+
+                log.debug("Appending logout audit for user {}", token.getUser().getEmail());
+                authAuditService.appendLogout(actorContext, sessionContext);
+            } else {
+                log.warn("Logout performed for token {} without an active role assignment, skipping detailed audit.", token.getId());
+            }
+        } catch (Exception e) {
+            log.error("Failed to append logout audit trail for token {}, but token was successfully revoked.", token.getId(), e);
+        }
+
+        log.info("Logout process completed for user {} (Token: {})", 
+                token.getUser() != null ? token.getUser().getEmail() : "unknown", 
+                token.getId());
     }
 
     @Transactional

@@ -12,6 +12,15 @@ import org.springframework.data.repository.query.Param;
 
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID> {
 
+    @Query("""
+            select rt from RefreshToken rt
+            left join fetch rt.user
+            left join fetch rt.activeRoleAssignment ra
+            left join fetch ra.company
+            where rt.tokenHash = :tokenHash
+            """)
+    Optional<RefreshToken> findByTokenHashWithAuditing(@Param("tokenHash") String tokenHash);
+
     Optional<RefreshToken> findByTokenHash(String tokenHash);
 
     Optional<RefreshToken> findByTokenHashAndRevokedAtIsNullAndExpiresAtAfter(String tokenHash, Instant now);
