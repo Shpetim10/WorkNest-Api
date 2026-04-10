@@ -8,6 +8,7 @@ import com.worknest.features.company.dto.SiteLocationRequest;
 import com.worknest.features.company.dto.SiteSetupStatusResponse;
 import com.worknest.features.company.dto.TrustedNetworkResponse;
 import com.worknest.features.company.dto.TrustedNetworkUpsertRequest;
+import java.util.List;
 import java.util.UUID;
 
 public interface CompanySiteSetupService {
@@ -23,4 +24,6 @@ public interface CompanySiteSetupService {
     SiteSetupStatusResponse getSetupStatus(UUID siteId);
 
     SiteActivationResponse activate(UUID siteId, boolean dryRun);
+
+    List<CompanySiteResponse> getSitesByCompany(UUID companyId);
 }

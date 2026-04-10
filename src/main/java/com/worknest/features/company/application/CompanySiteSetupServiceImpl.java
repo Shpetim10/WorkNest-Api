@@ -290,6 +290,16 @@ public class CompanySiteSetupServiceImpl implements CompanySiteSetupService {
         );
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<CompanySiteResponse> getSitesByCompany(UUID companyId) {
+        requireTenantCompany(companyId);
+        return companySiteRepository.findAllByCompanyIdOrderByNameAsc(companyId)
+                .stream()
+                .map(CompanySiteResponse::fromEntity)
+                .toList();
+    }
+
     private ValidationResult validateSiteSetup(CompanySite site, List<TrustedNetworkResponse> trustedNetworks) {
         List<SiteSetupIssueResponse> blockingIssues = new ArrayList<>();
         List<SiteSetupIssueResponse> warnings = new ArrayList<>();

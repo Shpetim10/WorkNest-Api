@@ -21,6 +21,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -63,6 +64,19 @@ public class CompanySiteController {
         CompanySiteResponse response = companySiteSetupService.createDraft(companyId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Site draft created successfully", response));
+    }
+
+    @GetMapping("/companies/{companyId}/sites")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @Operation(
+            summary = "Get all company sites",
+            description = "Returns a list of all sites (Draft or Active) belonging to the specified company."
+    )
+    public ApiResponse<List<CompanySiteResponse>> getAllSites(@PathVariable UUID companyId) {
+        return ApiResponse.success(
+                "Sites retrieved successfully",
+                companySiteSetupService.getSitesByCompany(companyId)
+        );
     }
 
     @PutMapping("/sites/{siteId}/basic-info")
