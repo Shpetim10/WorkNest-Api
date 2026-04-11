@@ -60,6 +60,10 @@ public record SiteLocationRequest(
         @Schema(description = "Postal code from reverse geocoding.", example = "1001")
         String postalCode,
 
+        @Size(min = 2, max = 2, message = "Country code from location must be exactly 2 characters")
+        @Schema(description = "Country code from reverse geocoding. Used to cross-validate with the site's primary country code.", example = "AL")
+        String countryCode,
+
         // --- Geofence configuration ---
 
         @NotNull(message = "Geofence shape type is required")

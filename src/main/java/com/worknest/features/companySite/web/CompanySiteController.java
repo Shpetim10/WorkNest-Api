@@ -3,16 +3,30 @@ package com.worknest.features.companySite.web;
 import com.worknest.common.api.ApiResponse;
 import com.worknest.common.web.ClientIpResolver;
 import com.worknest.features.companySite.application.CompanySiteCreationService;
+import com.worknest.features.companySite.application.CompanySiteLifecycleService;
 import com.worknest.features.companySite.application.CompanySiteQueryService;
+import com.worknest.features.companySite.dto.CompanySiteDetailsResponse;
 import com.worknest.features.companySite.dto.CompanySiteResponse;
 import com.worknest.features.companySite.dto.CreateSiteRequest;
 import com.worknest.features.companySite.dto.CreateSiteResponse;
+import com.worknest.features.companySite.dto.DetectLocationRequest;
+import com.worknest.features.companySite.dto.DetectLocationResponse;
+import com.worknest.features.companySite.dto.LocationDetailsReadDto;
+import com.worknest.features.companySite.dto.LocationDetailsUpdateRequest;
+import com.worknest.features.companySite.dto.MainDetailsReadDto;
+import com.worknest.features.companySite.dto.MainDetailsUpdateRequest;
+import com.worknest.features.companySite.dto.UpdateNetworkRequest;
+import com.worknest.features.companySite.dto.TrustedNetworkResponse;
+import com.worknest.features.companySite.application.CompanySiteLocationService;
+import com.worknest.features.companySite.application.CompanySiteUpdateService;
+import com.worknest.features.companySite.application.SiteTrustedNetworkService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -23,6 +37,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PutMapping;
+
 
 /**
  * Company site creation endpoint.
@@ -45,6 +61,9 @@ public class CompanySiteController {
     private final CompanySiteCreationService creationService;
     private final CompanySiteQueryService    queryService;
     private final CompanySiteLifecycleService lifecycleService;
+    private final CompanySiteUpdateService updateService;
+    private final CompanySiteLocationService locationService;
+    private final SiteTrustedNetworkService networkService;
 
     @GetMapping
     @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
@@ -55,6 +74,113 @@ public class CompanySiteController {
     )
     public ApiResponse<List<CompanySiteResponse>> listSites(@PathVariable UUID companyId) {
         return ApiResponse.success("Sites retrieved successfully", queryService.listSites(companyId));
+    }
+
+    @GetMapping("/{siteId}")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @Operation(
+            summary = "Get company site details",
+            description = "Returns comprehensive details for a specific site, including basic info, location, " +
+                          "and all configured trusted-network rules."
+    )
+    public ApiResponse<CompanySiteDetailsResponse> getSiteDetails(
+            @PathVariable UUID companyId,
+            @PathVariable UUID siteId
+    ) {
+        return ApiResponse.success("Site details retrieved successfully", queryService.getSiteDetails(companyId, siteId));
+    }
+
+    @GetMapping("/{siteId}/main-details")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @Operation(
+            summary = "Get main details of a site",
+            description = "Returns only the main details required for prefilling the Update Main Details modal, minimizing payload."
+    )
+    public ApiResponse<MainDetailsReadDto> getSiteMainDetails(
+            @PathVariable UUID companyId,
+            @PathVariable UUID siteId
+    ) {
+        return ApiResponse.success("Site main details retrieved successfully", updateService.getMainDetails(companyId, siteId));
+    }
+
+    @PutMapping("/{siteId}/main-details")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @Operation(
+            summary = "Update site main details",
+            description = "Updates only the main details of an existing site. Strict optimistic locking and business rules apply."
+    )
+    public ApiResponse<MainDetailsReadDto> updateSiteMainDetails(
+            @PathVariable UUID companyId,
+            @PathVariable UUID siteId,
+            @Valid @RequestBody MainDetailsUpdateRequest request
+    ) {
+        MainDetailsReadDto updated = updateService.updateMainDetails(companyId, siteId, request);
+        return ApiResponse.success("Site main details updated successfully", updated);
+    }
+
+    @GetMapping("/{siteId}/location")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @Operation(
+            summary = "Get location details of a site",
+            description = "Returns the location details to prefill the Update Location modal."
+    )
+    public ApiResponse<LocationDetailsReadDto> getSiteLocation(
+            @PathVariable UUID companyId,
+            @PathVariable UUID siteId
+    ) {
+        return ApiResponse.success("Site location details retrieved successfully", locationService.getLocation(companyId, siteId));
+    }
+
+    @PutMapping("/{siteId}/location")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @Operation(
+            summary = "Update site location",
+            description = "Replaces the site's location and geofence state. Strict normalization rules override client mismatches."
+    )
+    public ApiResponse<LocationDetailsReadDto> updateSiteLocation(
+            @PathVariable UUID companyId,
+            @PathVariable UUID siteId,
+            @Valid @RequestBody LocationDetailsUpdateRequest request
+    ) {
+        LocationDetailsReadDto updated = locationService.updateLocation(companyId, siteId, request);
+        return ApiResponse.success("Site location updated successfully", updated);
+    }
+
+    @PostMapping("/{siteId}/detect-location")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @Operation(
+            summary = "Assess browser coordinates against geofence",
+            description = "Assesses transient coordinates from the frontend map against the current site boundaries to provide UI feedback."
+    )
+    public ApiResponse<DetectLocationResponse> detectLocation(
+             @PathVariable UUID companyId,
+             @PathVariable UUID siteId,
+             @Valid @RequestBody DetectLocationRequest request) {
+        return ApiResponse.success("Location assessed", locationService.assessLocation(companyId, siteId, request));
+    }
+
+    // ── Network Management Endpoints ──────────────────────────────────────────
+
+    @GetMapping("/{siteId}/networks")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "List site trusted networks", description = "Returns all trusted networks for a specific site.")
+    public ApiResponse<List<TrustedNetworkResponse>> listNetworks(
+            @PathVariable UUID companyId,
+            @PathVariable UUID siteId
+    ) {
+        return ApiResponse.success("Networks retrieved successfully", networkService.listNetworks(companyId, siteId));
+    }
+
+    @PutMapping("/{siteId}/networks/{networkId}")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Update trusted network", description = "Updates an existing trusted network rule.")
+    public ApiResponse<TrustedNetworkResponse> updateNetwork(
+            @PathVariable UUID companyId,
+            @PathVariable UUID siteId,
+            @PathVariable UUID networkId,
+            @Valid @RequestBody UpdateNetworkRequest request
+    ) {
+        return ApiResponse.success("Network updated successfully", networkService.updateNetwork(companyId, siteId, networkId, request));
     }
 
     /**

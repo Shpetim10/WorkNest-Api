@@ -94,8 +94,13 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
             throw new SiteCodeAlreadyExistsException(normalizedCode);
         }
 
-        // ── 5. Geofence validation ───────────────────────────────────────────────
+        // ── 5. Geofence and Address validation ───────────────────────────────────
         GeofenceValidator.validate(request.location());
+        
+        if (request.location().countryCode() != null && 
+            !request.location().countryCode().equalsIgnoreCase(request.countryCode())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "COUNTRY_MISMATCH", "The selected location's country (" + request.location().countryCode() + ") must match the site's primary country code (" + request.countryCode() + ").");
+        }
 
         // ── 6. Trusted-network validation ────────────────────────────────────────
         List<TrustedNetworkRequest> networks = request.trustedNetworks() != null

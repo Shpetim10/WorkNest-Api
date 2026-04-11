@@ -40,4 +40,13 @@ public interface SiteTrustedNetworkRepository extends JpaRepository<SiteTrustedN
      * Counts existing rules for a site, used for priority-order suggestions.
      */
     long countBySiteId(UUID siteId);
+
+    Optional<SiteTrustedNetwork> findByIdAndSiteId(UUID id, UUID siteId);
+
+    boolean existsBySiteIdAndCidrBlockAndNetworkTypeAndIdNot(
+            UUID siteId,
+            String cidrBlock,
+            com.worknest.domain.enums.NetworkType networkType,
+            UUID id
+    );
 }

@@ -7,4 +7,9 @@ import java.util.UUID;
 public interface CompanySiteQueryService {
 
     List<CompanySiteResponse> listSites(UUID companyId);
+
+    /**
+     * Fetches comprehensive details of a specific site including its networks.
+     */
+    CompanySiteDetailsResponse getSiteDetails(UUID companyId, UUID siteId);
 }

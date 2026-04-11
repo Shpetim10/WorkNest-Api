@@ -24,6 +24,12 @@ public interface CompanySiteRepository extends JpaRepository<CompanySite, UUID> 
     boolean existsByCompanyIdAndCode(UUID companyId, String code);
 
     /**
+     * Checks whether a site with the given code exists for a company, excluding a specific ID.
+     * Used for uniqueness validation during updates.
+     */
+    boolean existsByCompanyIdAndCodeIgnoreCaseAndIdNot(UUID companyId, String code, UUID id);
+
+    /**
      * Loads a site only if it belongs to the given company.
      * Used for all single-site retrieval to enforce tenant isolation.
      */
