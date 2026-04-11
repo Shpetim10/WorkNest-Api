@@ -23,6 +23,15 @@ public interface RoleAssignmentRepository extends JpaRepository<RoleAssignment, 
             """)
     Optional<RoleAssignment> findActiveAdminByCompanyId(@Param("companyId") UUID companyId);
 
+    @Query("""
+            select ra
+            from RoleAssignment ra
+            where ra.company.id = :companyId
+              and ra.role = com.worknest.domain.enums.PlatformRole.STAFF
+              and ra.isActive = true
+            """)
+    List<RoleAssignment> findAllActiveStaffByCompanyId(@Param("companyId") UUID companyId);
+
     List<RoleAssignment> findAllByUserIdAndIsActive(UUID userId, Boolean isActive);
 
     Optional<RoleAssignment> findFirstByUserIdAndCompanyIdAndIsActiveTrue(UUID userId, UUID companyId);

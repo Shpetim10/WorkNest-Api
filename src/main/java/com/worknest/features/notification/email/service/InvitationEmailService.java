@@ -14,4 +14,12 @@ public interface InvitationEmailService {
             InvitationKind invitationKind,
             String activationLink,
             String preferredLanguage);
+
+    void sendProvisioningEmail(
+            Company company,
+            String recipientEmail,
+            String recipientDisplayName,
+            PlatformRole platformRole,
+            String activationLink,
+            String preferredLanguage);
 }

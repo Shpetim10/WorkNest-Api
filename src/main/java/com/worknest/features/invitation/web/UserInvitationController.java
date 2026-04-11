@@ -57,6 +57,23 @@ public class UserInvitationController {
                 .body(ApiResponse.success(response.message(), response));
     }
 
+    @PostMapping("/validate")
+    @Operation(
+            summary = "Validate Invitation Token",
+            description = "Checks if an invitation token is still valid. Returns masked metadata (e.g. Email, Company Name) without consuming the token."
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Token is valid")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "400",
+            description = "Invalid, expired, or already used token",
+            content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
+    )
+    public ResponseEntity<ApiResponse<com.worknest.features.invitation.dto.PreflightInvitationResponse>> validateInvitationToken(
+            @RequestBody @Valid com.worknest.features.invitation.dto.ValidateInvitationRequest request) {
+        com.worknest.features.invitation.dto.PreflightInvitationResponse response = invitationActivationService.validateToken(request);
+        return ResponseEntity.ok(ApiResponse.success("Token is valid", response));
+    }
+
     @PostMapping("/activate")
     @Operation(
             summary = "Activate User Account",

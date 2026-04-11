@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd"
+        objectQuotingStrategy="QUOTE_ONLY_RESERVED_WORDS">
+
+    <changeSet id="006-1" author="shaba">
+        <createTable tableName="employees">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="company_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_id" type="UUID">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_employees_user_id"/>
+            </column>
+            <column name="department_id" type="UUID">
+                <constraints nullable="true"/>
+            </column>
+            <column name="company_site_id" type="UUID">
+                <constraints nullable="true"/>
+            </column>
+            <column name="employment_type_role" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="start_date" type="DATE">
+                <constraints nullable="true"/>
+            </column>
+            <column name="supervisor_role_assignment_id" type="UUID">
+                <constraints nullable="true"/>
+            </column>
+            <column name="employment_status" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="employees" baseColumnNames="company_id" constraintName="fk_employees_company" referencedTableName="companies" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="employees" baseColumnNames="user_id" constraintName="fk_employees_user" referencedTableName="users" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="employees" baseColumnNames="department_id" constraintName="fk_employees_department" referencedTableName="departments" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="employees" baseColumnNames="company_site_id" constraintName="fk_employees_site" referencedTableName="company_sites" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="employees" baseColumnNames="supervisor_role_assignment_id" constraintName="fk_employees_supervisor" referencedTableName="role_assignments" referencedColumnNames="id"/>
+
+        <createIndex tableName="employees" indexName="idx_employees_company">
+            <column name="company_id"/>
+        </createIndex>
+        <createIndex tableName="employees" indexName="idx_employees_company_supervisor">
+            <column name="company_id"/>
+            <column name="supervisor_role_assignment_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="006-2" author="shaba">
+        <createTable tableName="employee_supervisor_history">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="company_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="employee_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="from_role_assignment_id" type="UUID">
+                <constraints nullable="true"/>
+            </column>
+            <column name="to_role_assignment_id" type="UUID">
+                <constraints nullable="true"/>
+            </column>
+            <column name="changed_by_user_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="changed_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reason" type="VARCHAR(255)">
+                <constraints nullable="true"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="employee_supervisor_history" baseColumnNames="company_id" constraintName="fk_emp_sup_hist_company" referencedTableName="companies" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="employee_supervisor_history" baseColumnNames="employee_id" constraintName="fk_emp_sup_hist_employee" referencedTableName="employees" referencedColumnNames="id" onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="employee_supervisor_history" baseColumnNames="from_role_assignment_id" constraintName="fk_emp_sup_hist_from_sup" referencedTableName="role_assignments" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="employee_supervisor_history" baseColumnNames="to_role_assignment_id" constraintName="fk_emp_sup_hist_to_sup" referencedTableName="role_assignments" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="employee_supervisor_history" baseColumnNames="changed_by_user_id" constraintName="fk_emp_sup_hist_changed_by" referencedTableName="users" referencedColumnNames="id"/>
+
+        <createIndex tableName="employee_supervisor_history" indexName="idx_emp_sup_hist_employee">
+            <column name="employee_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

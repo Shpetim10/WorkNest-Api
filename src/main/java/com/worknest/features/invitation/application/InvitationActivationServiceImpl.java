@@ -40,6 +40,33 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
     private final com.worknest.features.media.application.MediaStorageService mediaStorageService;
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public com.worknest.features.invitation.dto.PreflightInvitationResponse validateToken(com.worknest.features.invitation.dto.ValidateInvitationRequest request) {
+        if (request == null || !org.springframework.util.StringUtils.hasText(request.token())) {
+            throw new com.worknest.features.invitation.exception.InvitationTokenInvalidException();
+        }
+
+        String tokenHash = sha256TokenHashUtility.hash(request.token());
+
+        com.worknest.domain.entities.UserInvitation invitation = userInvitationRepository.findByTokenHash(tokenHash)
+                .orElseThrow(com.worknest.features.invitation.exception.InvitationTokenInvalidException::new);
+
+        if (invitation.isUsed()) {
+            throw new com.worknest.features.invitation.exception.InvitationAlreadyUsedException();
+        }
+        if (invitation.isExpired(java.time.Instant.now())) {
+            throw new com.worknest.features.invitation.exception.InvitationTokenExpiredException();
+        }
+
+        return new com.worknest.features.invitation.dto.PreflightInvitationResponse(
+                invitation.getEmail(),
+                invitation.getCompany() != null ? invitation.getCompany().getName() : null,
+                invitation.getPlatformRole(),
+                invitation.getInvitedJobTitle()
+        );
+    }
+
+    @Override
     @Transactional
     public ActivateInvitationResponse activateInvitation(ActivateInvitationRequest request, String clientIp) {
         validateRequest(request);
@@ -61,7 +88,7 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
                 .equals(invitation.getInvitationKind());
 
         // GDPR consent is mandatory for the initial admin (accepting on behalf of the company)
-        if (isInitialAdminActivation && !Boolean.TRUE.equals(request.gdprConsent())) {
+        if (!Boolean.TRUE.equals(request.gdprConsent())) {
             throw new InvalidRegistrationDataException(
                     "GDPR / Terms of Service consent is required to complete company registration");
         }

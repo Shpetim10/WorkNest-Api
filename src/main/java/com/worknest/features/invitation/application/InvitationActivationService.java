@@ -12,4 +12,6 @@ public interface InvitationActivationService {
      * @param clientIp the IP address of the caller — recorded for GDPR audit purposes
      */
     ActivateInvitationResponse activateInvitation(ActivateInvitationRequest request, String clientIp);
+    
+    com.worknest.features.invitation.dto.PreflightInvitationResponse validateToken(com.worknest.features.invitation.dto.ValidateInvitationRequest request);
 }
