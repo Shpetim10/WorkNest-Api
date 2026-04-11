@@ -1,5 +1,6 @@
 package com.worknest.features.invitation.web;
 
+import com.worknest.common.web.ClientIpResolver;
 import com.worknest.features.invitation.dto.ActivateInvitationRequest;
 import com.worknest.features.invitation.dto.ActivateInvitationResponse;
 import com.worknest.features.invitation.dto.CreateInvitationRequest;
@@ -77,20 +78,8 @@ public class UserInvitationController {
             @RequestBody @Valid ActivateInvitationRequest request,
             HttpServletRequest httpServletRequest
     ) {
-        String clientIp = resolveClientIp(httpServletRequest);
+        String clientIp = ClientIpResolver.resolve(httpServletRequest);
         ActivateInvitationResponse response = invitationActivationService.activateInvitation(request, clientIp);
         return ResponseEntity.ok(ApiResponse.success(response.message(), response));
-    }
-
-    /**
-     * Resolves the real client IP, respecting common reverse-proxy headers.
-     */
-    private String resolveClientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            // The first address in the chain is the originating client
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 }

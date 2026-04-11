@@ -1,8 +1,13 @@
 package com.worknest.common.exception;
 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+
 import com.worknest.common.api.ApiErrorResponse;
 import com.worknest.common.api.FieldValidationError;
 import com.worknest.features.company.exception.CompanySiteActivationBlockedException;
+import com.worknest.features.companySite.exception.InvalidCidrException;
+import com.worknest.features.companySite.exception.InvalidGeofenceException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.util.List;
@@ -14,9 +19,11 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.transaction.TransactionSystemException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -99,6 +106,26 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(InvalidGeofenceException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidGeofence(
+            InvalidGeofenceException exception,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(exception.getStatus()).body(
+                ApiErrorResponse.of(exception.getCode(), exception.getMessage(), request.getRequestURI(), List.of())
+        );
+    }
+
+    @ExceptionHandler(InvalidCidrException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidCidr(
+            InvalidCidrException exception,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(exception.getStatus()).body(
+                ApiErrorResponse.of(exception.getCode(), exception.getMessage(), request.getRequestURI(), List.of())
+        );
+    }
+
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ApiErrorResponse> handleBadCredentials(
             BadCredentialsException exception,
@@ -119,11 +146,63 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiErrorResponse> handleDataIntegrityViolation(
+            DataIntegrityViolationException exception,
+            HttpServletRequest request
+    ) {
+        log.error("Database constraint violation in {}: {}", request.getRequestURI(), exception.getMessage(), exception);
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                ApiErrorResponse.of(
+                        "DATABASE_CONFLICT",
+                        "The operation could not be completed due to a data conflict (e.g. duplicate site code or overlapping CIDR).",
+                        request.getRequestURI(),
+                        List.of()
+                )
+        );
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiErrorResponse> handleIllegalState(
+            IllegalStateException exception,
+            HttpServletRequest request
+    ) {
+        log.error("Illegal state in {}: {}", request.getRequestURI(), exception.getMessage());
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                ApiErrorResponse.of("INTERNAL_ERROR", exception.getMessage(), request.getRequestURI(), List.of())
+        );
+    }
+
+    /**
+     * Catches exceptions thrown during the JPA/Hibernate commit/flush phase.
+     * This often wraps ConstraintViolationExceptions that weren't caught
+     * earlier by the web-layer validation.
+     */
+    @ExceptionHandler(TransactionSystemException.class)
+    public ResponseEntity<ApiErrorResponse> handleTransactionSystem(
+            TransactionSystemException exception,
+            HttpServletRequest request
+    ) {
+        Throwable cause = exception.getRootCause();
+        if (cause instanceof jakarta.validation.ConstraintViolationException cve) {
+            return handleConstraintViolation(cve, request);
+        }
+
+        log.error("Transaction failure in {}: {}", request.getRequestURI(), exception.getMessage(), exception);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                ApiErrorResponse.of("TRANSACTION_ERROR", "The operation failed during database commit.", request.getRequestURI(), List.of())
+        );
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleUnhandled(
             Exception exception,
             HttpServletRequest request
     ) {
+        log.error("Unhandled exception in {}: {}", request.getRequestURI(), exception.getMessage(), exception);
+
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
                 ApiErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred", request.getRequestURI(), List.of())
         );

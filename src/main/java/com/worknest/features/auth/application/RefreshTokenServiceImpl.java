@@ -18,6 +18,7 @@ import com.worknest.security.service.JwtService;
 import com.worknest.audit.service.AuthAuditService;
 import com.worknest.audit.service.model.AuthAuditActorContext;
 import com.worknest.audit.service.model.AuthSessionContext;
+import java.time.Duration;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -197,6 +198,12 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
     private void validateRefreshToken(RefreshToken refreshToken, Instant now) {
         if (refreshToken.getRevokedAt() != null) {
+            // Allow a short grace period for recently rotated tokens to handle multi-tab/request race conditions
+            if (ROTATION_REASON.equals(refreshToken.getRevokedReason()) &&
+                    refreshToken.getRevokedAt().plus(Duration.ofSeconds(30)).isAfter(now)) {
+                log.info("Trusting recently rotated token within grace period: {}", refreshToken.getId());
+                return;
+            }
             throw new AuthenticationFailedException("REFRESH_TOKEN_REVOKED", "Refresh token has been revoked");
         }
         if (refreshToken.getExpiresAt() == null || !refreshToken.getExpiresAt().isAfter(now)) {

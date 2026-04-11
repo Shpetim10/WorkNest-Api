@@ -65,7 +65,16 @@ public class CompanySite {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
-    private SiteStatus status = SiteStatus.DRAFT;
+    private SiteStatus status = SiteStatus.PENDING_REVIEW;
+
+    /**
+     * Records how the site's location was originally captured in the frontend.
+     * This is informational only; the authoritative location data are the
+     * {@code latitude}/{@code longitude}/geofence fields on this entity.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "location_detection_source", length = 30)
+    private LocationDetectionSource locationDetectionSource;
 
     /**
      * Optimistic locking token. Incremented by JPA on every update.
@@ -166,7 +175,7 @@ public class CompanySite {
         // Only clean up shape-specific fields when the site is ACTIVE and a shape
         // is explicitly chosen. For DRAFT sites, all fields are left as-is so
         // partial saves can be freely stored and later resumed.
-        if (status != SiteStatus.ACTIVE || geofenceShapeType == null) {
+        if ((status != SiteStatus.ACTIVE && status != SiteStatus.PENDING_REVIEW) || geofenceShapeType == null) {
             return;
         }
         if (geofenceShapeType == GeofenceShapeType.CIRCLE) {

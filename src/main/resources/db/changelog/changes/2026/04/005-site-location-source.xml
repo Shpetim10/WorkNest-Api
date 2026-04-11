@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd"
+        objectQuotingStrategy="QUOTE_ONLY_RESERVED_WORDS">
+
+    <!--
+        005-site-setup-refinement.xml
+        ==============================
+        Refining the Company Site and Network architecture to support the
+        one-shot creation flow.
+
+        Changes:
+          1. Add `location_detection_source` to `company_sites`.
+          2. Migrate existing `NetworkType` enum strings to the new
+             production-friendly naming convention.
+    -->
+
+    <!-- Add informational metadata column for location capture method -->
+    <changeSet id="005-1" author="shaba">
+        <addColumn tableName="company_sites">
+            <column name="location_detection_source" type="VARCHAR(30)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <!-- Migrate NetworkType enum values to new naming convention.
+         Ensures existing data remains compatible with the Java enum. -->
+    <changeSet id="005-2" author="shaba">
+        <update tableName="site_trusted_networks">
+            <column name="network_type" value="DEDICATED_HOST"/>
+            <where>network_type = 'PUBLIC_IP'</where>
+        </update>
+        <update tableName="site_trusted_networks">
+            <column name="network_type" value="MANUAL_CIDR"/>
+            <where>network_type = 'CIDR_RANGE'</where>
+        </update>
+        <update tableName="site_trusted_networks">
+            <column name="network_type" value="VPN_GATEWAY"/>
+            <where>network_type = 'VPN'</where>
+        </update>
+        <update tableName="site_trusted_networks">
+            <column name="network_type" value="MANUAL_CIDR"/>
+            <where>network_type = 'AUTO_DETECTED'</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

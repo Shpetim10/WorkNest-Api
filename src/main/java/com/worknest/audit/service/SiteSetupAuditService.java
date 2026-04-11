@@ -116,4 +116,21 @@ public interface SiteSetupAuditService {
             UUID actorRoleAssignmentId,
             String ipAddress
     );
+
+    /**
+     * Emitted when a site is administratively disabled.
+     *
+     * @param companyId    owning company
+     * @param siteId       site being disabled
+     * @param actorUserId  actor who triggered the operation
+     * @param actorRoleAssignmentId actor's active role assignment
+     * @param ipAddress    client IP (may be null)
+     */
+    void appendSiteDisabled(
+            UUID companyId,
+            UUID siteId,
+            UUID actorUserId,
+            UUID actorRoleAssignmentId,
+            String ipAddress
+    );
 }

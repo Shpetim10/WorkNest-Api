@@ -48,6 +48,11 @@ spring:
 
 server:
   port: ${APP_PORT:8080}
+  # Honour X-Forwarded-* / Forwarded headers sent by trusted reverse-proxies
+  # (Cloudflare Tunnel, nginx, AWS ALB, etc.).  NATIVE delegates to the
+  # servlet container (Tomcat) which handles the full RFC 7239 Forwarded header
+  # in addition to X-Forwarded-{For,Proto,Host,Port}.
+  forward-headers-strategy: NATIVE
 
 management:
   endpoints:

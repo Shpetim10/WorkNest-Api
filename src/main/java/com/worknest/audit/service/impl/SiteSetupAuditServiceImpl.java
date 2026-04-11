@@ -192,6 +192,33 @@ public class SiteSetupAuditServiceImpl implements SiteSetupAuditService {
         log.debug("Audit: {} site={} company={} actor={} dryRun={} succeeded={}", action, siteId, companyId, actorUserId, dryRun, succeeded);
     }
 
+    @Override
+    public void appendSiteDisabled(
+            UUID companyId,
+            UUID siteId,
+            UUID actorUserId,
+            UUID actorRoleAssignmentId,
+            String ipAddress
+    ) {
+        auditLogService.logAction(buildAuditLog(
+                companyId, actorUserId, actorRoleAssignmentId,
+                "SITE_DISABLED", "CompanySite", siteId,
+                Map.of(),
+                Map.of(),
+                ipAddress
+        ));
+
+        platformEventService.publishEvent(new PlatformEvent(
+                "SITE_DISABLED",
+                companyId,
+                null,
+                actorUserId,
+                "Site " + siteId + " administratively disabled"
+        ));
+
+        log.debug("Audit: SITE_DISABLED site={} company={} actor={}", siteId, companyId, actorUserId);
+    }
+
     // ─────────────────────────────────────────────────────────
     // Internal helpers — mirrors AuthAuditServiceImpl exactly
     // ─────────────────────────────────────────────────────────
