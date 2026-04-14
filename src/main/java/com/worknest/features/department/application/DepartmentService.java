@@ -11,8 +11,8 @@ import java.util.UUID;
 public interface DepartmentService {
     DepartmentResponse createDepartment(CreateDepartmentRequest request);
     DepartmentResponse getDepartment(UUID id);
-    List<DepartmentListResponse> listDepartments();
+    List<DepartmentListResponse> listDepartments(UUID companyId);
     DepartmentResponse updateDepartment(UUID id, UpdateDepartmentRequest request);
     void deleteDepartment(UUID id);
-    List<DepartmentLookup> lookupDepartments();
+    List<DepartmentLookup> lookupDepartments(UUID companyId);
 }

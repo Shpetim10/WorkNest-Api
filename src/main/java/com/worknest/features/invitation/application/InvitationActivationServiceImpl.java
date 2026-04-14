@@ -38,6 +38,7 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
     private final PasswordEncoder passwordEncoder;
     private final AuthAuditService authAuditService;
     private final com.worknest.features.media.application.MediaStorageService mediaStorageService;
+    private final com.worknest.features.employee.repository.EmployeeRepository employeeRepository;
 
     @Override
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
@@ -144,6 +145,13 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
             }
         }
 
+        // Activate employee if they exist
+        employeeRepository.findByUserIdAndCompanyId(savedUser.getId(), invitation.getCompany().getId())
+                .ifPresent(employee -> {
+                    employee.setEmploymentStatus(EmploymentStatus.ACTIVE);
+                    employeeRepository.save(employee);
+                });
+
         // Mark invitation as used
         invitation.setUsedAt(now);
         userInvitationRepository.save(invitation);
@@ -193,6 +201,9 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
     }
 
     private void validatePassword(String password, String userEmail) {
+        if (password == null) {
+            throw new WeakPasswordException("Password is required to activate your account");
+        }
         if (password.length() < 8) {
             throw new WeakPasswordException("Password must be at least 8 characters long");
         }
@@ -215,8 +226,9 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
         ra.setCompany(invitation.getCompany());
         ra.setUser(user);
         ra.setRole(invitation.getPlatformRole());
-        ra.setJobTitle(StringUtils.hasText(invitation.getInvitedJobTitle())
-                ? invitation.getInvitedJobTitle().trim() : null);
+        if (StringUtils.hasText(invitation.getInvitedJobTitle())) {
+            ra.setJobTitle(invitation.getInvitedJobTitle().trim());
+        }
         ra.setIsActive(true);
         ra.setActivatedAt(now);
         ra.setCreatedBy(invitation.getInvitedBy());
@@ -235,8 +247,9 @@ public class InvitationActivationServiceImpl implements InvitationActivationServ
     private RoleAssignment activateExistingRoleAssignment(
             RoleAssignment roleAssignment, UserInvitation invitation, Instant now) {
         roleAssignment.setRole(invitation.getPlatformRole());
-        roleAssignment.setJobTitle(StringUtils.hasText(invitation.getInvitedJobTitle())
-                ? invitation.getInvitedJobTitle().trim() : null);
+        if (StringUtils.hasText(invitation.getInvitedJobTitle())) {
+            roleAssignment.setJobTitle(invitation.getInvitedJobTitle().trim());
+        }
         roleAssignment.setIsActive(true);
         roleAssignment.setActivatedAt(now);
         roleAssignment.setDeactivatedAt(null);

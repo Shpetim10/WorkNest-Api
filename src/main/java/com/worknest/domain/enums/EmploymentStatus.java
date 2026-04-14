@@ -5,6 +5,11 @@ package com.worknest.domain.enums;
  */
 public enum EmploymentStatus {
     /**
+     * Account is created but the employee has not yet logged in or activated it.
+     */
+    PENDING,
+
+    /**
      * Actively employed and working.
      */
     ACTIVE,

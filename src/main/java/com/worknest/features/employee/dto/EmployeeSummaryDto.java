@@ -9,5 +9,6 @@ public record EmployeeSummaryDto(
     String firstName,
     String lastName,
     String email,
-    String departmentName
+    String departmentName,
+    String jobTitle
 ) {}

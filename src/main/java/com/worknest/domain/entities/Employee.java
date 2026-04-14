@@ -82,7 +82,7 @@ public class Employee {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "employment_status", nullable = false, length = 30)
-    private EmploymentStatus employmentStatus = EmploymentStatus.ACTIVE;
+    private EmploymentStatus employmentStatus = EmploymentStatus.PENDING;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

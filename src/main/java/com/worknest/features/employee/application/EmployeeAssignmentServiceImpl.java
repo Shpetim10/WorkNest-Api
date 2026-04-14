@@ -154,13 +154,20 @@ public class EmployeeAssignmentServiceImpl implements EmployeeAssignmentService 
     }
 
     private EmployeeSummaryDto mapToSummary(Employee e) {
+        String jobTitle = (e.getUser() != null)
+                ? roleAssignmentRepository.findFirstByUserIdAndCompanyIdOrderByCreatedAtAsc(e.getUser().getId(), e.getCompany().getId())
+                    .map(com.worknest.domain.entities.RoleAssignment::getJobTitle)
+                    .orElse(null)
+                : null;
+
         return new EmployeeSummaryDto(
                 e.getId(),
                 e.getUser() != null ? e.getUser().getId() : null,
                 e.getUser() != null ? e.getUser().getFirstName() : null,
                 e.getUser() != null ? e.getUser().getLastName() : null,
                 e.getUser() != null ? e.getUser().getEmail() : null,
-                e.getDepartment() != null ? e.getDepartment().getName() : null
+                e.getDepartment() != null ? e.getDepartment().getName() : null,
+                jobTitle
         );
     }
 

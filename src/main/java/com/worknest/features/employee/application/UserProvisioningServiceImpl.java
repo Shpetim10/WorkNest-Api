@@ -31,6 +31,9 @@ import com.worknest.features.department.repository.DepartmentRepository;
 import com.worknest.features.employee.dto.CreateEmployeeRequest;
 import com.worknest.features.employee.dto.CreateStaffRequest;
 import com.worknest.features.employee.dto.ProvisioningResponse;
+import com.worknest.features.employee.dto.UpdateEmployeeRequest;
+import com.worknest.features.employee.dto.UpdateEmployeeResponse;
+import com.worknest.features.employee.dto.UpdateStaffRequest;
 import com.worknest.features.employee.repository.EmployeeRepository;
 import com.worknest.features.invitation.exception.InvalidInvitationRequestException;
 import com.worknest.features.invitation.repository.UserInvitationRepository;
@@ -84,12 +87,12 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         RoleAssignment supervisor = validateAndGetSupervisor(request.supervisorRoleAssignmentId(), company.getId());
 
         String normalizedEmail = request.email().trim().toLowerCase();
-        User user = resolveOrCreateUser(company, normalizedEmail, request.firstName(), request.lastName(), request.phoneNumber(), request.preferredLanguage());
+        User user = resolveOrCreateUser(company, normalizedEmail, request.firstName(), request.lastName(), null, null);
         if (hasActiveAssignmentInCompany(user, company)) {
             throw new UserAlreadyActiveException(normalizedEmail);
         }
 
-        RoleAssignment roleAssignment = createInactiveRoleAssignment(user, company, PlatformRole.EMPLOYEE, PlatformAccess.MOBILE, authenticatedUser);
+        RoleAssignment roleAssignment = createInactiveRoleAssignment(user, company, PlatformRole.EMPLOYEE, PlatformAccess.MOBILE, authenticatedUser, request.jobTitle());
         
         Employee employee = new Employee();
         employee.setCompany(company);
@@ -97,12 +100,12 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         employee.setDepartment(department);
         employee.setCompanySite(site);
         employee.setEmploymentTypeRole(PlatformRole.EMPLOYEE);
-        employee.setEmploymentStatus(EmploymentStatus.ACTIVE);
+        employee.setEmploymentStatus(EmploymentStatus.PENDING);
         employee.setStartDate(request.startDate());
         employee.setSupervisorRoleAssignment(supervisor);
         Employee savedEmployee = employeeRepository.save(employee);
 
-        return processInvitation(normalizedEmail, user, company, roleAssignment, savedEmployee, authenticatedUser, inviterRole, PlatformRole.EMPLOYEE, request.preferredLanguage());
+        return processInvitation(normalizedEmail, user, company, roleAssignment, savedEmployee, authenticatedUser, inviterRole, PlatformRole.EMPLOYEE, request.jobTitle(), null);
     }
 
     @Override
@@ -122,7 +125,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
             throw new UserAlreadyActiveException(normalizedEmail);
         }
 
-        RoleAssignment roleAssignment = createInactiveRoleAssignment(user, company, PlatformRole.STAFF, PlatformAccess.BOTH, authenticatedUser);
+        RoleAssignment roleAssignment = createInactiveRoleAssignment(user, company, PlatformRole.STAFF, PlatformAccess.BOTH, authenticatedUser, request.jobTitle());
         assignPermissions(roleAssignment, request.permissionCodes(), inviterRole.getUser());
 
         Employee employee = new Employee();
@@ -131,16 +134,203 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         employee.setDepartment(department);
         employee.setCompanySite(site);
         employee.setEmploymentTypeRole(PlatformRole.STAFF);
-        employee.setEmploymentStatus(EmploymentStatus.ACTIVE);
+        employee.setEmploymentStatus(EmploymentStatus.PENDING);
         employee.setStartDate(request.startDate());
         Employee savedEmployee = employeeRepository.save(employee);
 
-        return processInvitation(normalizedEmail, user, company, roleAssignment, savedEmployee, authenticatedUser, inviterRole, PlatformRole.STAFF, request.preferredLanguage());
+        // Assign requested employees under this staff member's supervision
+        assignEmployeesToStaff(request.assignedEmployeeIds(), roleAssignment, company);
+
+        return processInvitation(normalizedEmail, user, company, roleAssignment, savedEmployee, authenticatedUser, inviterRole, PlatformRole.STAFF, request.jobTitle(), request.preferredLanguage());
+    }
+
+    @Override
+    @Transactional
+    public ProvisioningResponse resendInvitation(UUID companyId, UUID employeeId) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new InvalidInvitationRequestException("Employee not found"));
+
+        if (!employee.getCompany().getId().equals(companyId)) {
+            throw new InvalidInvitationRequestException("Employee does not belong to this company");
+        }
+
+        if (employee.getUser().getStatus() == UserStatus.ACTIVE) {
+            throw new InvalidInvitationRequestException("User is already active and does not require a new invitation");
+        }
+
+        if (employee.getEmploymentStatus() != EmploymentStatus.PENDING) {
+            throw new InvalidInvitationRequestException("Invitation can only be resent for pending employees");
+        }
+
+        Company company = employee.getCompany();
+        User user = employee.getUser();
+        User authenticatedUser = resolveCurrentAuthenticatedUser();
+        RoleAssignment inviterRole = resolveActiveRoleAssignment(authenticatedUser.getId(), company.getId());
+        validateInviterAuthorization(inviterRole);
+
+        // Find the role assignment created during provisioning (which is inactive during PENDING status)
+        RoleAssignment roleAssignment = roleAssignmentRepository.findFirstByUserIdAndCompanyIdOrderByCreatedAtAsc(user.getId(), company.getId())
+                .orElseThrow(() -> new InvalidInvitationRequestException("Role assignment for employee not found"));
+
+        String preferredLanguage = (user.getPreferredLanguage() != null) ? user.getPreferredLanguage().getCode() : null;
+
+        return processInvitation(
+                user.getEmail(),
+                user,
+                company,
+                roleAssignment,
+                employee,
+                authenticatedUser,
+                inviterRole,
+                employee.getEmploymentTypeRole(),
+                roleAssignment.getJobTitle(),
+                preferredLanguage
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Update operations
+    // -------------------------------------------------------------------------
+
+    @Override
+    @Transactional
+    public UpdateEmployeeResponse updateEmployee(UUID companyId, UUID employeeId, UpdateEmployeeRequest request) {
+        if (!companyId.equals(request.companyId())) {
+            throw new InvalidInvitationRequestException("Company ID in path does not match request body");
+        }
+
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new InvalidInvitationRequestException("Employee not found"));
+
+        if (!employee.getCompany().getId().equals(companyId)) {
+            throw new InvalidInvitationRequestException("Employee does not belong to this company");
+        }
+
+        if (employee.getEmploymentTypeRole() != com.worknest.domain.enums.PlatformRole.EMPLOYEE) {
+            throw new InvalidInvitationRequestException("Target record is not an EMPLOYEE — use the staff update endpoint");
+        }
+
+        // --- Update User personal details ---
+        User user = employee.getUser();
+        user.setFirstName(request.firstName().trim());
+        user.setLastName(request.lastName().trim());
+        user.setDisplayName((user.getFirstName() + " " + user.getLastName()).trim());
+        userRepository.save(user);
+
+        // --- Update RoleAssignment jobTitle ---
+        RoleAssignment roleAssignment = roleAssignmentRepository
+                .findFirstByUserIdAndCompanyIdOrderByCreatedAtAsc(user.getId(), companyId)
+                .orElseThrow(() -> new InvalidInvitationRequestException("Role assignment not found for this employee"));
+        roleAssignment.setJobTitle(request.jobTitle());
+        roleAssignmentRepository.save(roleAssignment);
+
+        // --- Update Employee organisational fields ---
+        Department department = validateAndGetDepartment(request.departmentId(), companyId);
+        CompanySite site = validateAndGetSite(request.companySiteId(), companyId);
+        RoleAssignment supervisor = validateAndGetSupervisor(request.supervisorRoleAssignmentId(), companyId);
+
+        employee.setDepartment(department);
+        employee.setCompanySite(site);
+        employee.setSupervisorRoleAssignment(supervisor);
+        if (request.startDate() != null) {
+            employee.setStartDate(request.startDate());
+        }
+        employeeRepository.save(employee);
+
+        return buildUpdateResponse(employee, user, roleAssignment, "Employee updated successfully");
+    }
+
+    @Override
+    @Transactional
+    public UpdateEmployeeResponse updateStaff(UUID companyId, UUID employeeId, UpdateStaffRequest request) {
+        if (!companyId.equals(request.companyId())) {
+            throw new InvalidInvitationRequestException("Company ID in path does not match request body");
+        }
+
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new InvalidInvitationRequestException("Staff member not found"));
+
+        if (!employee.getCompany().getId().equals(companyId)) {
+            throw new InvalidInvitationRequestException("Staff member does not belong to this company");
+        }
+
+        if (employee.getEmploymentTypeRole() != com.worknest.domain.enums.PlatformRole.STAFF) {
+            throw new InvalidInvitationRequestException("Target record is not a STAFF member — use the employee update endpoint");
+        }
+
+        // --- Update User personal details ---
+        User user = employee.getUser();
+        user.setFirstName(request.firstName().trim());
+        user.setLastName(request.lastName().trim());
+        user.setDisplayName((user.getFirstName() + " " + user.getLastName()).trim());
+        userRepository.save(user);
+
+        // --- Update RoleAssignment jobTitle ---
+        RoleAssignment roleAssignment = roleAssignmentRepository
+                .findFirstByUserIdAndCompanyIdOrderByCreatedAtAsc(user.getId(), companyId)
+                .orElseThrow(() -> new InvalidInvitationRequestException("Role assignment not found for this staff member"));
+        roleAssignment.setJobTitle(request.jobTitle());
+        roleAssignmentRepository.save(roleAssignment);
+
+        // --- Update Employee organisational fields ---
+        Department department = validateAndGetDepartment(request.departmentId(), companyId);
+        CompanySite site = validateAndGetSite(request.companySiteId(), companyId);
+
+        employee.setDepartment(department);
+        employee.setCompanySite(site);
+        if (request.startDate() != null) {
+            employee.setStartDate(request.startDate());
+        }
+        employeeRepository.save(employee);
+
+        // --- Replace permissions (only when caller explicitly provides the list) ---
+        if (request.permissionCodes() != null) {
+            User authenticatedUser = resolveCurrentAuthenticatedUser();
+            roleAssignmentPermissionRepository.deleteAllByRoleAssignmentId(roleAssignment.getId());
+            assignPermissions(roleAssignment, request.permissionCodes(), authenticatedUser);
+        }
+
+        // --- Replace supervised employees (only when caller explicitly provides the list) ---
+        if (request.assignedEmployeeIds() != null) {
+            // Clear existing assignments for this supervisor within the company
+            List<Employee> currentlyAssigned = employeeRepository
+                    .findAllAssignedToManager(companyId, com.worknest.domain.enums.PlatformRole.EMPLOYEE, roleAssignment.getId());
+            for (Employee emp : currentlyAssigned) {
+                emp.setSupervisorRoleAssignment(null);
+                employeeRepository.save(emp);
+            }
+            // Assign the new set
+            assignEmployeesToStaff(request.assignedEmployeeIds(), roleAssignment, employee.getCompany());
+        }
+
+        return buildUpdateResponse(employee, user, roleAssignment, "Staff updated successfully");
+    }
+
+    /** Builds a rich update response from the refreshed domain objects. */
+    private UpdateEmployeeResponse buildUpdateResponse(Employee employee, User user, RoleAssignment roleAssignment, String message) {
+        return new UpdateEmployeeResponse(
+                employee.getId(),
+                user.getId(),
+                roleAssignment.getId(),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getEmail(),
+                roleAssignment.getJobTitle(),
+                employee.getEmploymentTypeRole(),
+                employee.getEmploymentStatus(),
+                employee.getDepartment() != null ? employee.getDepartment().getId() : null,
+                employee.getDepartment() != null ? employee.getDepartment().getName() : null,
+                employee.getCompanySite() != null ? employee.getCompanySite().getId() : null,
+                employee.getCompanySite() != null ? employee.getCompanySite().getName() : null,
+                employee.getSupervisorRoleAssignment() != null ? employee.getSupervisorRoleAssignment().getId() : null,
+                employee.getStartDate(),
+                message
+        );
     }
 
     private ProvisioningResponse processInvitation(
             String email, User user, Company company, RoleAssignment roleAssignment, Employee employee, 
-            User invitedBy, RoleAssignment inviterRole, PlatformRole platformRole, String preferredLanguage) {
+            User invitedBy, RoleAssignment inviterRole, PlatformRole platformRole, String invitedJobTitle, String preferredLanguage) {
 
         String rawToken = secureTokenGenerator.generateToken();
         String tokenHash = sha256TokenHashUtility.hash(rawToken);
@@ -155,17 +345,29 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         invitation.setPlatformRole(platformRole);
         invitation.setPlatformAccess(roleAssignment.getPlatformAccess());
         invitation.setInvitationKind(platformRole == PlatformRole.STAFF ? InvitationKind.STAFF_INVITATION : InvitationKind.EMPLOYEE_INVITATION);
+        invitation.setInvitedJobTitle(invitedJobTitle);
         invitation.setExpiresAt(expiresAt);
 
         UserInvitation savedInvitation = userInvitationRepository.save(invitation);
 
-        invitationEmailService.sendProvisioningEmail(
-                company,
-                email,
-                user.getDisplayName(),
-                platformRole,
-                activationLinkBase + "?token=" + rawToken,
-                preferredLanguage != null ? preferredLanguage : "en");
+        if (user.getStatus() == UserStatus.ACTIVE) {
+            // User already has credentials in another company — notify them of the new position only
+            invitationEmailService.sendNewPositionEmail(
+                    company,
+                    email,
+                    user.getDisplayName(),
+                    platformRole,
+                    preferredLanguage != null ? preferredLanguage : "en");
+        } else {
+            // Brand-new user — send full activation/setup email
+            invitationEmailService.sendProvisioningEmail(
+                    company,
+                    email,
+                    user.getDisplayName(),
+                    platformRole,
+                    activationLinkBase + "?token=" + rawToken,
+                    preferredLanguage != null ? preferredLanguage : "en");
+        }
 
         AuthAuditActorContext actorContext = new AuthAuditActorContext(
                 company.getId(),
@@ -221,7 +423,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
     }
 
     private RoleAssignment validateAndGetSupervisor(UUID supervisorId, UUID companyId) {
-        if (supervisorId == null) throw new InvalidInvitationRequestException("Supervisor is required for Employee");
+        if (supervisorId == null) return null; // Supervisor is optional for employee creation
         RoleAssignment sup = roleAssignmentRepository.findById(supervisorId).orElseThrow(() -> new InvalidInvitationRequestException("Supervisor not found"));
         if (!sup.getCompany().getId().equals(companyId)) throw new InvalidInvitationRequestException("Supervisor does not belong to the company");
         if (sup.getRole() != PlatformRole.STAFF) throw new InvalidInvitationRequestException("Supervisor must be STAFF");
@@ -248,7 +450,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         }
     }
 
-    private RoleAssignment createInactiveRoleAssignment(User user, Company company, PlatformRole role, PlatformAccess access, User createdBy) {
+    private RoleAssignment createInactiveRoleAssignment(User user, Company company, PlatformRole role, PlatformAccess access, User createdBy, String jobTitle) {
         RoleAssignment ra = roleAssignmentRepository.findFirstByUserIdAndCompanyIdAndIsActiveTrue(user.getId(), company.getId()).orElseGet(RoleAssignment::new);
         ra.setCompany(company);
         ra.setUser(user);
@@ -256,6 +458,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         ra.setPlatformAccess(access);
         ra.setIsActive(false);
         ra.setCreatedBy(createdBy);
+        ra.setJobTitle(jobTitle);
         return roleAssignmentRepository.save(ra);
     }
 
@@ -307,6 +510,24 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
     private void validateInviterAuthorization(RoleAssignment inviterRole) {
         if (inviterRole.getRole() != PlatformRole.ADMIN && inviterRole.getRole() != PlatformRole.SUPERADMIN && inviterRole.getRole() != PlatformRole.STAFF) {
             throw new org.springframework.security.access.AccessDeniedException("Only admins or staff can provision users");
+        }
+    }
+
+    private void assignEmployeesToStaff(List<UUID> assignedEmployeeIds, RoleAssignment staffRoleAssignment, Company company) {
+        if (assignedEmployeeIds == null || assignedEmployeeIds.isEmpty()) {
+            return;
+        }
+
+        // We could look them up one by one or do a batch update. Doing it iteratively to rely on existing queries 
+        // or we could use the repository. Here we use findById, verify company, verify role, then save.
+        for (UUID empId : assignedEmployeeIds) {
+            employeeRepository.findById(empId).ifPresent(emp -> {
+                if (emp.getCompany().getId().equals(company.getId()) && 
+                    emp.getEmploymentTypeRole() == PlatformRole.EMPLOYEE) {
+                    emp.setSupervisorRoleAssignment(staffRoleAssignment);
+                    employeeRepository.save(emp);
+                }
+            });
         }
     }
 }

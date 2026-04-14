@@ -87,4 +87,31 @@ public class InvitationEmailServiceImpl implements InvitationEmailService {
 
         emailI18nService.sendMail(message, locale);
     }
+
+    @Override
+    public void sendNewPositionEmail(
+            Company company,
+            String recipientEmail,
+            String recipientDisplayName,
+            PlatformRole platformRole,
+            String preferredLanguage) {
+
+        Locale locale = Language.getLocaleOrDefault(preferredLanguage);
+
+        Map<String, Object> templateModel = new HashMap<>();
+        templateModel.put("recipientName", recipientDisplayName);
+        templateModel.put("companyName", company.getName());
+        templateModel.put("role", platformRole.name());
+        templateModel.put("fromName", mailProperties.getFromName());
+
+        EmailMessage message = EmailMessage.builder()
+                .to(recipientEmail)
+                .subjectKey("email.new-position.subject")
+                .subjectArgs(new Object[]{company.getName()})
+                .templateName("new-position")
+                .templateModel(templateModel)
+                .build();
+
+        emailI18nService.sendMail(message, locale);
+    }
 }

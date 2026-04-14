@@ -6,6 +6,7 @@ import com.worknest.features.companySite.application.CompanySiteCreationService;
 import com.worknest.features.companySite.application.CompanySiteLifecycleService;
 import com.worknest.features.companySite.application.CompanySiteQueryService;
 import com.worknest.features.companySite.dto.CompanySiteDetailsResponse;
+import com.worknest.features.companySite.dto.CompanySiteLookup;
 import com.worknest.features.companySite.dto.CompanySiteResponse;
 import com.worknest.features.companySite.dto.CreateSiteRequest;
 import com.worknest.features.companySite.dto.CreateSiteResponse;
@@ -88,6 +89,16 @@ public class CompanySiteController {
             @PathVariable UUID siteId
     ) {
         return ApiResponse.success("Site details retrieved successfully", queryService.getSiteDetails(companyId, siteId));
+    }
+
+    @GetMapping("/lookup")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @Operation(
+            summary = "Lookup company sites",
+            description = "Returns a lightweight id/code/name list of all ACTIVE sites for the given company (e.g. for dropdowns)."
+    )
+    public ApiResponse<List<CompanySiteLookup>> lookupSites(@PathVariable UUID companyId) {
+        return ApiResponse.success("Sites lookup successful", queryService.lookupSites(companyId));
     }
 
     @GetMapping("/{siteId}/main-details")

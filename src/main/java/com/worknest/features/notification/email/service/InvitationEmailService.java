@@ -22,4 +22,11 @@ public interface InvitationEmailService {
             PlatformRole platformRole,
             String activationLink,
             String preferredLanguage);
+
+    void sendNewPositionEmail(
+            Company company,
+            String recipientEmail,
+            String recipientDisplayName,
+            PlatformRole platformRole,
+            String preferredLanguage);
 }

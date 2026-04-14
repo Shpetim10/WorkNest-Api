@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!-- 1. Drop legacy composite constraints on users table. 
+         These were defined in 001 but may have been removed during column drops.
+         Preconditions ensure idempotence. -->
+    <changeSet id="007-1" author="shaba">
+        <preConditions onFail="MARK_RAN">
+            <uniqueConstraintExists constraintName="uk_users_company_email" tableName="users"/>
+        </preConditions>
+        <dropUniqueConstraint tableName="users" constraintName="uk_users_company_email"/>
+    </changeSet>
+
+    <changeSet id="007-1b" author="shaba">
+        <preConditions onFail="MARK_RAN">
+            <uniqueConstraintExists constraintName="uk_users_company_username" tableName="users"/>
+        </preConditions>
+        <dropUniqueConstraint tableName="users" constraintName="uk_users_company_username"/>
+    </changeSet>
+
+    <!-- 2. Establish global email uniqueness for the shared identity model.
+         Matches the User entity's expectation of email as the primary differentiator. -->
+    <changeSet id="007-2" author="shaba">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <uniqueConstraintExists constraintName="uk_users_email" tableName="users"/>
+            </not>
+        </preConditions>
+        <addUniqueConstraint tableName="users" columnNames="email" constraintName="uk_users_email"/>
+    </changeSet>
+
+    <!-- 3. Add optimized index for active role lookups.
+         Enhances the findFirstByUserIdAndCompanyIdAndIsActiveTrue query used 
+         repeatedly in the authentication and provisioning flows. -->
+    <changeSet id="007-3" author="shaba">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists indexName="idx_role_assignments_user_company_active" tableName="role_assignments"/>
+            </not>
+        </preConditions>
+        <createIndex indexName="idx_role_assignments_user_company_active" tableName="role_assignments">
+            <column name="user_id"/>
+            <column name="company_id"/>
+            <column name="is_active"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

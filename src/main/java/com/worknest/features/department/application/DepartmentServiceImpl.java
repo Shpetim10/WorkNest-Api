@@ -65,8 +65,8 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<DepartmentListResponse> listDepartments() {
-        return departmentRepository.findAllByCompanyId(getCurrentCompanyId())
+    public List<DepartmentListResponse> listDepartments(UUID companyId) {
+        return departmentRepository.findAllByCompanyId(companyId)
                 .stream()
                 .map(DepartmentListResponse::fromEntity)
                 .toList();
@@ -106,8 +106,8 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<DepartmentLookup> lookupDepartments() {
-        return departmentRepository.findAllByCompanyIdAndStatus(getCurrentCompanyId(), DepartmentStatus.ACTIVE)
+    public List<DepartmentLookup> lookupDepartments(UUID companyId) {
+        return departmentRepository.findAllByCompanyIdAndStatus(companyId, DepartmentStatus.ACTIVE)
                 .stream()
                 .map(DepartmentLookup::fromEntity)
                 .toList();

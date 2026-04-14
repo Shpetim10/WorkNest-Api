@@ -1,8 +1,10 @@
 package com.worknest.features.companySite.application;
 
 import com.worknest.domain.entities.CompanySite;
+import com.worknest.domain.enums.SiteStatus;
 import com.worknest.features.company.repository.CompanyRepository;
 import com.worknest.features.companySite.dto.CompanySiteDetailsResponse;
+import com.worknest.features.companySite.dto.CompanySiteLookup;
 import com.worknest.features.companySite.dto.CompanySiteResponse;
 import com.worknest.features.companySite.dto.TrustedNetworkResponse;
 import com.worknest.features.companySite.exception.CompanyNotFoundException;
@@ -70,5 +72,22 @@ public class CompanySiteQueryServiceImpl implements CompanySiteQueryService {
                 countryName,
                 networks
         );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CompanySiteLookup> lookupSites(UUID companyId) {
+        UUID tenantCompanyId = TenantContextHolder.get()
+                .orElseThrow(() -> new IllegalStateException("No tenant context found"))
+                .companyId();
+
+        if (!tenantCompanyId.equals(companyId) || !companyRepository.existsById(companyId)) {
+            throw new CompanyNotFoundException();
+        }
+
+        return siteRepository.findAllByCompanyIdAndStatus(companyId, SiteStatus.ACTIVE)
+                .stream()
+                .map(CompanySiteLookup::fromEntity)
+                .toList();
     }
 }

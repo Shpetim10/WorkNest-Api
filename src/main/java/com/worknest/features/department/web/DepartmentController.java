@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/departments")
+@RequestMapping("/api/v1/companies/{companyId}/departments")
 @RequiredArgsConstructor
 @Tag(name = "Departments", description = "Tenant-scoped department management API")
 public class DepartmentController {
@@ -35,46 +35,53 @@ public class DepartmentController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Create department", description = "Creates a new department for the current company")
-    public ApiResponse<DepartmentResponse> createDepartment(@Valid @RequestBody CreateDepartmentRequest request) {
+    public ApiResponse<DepartmentResponse> createDepartment(
+            @PathVariable UUID companyId,
+            @Valid @RequestBody CreateDepartmentRequest request) {
         return ApiResponse.success("Department created successfully", departmentService.createDepartment(request));
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Get department", description = "Retrieves a single department by ID for the current company")
-    public ApiResponse<DepartmentResponse> getDepartment(@PathVariable UUID id) {
+    public ApiResponse<DepartmentResponse> getDepartment(
+            @PathVariable UUID companyId,
+            @PathVariable UUID id) {
         return ApiResponse.success("Department retrieved successfully", departmentService.getDepartment(id));
     }
 
     @GetMapping
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     @Operation(summary = "List departments", description = "Retrieves all departments for the current company")
-    public ApiResponse<List<DepartmentListResponse>> listDepartments() {
-        return ApiResponse.success("Departments retrieved successfully", departmentService.listDepartments());
+    public ApiResponse<List<DepartmentListResponse>> listDepartments(@PathVariable UUID companyId) {
+        return ApiResponse.success("Departments retrieved successfully", departmentService.listDepartments(companyId));
     }
 
     @GetMapping("/lookup")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Lookup departments", description = "Retrieves department ID and Name pairs for the current company (e.g. for dropdowns)")
-    public ApiResponse<List<DepartmentLookup>> lookupDepartments() {
-        return ApiResponse.success("Departments lookup successful", departmentService.lookupDepartments());
+    public ApiResponse<List<DepartmentLookup>> lookupDepartments(@PathVariable UUID companyId) {
+        return ApiResponse.success("Departments lookup successful", departmentService.lookupDepartments(companyId));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Update department", description = "Updates an existing department for the current company")
     public ApiResponse<DepartmentResponse> updateDepartment(
+            @PathVariable UUID companyId,
             @PathVariable UUID id, 
             @Valid @RequestBody UpdateDepartmentRequest request) {
         return ApiResponse.success("Department updated successfully", departmentService.updateDepartment(id, request));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Delete department", description = "Hard deletes a department for the current company")
-    public ApiResponse<Void> deleteDepartment(@PathVariable UUID id) {
+    public ApiResponse<Void> deleteDepartment(
+            @PathVariable UUID companyId,
+            @PathVariable UUID id) {
         departmentService.deleteDepartment(id);
         return ApiResponse.success("Department deleted successfully", null);
     }
