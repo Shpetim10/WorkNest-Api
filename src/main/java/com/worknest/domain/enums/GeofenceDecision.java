@@ -1,0 +1,12 @@
+package com.worknest.domain.enums;
+
+public enum GeofenceDecision {
+    PASSED,
+    FAILED_OUTSIDE,
+    FAILED_MISSING_LOCATION,
+    FAILED_INVALID_COORDINATES,
+    WARNING_LOW_ACCURACY,
+    WARNING_BOUNDARY_ZONE,
+    NOT_REQUIRED,
+    NOT_CONFIGURED
+}

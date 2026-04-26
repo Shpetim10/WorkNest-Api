@@ -9,23 +9,8 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 
-/**
- * Single payload for {@code POST /api/v1/companies/{companyId}/sites}.
- *
- * <p>This is the one-shot create-site request. It carries:
- * <ol>
- *   <li>Site business data (name, code, type, etc.).</li>
- *   <li>Final, admin-reviewed location fields (coordinates + address + geofence).</li>
- *   <li>An optional list of trusted-network rules to attach in the same transaction.</li>
- * </ol>
- *
- * <p>The server performs strict validation on every field before any persistence occurs.
- * No intermediate/draft state is created.
- */
-@Schema(description = "One-shot payload to create a company site and optional trusted networks in a single transaction.")
+@Schema(description = "One-shot payload to create a company site with location, trusted networks, and attendance policy.")
 public record CreateSiteRequest(
-
-        // ── Business info ─────────────────────────────────────────────────────────
 
         @NotBlank(message = "Site name is required")
         @Size(max = 255, message = "Site name must not exceed 255 characters")
@@ -43,7 +28,7 @@ public record CreateSiteRequest(
         SiteType type,
 
         @NotBlank(message = "Country code is required")
-        @Size(min = 2, max = 2, message = "Country code must be exactly 2 characters (ISO 3166-1 alpha-2)")
+        @Size(min = 2, max = 2, message = "Country code must be exactly 2 characters")
         @Schema(description = "ISO 3166-1 alpha-2 country code.", example = "AL")
         String countryCode,
 
@@ -52,33 +37,21 @@ public record CreateSiteRequest(
         @Schema(description = "IANA time-zone identifier.", example = "Europe/Tirane")
         String timezone,
 
-        @Schema(description = "Free-text notes or internal remarks for this site.", example = "Primary HQ site — 3rd floor")
+        @Schema(description = "Free-text notes or internal remarks for this site.", example = "Primary HQ site - 3rd floor")
         String notes,
-
-        // ── Attendance feature flags ──────────────────────────────────────────────
-
-        @Schema(description = "Whether clock-in requires location verification. Defaults to true.", example = "true")
-        Boolean locationRequired,
-
-        @Schema(description = "Whether QR-code check-in is enabled for this site. Defaults to true.", example = "true")
-        Boolean qrEnabled,
-
-        @Schema(description = "Whether clock-in is enabled. Defaults to true.", example = "true")
-        Boolean checkInEnabled,
-
-        @Schema(description = "Whether clock-out is enabled. Defaults to true.", example = "true")
-        Boolean checkOutEnabled,
-
-        // ── Location & geofence ───────────────────────────────────────────────────
 
         @NotNull(message = "Location data is required")
         @Valid
-        @Schema(description = "Authoritative coordinates (lat/lng), reverse-geocoded address, and geofence configuration.")
+        @Schema(description = "Authoritative coordinates, address, and geofence configuration.")
         SiteLocationRequest location,
 
-        // ── Trusted networks (optional) ───────────────────────────────────────────
-
         @Valid
-        @Schema(description = "Optional list of trusted-network rules to create alongside the site. May be empty or null.")
-        List<@Valid TrustedNetworkRequest> trustedNetworks
-) {}
+        @Schema(description = "Optional trusted network rules to create alongside the site.")
+        List<@Valid TrustedNetworkRequest> trustedNetworks,
+
+        @NotNull(message = "Attendance policy is required")
+        @Valid
+        @Schema(description = "Attendance policy configured during site creation.")
+        SiteAttendancePolicyCreateRequest attendancePolicy
+) {
+}

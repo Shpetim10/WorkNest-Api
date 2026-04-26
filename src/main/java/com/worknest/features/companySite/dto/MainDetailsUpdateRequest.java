@@ -31,15 +31,6 @@ public record MainDetailsUpdateRequest(
 
         String notes,
 
-        @NotNull(message = "QR Enabled flag must be provided.")
-        Boolean qrEnabled,
-
-        @NotNull(message = "Check-in Enabled flag must be provided.")
-        Boolean checkInEnabled,
-
-        @NotNull(message = "Check-out Enabled flag must be provided.")
-        Boolean checkOutEnabled,
-
         @NotNull(message = "Version is required for optimistic locking.")
         Long version
 ) {}

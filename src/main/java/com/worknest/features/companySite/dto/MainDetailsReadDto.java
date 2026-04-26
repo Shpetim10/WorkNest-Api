@@ -15,8 +15,5 @@ public record MainDetailsReadDto(
         String countryCode,
         String timezone,
         String notes,
-        Boolean qrEnabled,
-        Boolean checkInEnabled,
-        Boolean checkOutEnabled,
         Long version
 ) {}

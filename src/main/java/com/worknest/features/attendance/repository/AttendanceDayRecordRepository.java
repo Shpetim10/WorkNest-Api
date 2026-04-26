@@ -1,0 +1,42 @@
+package com.worknest.features.attendance.repository;
+
+import com.worknest.domain.entities.AttendanceDayRecord;
+import jakarta.persistence.LockModeType;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+public interface AttendanceDayRecordRepository extends JpaRepository<AttendanceDayRecord, UUID> {
+
+    Optional<AttendanceDayRecord> findByCompanyIdAndEmployeeIdAndWorkDate(UUID companyId, UUID employeeId, LocalDate workDate);
+
+    Optional<AttendanceDayRecord> findByIdAndCompanyId(UUID id, UUID companyId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select r
+            from AttendanceDayRecord r
+            where r.company.id = :companyId
+              and r.employee.id = :employeeId
+              and r.workDate = :workDate
+            """)
+    Optional<AttendanceDayRecord> findWithLockByCompanyIdAndEmployeeIdAndWorkDate(
+            @Param("companyId") UUID companyId,
+            @Param("employeeId") UUID employeeId,
+            @Param("workDate") LocalDate workDate
+    );
+
+    List<AttendanceDayRecord> findAllByCompanyIdAndEmployeeIdAndWorkDateBetweenOrderByWorkDateAsc(
+            UUID companyId,
+            UUID employeeId,
+            LocalDate from,
+            LocalDate to
+    );
+
+    List<AttendanceDayRecord> findAllByCompanyIdAndWorkDateBetweenOrderByWorkDateAsc(UUID companyId, LocalDate from, LocalDate to);
+}

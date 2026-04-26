@@ -2,12 +2,19 @@ package com.worknest.features.companySite.application;
 
 import com.worknest.audit.service.SiteSetupAuditService;
 import com.worknest.common.exception.BusinessException;
+import com.worknest.domain.entities.AttendancePolicy;
+import com.worknest.domain.entities.AttendanceQrTerminal;
 import com.worknest.domain.entities.Company;
 import com.worknest.domain.entities.CompanySite;
 import com.worknest.domain.entities.SiteTrustedNetwork;
+import com.worknest.domain.enums.AttendancePolicySource;
 import com.worknest.domain.enums.SiteStatus;
+import com.worknest.features.attendance.application.AttendanceQrService;
+import com.worknest.features.attendance.repository.AttendancePolicyRepository;
 import com.worknest.features.companySite.dto.CreateSiteRequest;
 import com.worknest.features.companySite.dto.CreateSiteResponse;
+import com.worknest.features.companySite.dto.LinkedQrTerminalResponse;
+import com.worknest.features.companySite.dto.SiteAttendancePolicySummaryResponse;
 import com.worknest.features.companySite.dto.TrustedNetworkRequest;
 import com.worknest.features.companySite.dto.TrustedNetworkResponse;
 import com.worknest.features.companySite.exception.CompanyNotFoundException;
@@ -60,6 +67,8 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
     private final SiteTrustedNetworkRepository networkRepository;
     private final CompanyRepository            companyRepository;
     private final SiteSetupAuditService        auditService;
+    private final AttendancePolicyRepository   attendancePolicyRepository;
+    private final AttendanceQrService          attendanceQrService;
     private final EntityManager                entityManager;
 
     @Override
@@ -108,6 +117,7 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
                 : List.of();
 
         validateTrustedNetworks(networks);
+        validateAttendancePolicy(request);
 
         // ── 7. Persist site ──────────────────────────────────────────────────────
         Company companyRef = entityManager.getReference(Company.class, companyId);
@@ -120,6 +130,12 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
             SiteTrustedNetwork rule = buildNetworkEntity(site, netReq);
             savedNetworks.add(networkRepository.save(rule));
         }
+
+        AttendancePolicy attendancePolicy = buildAttendancePolicy(companyRef, site, request);
+        attendancePolicy = attendancePolicyRepository.save(attendancePolicy);
+        AttendanceQrTerminal defaultTerminal = Boolean.TRUE.equals(attendancePolicy.getRequireQr())
+                ? attendanceQrService.ensureDefaultTerminal(companyRef, site)
+                : null;
 
         // ── 9. Audit ─────────────────────────────────────────────────────────────
         auditService.appendSiteDraftCreated(
@@ -152,7 +168,12 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
                 .map(TrustedNetworkResponse::fromEntity)
                 .toList();
 
-        return CreateSiteResponse.fromEntity(site, networkResponses);
+        return CreateSiteResponse.fromEntity(
+                site,
+                networkResponses,
+                mapPolicySummary(attendancePolicy),
+                mapTerminal(defaultTerminal)
+        );
     }
 
     // ── Private helpers ────────────────────────────────────────────────────────
@@ -193,11 +214,11 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
         site.setTimezone(req.timezone() != null ? req.timezone().trim() : "UTC");
         site.setNotes(req.notes());
 
-        // Feature flags (default to true if null)
-        site.setLocationRequired(req.locationRequired() == null || req.locationRequired());
-        site.setQrEnabled(req.qrEnabled()         == null || req.qrEnabled());
-        site.setCheckInEnabled(req.checkInEnabled()  == null || req.checkInEnabled());
-        site.setCheckOutEnabled(req.checkOutEnabled() == null || req.checkOutEnabled());
+        // Legacy site-level toggles are kept in sync with the attendance policy for backward compatibility.
+        site.setLocationRequired(req.attendancePolicy().requireLocation());
+        site.setQrEnabled(req.attendancePolicy().requireQr());
+        site.setCheckInEnabled(req.attendancePolicy().checkInEnabled());
+        site.setCheckOutEnabled(req.attendancePolicy().checkOutEnabled());
 
         // Location — authoritative fields
         var loc = req.location();
@@ -241,6 +262,75 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
         rule.setNotes(req.notes());
         rule.setExpiresAt(req.expiresAt());
         return rule;
+    }
+
+    private void validateAttendancePolicy(CreateSiteRequest request) {
+        var policy = request.attendancePolicy();
+        if (policy == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "ATTENDANCE_POLICY_REQUIRED", "Attendance policy is required.");
+        }
+        if (Boolean.TRUE.equals(policy.missingCheckoutAutoCloseEnabled()) && policy.autoCheckoutAfterMinutes() == null) {
+            throw new BusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    "AUTO_CHECKOUT_MINUTES_REQUIRED",
+                    "autoCheckoutAfterMinutes is required when missing checkout auto-close is enabled."
+            );
+        }
+    }
+
+    private AttendancePolicy buildAttendancePolicy(Company company, CompanySite site, CreateSiteRequest request) {
+        var input = request.attendancePolicy();
+        AttendancePolicy policy = new AttendancePolicy();
+        policy.setCompany(company);
+        policy.setSite(site);
+        policy.setRequireQr(input.requireQr());
+        policy.setRequireLocation(input.requireLocation());
+        policy.setCheckInEnabled(input.checkInEnabled());
+        policy.setCheckOutEnabled(input.checkOutEnabled());
+        policy.setUseNetworkAsWarning(input.useNetworkAsWarning());
+        policy.setRejectOutsideGeofence(input.rejectOutsideGeofence());
+        policy.setRejectPoorAccuracy(input.rejectPoorAccuracy());
+        policy.setAllowManualCorrection(input.allowManualCorrection());
+        policy.setAllowManagerManualEntry(input.allowManagerManualEntry());
+        policy.setMissingCheckoutAutoCloseEnabled(input.missingCheckoutAutoCloseEnabled());
+        policy.setAutoCheckoutAfterMinutes(input.autoCheckoutAfterMinutes());
+        policy.setLateGraceMinutes(input.lateGraceMinutes());
+        policy.setEarlyClockInWindowMinutes(input.earlyClockInWindowMinutes());
+        return policy;
+    }
+
+    private SiteAttendancePolicySummaryResponse mapPolicySummary(AttendancePolicy policy) {
+        return new SiteAttendancePolicySummaryResponse(
+                policy.getId(),
+                AttendancePolicySource.SITE_OVERRIDE,
+                Boolean.TRUE.equals(policy.getRequireQr()),
+                Boolean.TRUE.equals(policy.getRequireLocation()),
+                Boolean.TRUE.equals(policy.getCheckInEnabled()),
+                Boolean.TRUE.equals(policy.getCheckOutEnabled()),
+                Boolean.TRUE.equals(policy.getUseNetworkAsWarning()),
+                Boolean.TRUE.equals(policy.getRejectOutsideGeofence()),
+                Boolean.TRUE.equals(policy.getRejectPoorAccuracy()),
+                Boolean.TRUE.equals(policy.getAllowManualCorrection()),
+                Boolean.TRUE.equals(policy.getAllowManagerManualEntry()),
+                Boolean.TRUE.equals(policy.getMissingCheckoutAutoCloseEnabled()),
+                policy.getAutoCheckoutAfterMinutes(),
+                policy.getLateGraceMinutes() != null ? policy.getLateGraceMinutes() : 0,
+                policy.getEarlyClockInWindowMinutes() != null ? policy.getEarlyClockInWindowMinutes() : 0
+        );
+    }
+
+    private LinkedQrTerminalResponse mapTerminal(AttendanceQrTerminal terminal) {
+        if (terminal == null) {
+            return null;
+        }
+        return new LinkedQrTerminalResponse(
+                terminal.getId(),
+                terminal.getName(),
+                terminal.getStatus(),
+                terminal.getRotationSeconds(),
+                Boolean.TRUE.equals(terminal.getAutoCreated()),
+                terminal.getLastHeartbeatAt()
+        );
     }
 
     /**

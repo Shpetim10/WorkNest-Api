@@ -1,0 +1,451 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd"
+        objectQuotingStrategy="QUOTE_ONLY_RESERVED_WORDS">
+
+    <changeSet id="008-1" author="codex">
+        <createTable tableName="attendance_policies">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="company_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="site_id" type="UUID"/>
+            <column name="require_qr" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="require_location" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="check_in_enabled" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="check_out_enabled" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="use_network_as_warning" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reject_outside_geofence" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reject_poor_accuracy" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="allow_manual_correction" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="allow_manager_manual_entry" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="missing_checkout_auto_close_enabled" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="auto_checkout_after_minutes" type="INT"/>
+            <column name="late_grace_minutes" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="early_clock_in_window_minutes" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="attendance_policies" baseColumnNames="company_id"
+                                 constraintName="fk_attendance_policies_company"
+                                 referencedTableName="companies" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_policies" baseColumnNames="site_id"
+                                 constraintName="fk_attendance_policies_site"
+                                 referencedTableName="company_sites" referencedColumnNames="id"/>
+
+        <addUniqueConstraint tableName="attendance_policies" constraintName="uk_attendance_policies_company_site"
+                             columnNames="company_id, site_id"/>
+        <createIndex tableName="attendance_policies" indexName="idx_attendance_policies_company">
+            <column name="company_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="008-2" author="codex">
+        <createTable tableName="attendance_qr_terminals">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="company_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="site_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(120)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="rotation_seconds" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="secret_key_version" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="auto_created" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_heartbeat_at" type="DATETIME"/>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="attendance_qr_terminals" baseColumnNames="company_id"
+                                 constraintName="fk_attendance_qr_terminals_company"
+                                 referencedTableName="companies" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_qr_terminals" baseColumnNames="site_id"
+                                 constraintName="fk_attendance_qr_terminals_site"
+                                 referencedTableName="company_sites" referencedColumnNames="id"/>
+
+        <addUniqueConstraint tableName="attendance_qr_terminals"
+                             constraintName="uk_attendance_qr_terminals_company_site_name"
+                             columnNames="company_id, site_id, name"/>
+        <createIndex tableName="attendance_qr_terminals" indexName="idx_attendance_qr_terminals_site_status">
+            <column name="site_id"/>
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="008-3" author="codex">
+        <createTable tableName="attendance_qr_challenges">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="company_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="site_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="qr_terminal_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="nonce" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="token_hash" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="issued_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+            <column name="used_at" type="DATETIME"/>
+            <column name="used_by_user_id" type="UUID"/>
+            <column name="status" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="attendance_qr_challenges" baseColumnNames="company_id"
+                                 constraintName="fk_attendance_qr_challenges_company"
+                                 referencedTableName="companies" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_qr_challenges" baseColumnNames="site_id"
+                                 constraintName="fk_attendance_qr_challenges_site"
+                                 referencedTableName="company_sites" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_qr_challenges" baseColumnNames="qr_terminal_id"
+                                 constraintName="fk_attendance_qr_challenges_terminal"
+                                 referencedTableName="attendance_qr_terminals" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_qr_challenges" baseColumnNames="used_by_user_id"
+                                 constraintName="fk_attendance_qr_challenges_used_by"
+                                 referencedTableName="users" referencedColumnNames="id"/>
+
+        <addUniqueConstraint tableName="attendance_qr_challenges"
+                             constraintName="uk_attendance_qr_challenges_token_hash"
+                             columnNames="token_hash"/>
+        <addUniqueConstraint tableName="attendance_qr_challenges"
+                             constraintName="uk_attendance_qr_challenges_terminal_nonce"
+                             columnNames="company_id, qr_terminal_id, nonce"/>
+        <createIndex tableName="attendance_qr_challenges" indexName="idx_attendance_qr_challenges_site_status_expiry">
+            <column name="site_id"/>
+            <column name="status"/>
+            <column name="expires_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="008-4" author="codex">
+        <createTable tableName="attendance_day_records">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="company_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="employee_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="site_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="work_date" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="timezone" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="first_check_in_at" type="DATETIME"/>
+            <column name="last_check_out_at" type="DATETIME"/>
+            <column name="worked_minutes" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="break_minutes" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="late_minutes" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="early_leave_minutes" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="overtime_minutes" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="day_status" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="has_warnings" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="warning_flags_json" type="jsonb"/>
+            <column name="review_status" type="VARCHAR(30)" defaultValue="NONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payroll_locked" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_event_count" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="attendance_day_records" baseColumnNames="company_id"
+                                 constraintName="fk_attendance_day_records_company"
+                                 referencedTableName="companies" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_day_records" baseColumnNames="employee_id"
+                                 constraintName="fk_attendance_day_records_employee"
+                                 referencedTableName="employees" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_day_records" baseColumnNames="user_id"
+                                 constraintName="fk_attendance_day_records_user"
+                                 referencedTableName="users" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_day_records" baseColumnNames="site_id"
+                                 constraintName="fk_attendance_day_records_site"
+                                 referencedTableName="company_sites" referencedColumnNames="id"/>
+
+        <addUniqueConstraint tableName="attendance_day_records"
+                             constraintName="uk_attendance_day_records_company_employee_work_date"
+                             columnNames="company_id, employee_id, work_date"/>
+        <createIndex tableName="attendance_day_records" indexName="idx_attendance_day_records_site_work_date">
+            <column name="site_id"/>
+            <column name="work_date"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="008-5" author="codex">
+        <createTable tableName="attendance_events">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="company_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="employee_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="site_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="event_type" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="event_status" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="capture_method" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="attendance_decision" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="server_recorded_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+            <column name="client_captured_at" type="DATETIME"/>
+            <column name="work_date" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="timezone" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="client_request_id" type="VARCHAR(100)"/>
+            <column name="device_public_id" type="VARCHAR(120)"/>
+            <column name="platform" type="VARCHAR(30)"/>
+            <column name="app_version" type="VARCHAR(30)"/>
+            <column name="qr_challenge_id" type="UUID"/>
+            <column name="qr_terminal_id" type="UUID"/>
+            <column name="qr_validation_status" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="latitude" type="DECIMAL(9,6)"/>
+            <column name="longitude" type="DECIMAL(9,6)"/>
+            <column name="accuracy_meters" type="DECIMAL(10,2)"/>
+            <column name="distance_from_site_meters" type="DECIMAL(10,2)"/>
+            <column name="inside_geofence" type="BOOLEAN"/>
+            <column name="geofence_decision" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="request_ip_address" type="VARCHAR(120)"/>
+            <column name="forwarded_for_chain" type="TEXT"/>
+            <column name="network_matched" type="BOOLEAN"/>
+            <column name="matched_network_id" type="UUID"/>
+            <column name="network_decision" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="risk_score" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="warning_flags_json" type="jsonb"/>
+            <column name="rejection_reason_code" type="VARCHAR(80)"/>
+            <column name="rejection_reason_message" type="VARCHAR(255)"/>
+            <column name="employee_note" type="TEXT"/>
+            <column name="review_status" type="VARCHAR(30)" defaultValue="NONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reviewed_by_user_id" type="UUID"/>
+            <column name="reviewed_at" type="DATETIME"/>
+            <column name="review_note" type="TEXT"/>
+            <column name="created_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="attendance_events" baseColumnNames="company_id"
+                                 constraintName="fk_attendance_events_company"
+                                 referencedTableName="companies" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_events" baseColumnNames="employee_id"
+                                 constraintName="fk_attendance_events_employee"
+                                 referencedTableName="employees" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_events" baseColumnNames="user_id"
+                                 constraintName="fk_attendance_events_user"
+                                 referencedTableName="users" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_events" baseColumnNames="site_id"
+                                 constraintName="fk_attendance_events_site"
+                                 referencedTableName="company_sites" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_events" baseColumnNames="qr_challenge_id"
+                                 constraintName="fk_attendance_events_qr_challenge"
+                                 referencedTableName="attendance_qr_challenges" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_events" baseColumnNames="qr_terminal_id"
+                                 constraintName="fk_attendance_events_qr_terminal"
+                                 referencedTableName="attendance_qr_terminals" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_events" baseColumnNames="matched_network_id"
+                                 constraintName="fk_attendance_events_matched_network"
+                                 referencedTableName="site_trusted_networks" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_events" baseColumnNames="reviewed_by_user_id"
+                                 constraintName="fk_attendance_events_reviewed_by"
+                                 referencedTableName="users" referencedColumnNames="id"/>
+
+        <addUniqueConstraint tableName="attendance_events"
+                             constraintName="uk_attendance_events_company_client_request_id"
+                             columnNames="company_id, client_request_id"/>
+        <createIndex tableName="attendance_events" indexName="idx_attendance_events_company_employee_work_date">
+            <column name="company_id"/>
+            <column name="employee_id"/>
+            <column name="work_date"/>
+            <column name="server_recorded_at"/>
+        </createIndex>
+        <createIndex tableName="attendance_events" indexName="idx_attendance_events_site_recorded_at">
+            <column name="site_id"/>
+            <column name="server_recorded_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="008-6" author="codex">
+        <createTable tableName="attendance_review_actions">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="company_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="attendance_event_id" type="UUID"/>
+            <column name="attendance_day_record_id" type="UUID"/>
+            <column name="action_type" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="before_snapshot_json" type="jsonb"/>
+            <column name="after_snapshot_json" type="jsonb"/>
+            <column name="reason" type="TEXT"/>
+            <column name="acted_by_user_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="acted_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="attendance_review_actions" baseColumnNames="company_id"
+                                 constraintName="fk_attendance_review_actions_company"
+                                 referencedTableName="companies" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_review_actions" baseColumnNames="attendance_event_id"
+                                 constraintName="fk_attendance_review_actions_event"
+                                 referencedTableName="attendance_events" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_review_actions" baseColumnNames="attendance_day_record_id"
+                                 constraintName="fk_attendance_review_actions_day_record"
+                                 referencedTableName="attendance_day_records" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="attendance_review_actions" baseColumnNames="acted_by_user_id"
+                                 constraintName="fk_attendance_review_actions_acted_by"
+                                 referencedTableName="users" referencedColumnNames="id"/>
+
+        <createIndex tableName="attendance_review_actions" indexName="idx_attendance_review_actions_event">
+            <column name="attendance_event_id"/>
+        </createIndex>
+        <createIndex tableName="attendance_review_actions" indexName="idx_attendance_review_actions_day_record">
+            <column name="attendance_day_record_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

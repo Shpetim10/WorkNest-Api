@@ -1,11 +1,16 @@
 package com.worknest.features.companySite.application;
 
 import com.worknest.domain.entities.CompanySite;
+import com.worknest.domain.enums.AttendancePolicySource;
 import com.worknest.domain.enums.SiteStatus;
+import com.worknest.features.attendance.application.AttendancePolicyResolver;
+import com.worknest.features.attendance.repository.AttendanceQrTerminalRepository;
 import com.worknest.features.company.repository.CompanyRepository;
 import com.worknest.features.companySite.dto.CompanySiteDetailsResponse;
 import com.worknest.features.companySite.dto.CompanySiteLookup;
 import com.worknest.features.companySite.dto.CompanySiteResponse;
+import com.worknest.features.companySite.dto.LinkedQrTerminalResponse;
+import com.worknest.features.companySite.dto.SiteAttendancePolicySummaryResponse;
 import com.worknest.features.companySite.dto.TrustedNetworkResponse;
 import com.worknest.features.companySite.exception.CompanyNotFoundException;
 import com.worknest.features.companySite.exception.SiteNotFoundException;
@@ -26,6 +31,8 @@ public class CompanySiteQueryServiceImpl implements CompanySiteQueryService {
     private final CompanySiteRepository         siteRepository;
     private final CompanyRepository             companyRepository;
     private final SiteTrustedNetworkRepository  networkRepository;
+    private final AttendancePolicyResolver      attendancePolicyResolver;
+    private final AttendanceQrTerminalRepository attendanceQrTerminalRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -70,7 +77,18 @@ public class CompanySiteQueryServiceImpl implements CompanySiteQueryService {
         return new CompanySiteDetailsResponse(
                 CompanySiteResponse.fromEntity(site),
                 countryName,
-                networks
+                networks,
+                mapPolicy(site),
+                attendanceQrTerminalRepository.findAllBySiteIdOrderByCreatedAtAsc(siteId).stream()
+                        .map(terminal -> new LinkedQrTerminalResponse(
+                                terminal.getId(),
+                                terminal.getName(),
+                                terminal.getStatus(),
+                                terminal.getRotationSeconds(),
+                                Boolean.TRUE.equals(terminal.getAutoCreated()),
+                                terminal.getLastHeartbeatAt()
+                        ))
+                        .toList()
         );
     }
 
@@ -89,5 +107,27 @@ public class CompanySiteQueryServiceImpl implements CompanySiteQueryService {
                 .stream()
                 .map(CompanySiteLookup::fromEntity)
                 .toList();
+    }
+
+    private SiteAttendancePolicySummaryResponse mapPolicy(CompanySite site) {
+        var resolved = attendancePolicyResolver.resolveForSite(site.getCompany(), site);
+        var dto = resolved.dto();
+        return new SiteAttendancePolicySummaryResponse(
+                dto.policyId(),
+                dto.policySource() != null ? dto.policySource() : AttendancePolicySource.COMPANY_DEFAULT,
+                dto.requireQr(),
+                dto.requireLocation(),
+                dto.checkInEnabled(),
+                dto.checkOutEnabled(),
+                dto.useNetworkAsWarning(),
+                dto.rejectOutsideGeofence(),
+                dto.rejectPoorAccuracy(),
+                dto.allowManualCorrection(),
+                dto.allowManagerManualEntry(),
+                dto.missingCheckoutAutoCloseEnabled(),
+                dto.autoCheckoutAfterMinutes(),
+                dto.lateGraceMinutes(),
+                dto.earlyClockInWindowMinutes()
+        );
     }
 }

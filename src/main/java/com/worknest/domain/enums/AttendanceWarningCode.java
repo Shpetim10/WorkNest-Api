@@ -1,0 +1,13 @@
+package com.worknest.domain.enums;
+
+public enum AttendanceWarningCode {
+    NETWORK_NOT_MATCHED,
+    NETWORK_NOT_CONFIGURED,
+    LOW_LOCATION_ACCURACY,
+    OUTSIDE_OFFICE_NETWORK,
+    CLIENT_TIME_SKEW,
+    POSSIBLE_VPN_OR_PROXY,
+    LOCATION_NEAR_BOUNDARY,
+    MANUAL_ENTRY,
+    MULTI_SITE_AMBIGUITY
+}

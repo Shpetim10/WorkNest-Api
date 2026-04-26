@@ -67,9 +67,6 @@ public class CompanySiteUpdateServiceImpl implements CompanySiteUpdateService {
         site.setCountryCode(request.countryCode());
         site.setTimezone(request.timezone());
         site.setNotes(request.notes());
-        site.setQrEnabled(request.qrEnabled());
-        site.setCheckInEnabled(request.checkInEnabled());
-        site.setCheckOutEnabled(request.checkOutEnabled());
 
         CompanySite updatedSite = repository.save(site);
         return mapToDto(updatedSite);
@@ -95,9 +92,6 @@ public class CompanySiteUpdateServiceImpl implements CompanySiteUpdateService {
                 .countryCode(site.getCountryCode())
                 .timezone(site.getTimezone())
                 .notes(site.getNotes())
-                .qrEnabled(site.getQrEnabled())
-                .checkInEnabled(site.getCheckInEnabled())
-                .checkOutEnabled(site.getCheckOutEnabled())
                 .version(site.getVersion())
                 .build();
     }
