@@ -29,8 +29,8 @@
         <liquibase.changeLogFile>src/main/resources/db/changelog/db.changelog-master.yml</liquibase.changeLogFile>
         <liquibase.draftChangeLogFile>src/main/resources/db/changelog/changes/000-initial-draft.yml</liquibase.draftChangeLogFile>
         <liquibase.url>jdbc:postgresql://localhost:5432/worknest_db?currentSchema=public</liquibase.url>
-        <liquibase.username>root</liquibase.username>
-        <liquibase.password>root</liquibase.password>
+        <liquibase.username>dev</liquibase.username>
+        <liquibase.password>dev</liquibase.password>
         <postgresql.version>42.7.4</postgresql.version>
         <lombok.version>1.18.38</lombok.version>
         <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>

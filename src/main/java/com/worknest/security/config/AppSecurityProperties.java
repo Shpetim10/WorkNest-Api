@@ -23,6 +23,7 @@ public class AppSecurityProperties {
     @Setter
     public static class Cors {
         private List<String> allowedOrigins = new ArrayList<>();
+        private List<String> allowedOriginPatterns = new ArrayList<>();
         private List<String> allowedMethods = new ArrayList<>();
         private List<String> allowedHeaders = new ArrayList<>();
         private List<String> exposedHeaders = new ArrayList<>();

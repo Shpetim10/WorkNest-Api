@@ -77,7 +77,7 @@ public class UserProvisioningController {
     @PutMapping("/employee/{employeeId}")
     @Operation(
             summary = "Update Employee",
-            description = "Updates an existing EMPLOYEE's personal details (name, jobTitle), organisational placement "
+            description = "Updates an existing EMPLOYEE's personal details (name, email, jobTitle), organisational placement "
                     + "(department, site, supervisor) and start date. All fields are required in the request body; "
                     + "optional fields (departmentId, companySiteId, supervisorRoleAssignmentId, startDate) may be null "
                     + "to clear or leave them unchanged."
@@ -95,7 +95,7 @@ public class UserProvisioningController {
     @PutMapping("/staff/{employeeId}")
     @Operation(
             summary = "Update Staff",
-            description = "Updates an existing STAFF member's personal details (name, jobTitle), organisational placement "
+            description = "Updates an existing STAFF member's personal details (name, email, jobTitle), organisational placement "
                     + "(department, site) and start date. Optionally replaces the full permission set and the list of "
                     + "supervised employees. Pass null for permissionCodes / assignedEmployeeIds to leave those unchanged; "
                     + "pass an empty list to clear them."
@@ -110,4 +110,3 @@ public class UserProvisioningController {
         return ResponseEntity.ok(ApiResponse.success("Staff updated successfully", response));
     }
 }
-

@@ -49,7 +49,7 @@ public record CreateSiteRequest(
         @Schema(description = "Optional trusted network rules to create alongside the site.")
         List<@Valid TrustedNetworkRequest> trustedNetworks,
 
-        @NotNull(message = "Attendance policy is required")
+        @NotNull(message = "Attendance policy is required. Send the 'attendancePolicy' object with all attendance settings.")
         @Valid
         @Schema(description = "Attendance policy configured during site creation.")
         SiteAttendancePolicyCreateRequest attendancePolicy

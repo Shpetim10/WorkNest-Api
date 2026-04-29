@@ -1,6 +1,7 @@
 package com.worknest.features.companySite.application;
 
 import com.worknest.audit.service.SiteSetupAuditService;
+import com.worknest.common.api.FieldValidationError;
 import com.worknest.common.exception.BusinessException;
 import com.worknest.domain.entities.AttendancePolicy;
 import com.worknest.domain.entities.AttendanceQrTerminal;
@@ -18,8 +19,10 @@ import com.worknest.features.companySite.dto.SiteAttendancePolicySummaryResponse
 import com.worknest.features.companySite.dto.TrustedNetworkRequest;
 import com.worknest.features.companySite.dto.TrustedNetworkResponse;
 import com.worknest.features.companySite.exception.CompanyNotFoundException;
-import com.worknest.features.companySite.exception.DuplicateTrustedNetworkException;
+import com.worknest.features.companySite.exception.InvalidCidrException;
+import com.worknest.features.companySite.exception.InvalidGeofenceException;
 import com.worknest.features.companySite.exception.SiteCodeAlreadyExistsException;
+import com.worknest.features.companySite.exception.SiteCreationValidationException;
 import com.worknest.features.companySite.repository.CompanySiteRepository;
 import com.worknest.features.companySite.repository.SiteTrustedNetworkRepository;
 import com.worknest.features.companySite.validation.CidrValidator;
@@ -28,6 +31,9 @@ import com.worknest.features.company.repository.CompanyRepository;
 import com.worknest.security.AuthSessionPrincipal;
 import com.worknest.tenant.TenantContextHolder;
 import jakarta.persistence.EntityManager;
+import java.time.DateTimeException;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -103,21 +109,11 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
             throw new SiteCodeAlreadyExistsException(normalizedCode);
         }
 
-        // ── 5. Geofence and Address validation ───────────────────────────────────
-        GeofenceValidator.validate(request.location());
-        
-        if (request.location().countryCode() != null && 
-            !request.location().countryCode().equalsIgnoreCase(request.countryCode())) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "COUNTRY_MISMATCH", "The selected location's country (" + request.location().countryCode() + ") must match the site's primary country code (" + request.countryCode() + ").");
-        }
-
-        // ── 6. Trusted-network validation ────────────────────────────────────────
         List<TrustedNetworkRequest> networks = request.trustedNetworks() != null
                 ? request.trustedNetworks()
                 : List.of();
 
-        validateTrustedNetworks(networks);
-        validateAttendancePolicy(request);
+        validateCreateRequest(request, networks);
 
         // ── 7. Persist site ──────────────────────────────────────────────────────
         Company companyRef = entityManager.getReference(Company.class, companyId);
@@ -185,17 +181,80 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
      *   <li>No duplicate (cidrBlock + networkType) pairs within the same request.</li>
      * </ul>
      */
-    private void validateTrustedNetworks(List<TrustedNetworkRequest> networks) {
-        Set<String> seenKeys = new HashSet<>();
-        for (TrustedNetworkRequest net : networks) {
-            // CIDR validation (throws InvalidCidrException on failure)
-            CidrValidator.validate(net.cidrBlock(), net.ipVersion());
+    private void validateCreateRequest(CreateSiteRequest request, List<TrustedNetworkRequest> networks) {
+        List<FieldValidationError> fieldErrors = new ArrayList<>();
 
-            // Intra-request duplicate check
-            String dedupKey = CidrValidator.normalize(net.cidrBlock()) + "|" + net.networkType();
-            if (!seenKeys.add(dedupKey)) {
-                throw new DuplicateTrustedNetworkException(net.cidrBlock());
+        validateTimezone(request.timezone(), fieldErrors);
+        validateLocation(request, fieldErrors);
+        validateTrustedNetworks(networks, fieldErrors);
+        validateAttendancePolicy(request, fieldErrors);
+
+        if (!fieldErrors.isEmpty()) {
+            throw new SiteCreationValidationException(fieldErrors);
+        }
+    }
+
+    private void validateTrustedNetworks(List<TrustedNetworkRequest> networks, List<FieldValidationError> fieldErrors) {
+        Set<String> seenKeys = new HashSet<>();
+        for (int i = 0; i < networks.size(); i++) {
+            TrustedNetworkRequest net = networks.get(i);
+            String fieldPrefix = "trustedNetworks[" + i + "]";
+            boolean cidrValid = true;
+
+            try {
+                CidrValidator.validate(net.cidrBlock(), net.ipVersion());
+            } catch (InvalidCidrException exception) {
+                fieldErrors.add(new FieldValidationError(fieldPrefix + ".cidrBlock", exception.getMessage()));
+                cidrValid = false;
             }
+
+            if (cidrValid) {
+                String dedupKey = CidrValidator.normalize(net.cidrBlock()) + "|" + net.networkType();
+                if (!seenKeys.add(dedupKey)) {
+                    fieldErrors.add(new FieldValidationError(
+                            fieldPrefix + ".cidrBlock",
+                            "This CIDR block is duplicated in the request for the same network type."
+                    ));
+                }
+            }
+
+            if (net.expiresAt() != null && net.expiresAt().isBefore(Instant.now())) {
+                fieldErrors.add(new FieldValidationError(
+                        fieldPrefix + ".expiresAt",
+                        "Trusted network expiration must be in the future."
+                ));
+            }
+        }
+    }
+
+    private void validateLocation(CreateSiteRequest request, List<FieldValidationError> fieldErrors) {
+        try {
+            GeofenceValidator.validate(request.location());
+        } catch (InvalidGeofenceException exception) {
+            fieldErrors.add(new FieldValidationError(inferGeofenceField(request), exception.getMessage()));
+        }
+
+        if (request.location().countryCode() != null
+                && !request.location().countryCode().equalsIgnoreCase(request.countryCode())) {
+            fieldErrors.add(new FieldValidationError(
+                    "location.countryCode",
+                    "Location country must match the site's primary country code."
+            ));
+        }
+    }
+
+    private void validateTimezone(String timezone, List<FieldValidationError> fieldErrors) {
+        if (timezone == null || timezone.isBlank()) {
+            return;
+        }
+
+        try {
+            ZoneId.of(timezone.trim());
+        } catch (DateTimeException exception) {
+            fieldErrors.add(new FieldValidationError(
+                    "timezone",
+                    "Timezone must be a valid IANA timezone, for example 'Europe/Tirane'."
+            ));
         }
     }
 
@@ -264,18 +323,37 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
         return rule;
     }
 
-    private void validateAttendancePolicy(CreateSiteRequest request) {
+    private void validateAttendancePolicy(CreateSiteRequest request, List<FieldValidationError> fieldErrors) {
         var policy = request.attendancePolicy();
         if (policy == null) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "ATTENDANCE_POLICY_REQUIRED", "Attendance policy is required.");
+            fieldErrors.add(new FieldValidationError(
+                    "attendancePolicy",
+                    "Attendance policy is required. Send the 'attendancePolicy' object with all attendance settings."
+            ));
+            return;
         }
         if (Boolean.TRUE.equals(policy.missingCheckoutAutoCloseEnabled()) && policy.autoCheckoutAfterMinutes() == null) {
-            throw new BusinessException(
-                    HttpStatus.BAD_REQUEST,
-                    "AUTO_CHECKOUT_MINUTES_REQUIRED",
-                    "autoCheckoutAfterMinutes is required when missing checkout auto-close is enabled."
-            );
+            fieldErrors.add(new FieldValidationError(
+                    "attendancePolicy.autoCheckoutAfterMinutes",
+                    "Auto check-out minutes is required when missing check-out auto-close is enabled."
+            ));
         }
+    }
+
+    private String inferGeofenceField(CreateSiteRequest request) {
+        if (request.location() == null || request.location().geofenceShapeType() == null) {
+            return "location.geofenceShapeType";
+        }
+
+        return switch (request.location().geofenceShapeType()) {
+            case CIRCLE -> request.location().geofencePolygonGeoJson() != null
+                    && !request.location().geofencePolygonGeoJson().isBlank()
+                    ? "location.geofencePolygonGeoJson"
+                    : "location.geofenceRadiusMeters";
+            case POLYGON -> request.location().geofenceRadiusMeters() != null
+                    ? "location.geofenceRadiusMeters"
+                    : "location.geofencePolygonGeoJson";
+        };
     }
 
     private AttendancePolicy buildAttendancePolicy(Company company, CompanySite site, CreateSiteRequest request) {

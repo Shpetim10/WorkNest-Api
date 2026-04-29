@@ -8,6 +8,7 @@ import com.worknest.common.api.FieldValidationError;
 import com.worknest.features.company.exception.CompanySiteActivationBlockedException;
 import com.worknest.features.companySite.exception.InvalidCidrException;
 import com.worknest.features.companySite.exception.InvalidGeofenceException;
+import com.worknest.features.companySite.exception.SiteCreationValidationException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.util.List;
@@ -39,7 +40,12 @@ public class GlobalExceptionHandler {
                 .toList();
 
         return ResponseEntity.badRequest().body(
-                ApiErrorResponse.of("VALIDATION_ERROR", "Request validation failed", request.getRequestURI(), fieldErrors)
+                ApiErrorResponse.of(
+                        "VALIDATION_ERROR",
+                        "Some submitted fields are missing or invalid. Fix the highlighted fields and try again.",
+                        request.getRequestURI(),
+                        fieldErrors
+                )
         );
     }
 
@@ -54,7 +60,22 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.toList());
 
         return ResponseEntity.badRequest().body(
-                ApiErrorResponse.of("VALIDATION_ERROR", "Request validation failed", request.getRequestURI(), fieldErrors)
+                ApiErrorResponse.of(
+                        "VALIDATION_ERROR",
+                        "Some submitted fields are missing or invalid. Fix the highlighted fields and try again.",
+                        request.getRequestURI(),
+                        fieldErrors
+                )
+        );
+    }
+
+    @ExceptionHandler(SiteCreationValidationException.class)
+    public ResponseEntity<ApiErrorResponse> handleSiteCreationValidation(
+            SiteCreationValidationException exception,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(exception.getStatus()).body(
+                ApiErrorResponse.of(exception.getCode(), exception.getMessage(), request.getRequestURI(), exception.getFieldErrors())
         );
     }
 

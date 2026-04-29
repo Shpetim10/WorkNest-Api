@@ -19,6 +19,7 @@ import com.worknest.domain.enums.PlatformRole;
 import com.worknest.domain.enums.UserStatus;
 import com.worknest.common.i18n.Language;
 import com.worknest.features.auth.exception.UserAlreadyActiveException;
+import com.worknest.features.auth.exception.UserEmailAlreadyExistsException;
 import com.worknest.features.auth.repository.PermissionRepository;
 import com.worknest.features.auth.repository.RoleAssignmentPermissionRepository;
 import com.worknest.features.auth.repository.RoleAssignmentRepository;
@@ -212,6 +213,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
 
         // --- Update User personal details ---
         User user = employee.getUser();
+        user.setEmail(normalizeEmailForUpdate(request.email(), user.getId()));
         user.setFirstName(request.firstName().trim());
         user.setLastName(request.lastName().trim());
         user.setDisplayName((user.getFirstName() + " " + user.getLastName()).trim());
@@ -260,6 +262,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
 
         // --- Update User personal details ---
         User user = employee.getUser();
+        user.setEmail(normalizeEmailForUpdate(request.email(), user.getId()));
         user.setFirstName(request.firstName().trim());
         user.setLastName(request.lastName().trim());
         user.setDisplayName((user.getFirstName() + " " + user.getLastName()).trim());
@@ -484,6 +487,16 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         }
 
         return userRepository.save(user);
+    }
+
+    private String normalizeEmailForUpdate(String email, UUID currentUserId) {
+        String normalizedEmail = email.trim().toLowerCase();
+        boolean usedByAnotherUser = userRepository.findAllByEmailIgnoreCase(normalizedEmail).stream()
+                .anyMatch(existingUser -> !Objects.equals(existingUser.getId(), currentUserId));
+        if (usedByAnotherUser) {
+            throw new UserEmailAlreadyExistsException(normalizedEmail);
+        }
+        return normalizedEmail;
     }
 
     private boolean hasActiveAssignmentInCompany(User user, Company company) {

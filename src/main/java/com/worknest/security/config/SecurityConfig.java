@@ -48,6 +48,7 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/actuator/health"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/companies/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/logout").permitAll()
@@ -77,6 +78,7 @@ public class SecurityConfig {
 
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(cors.getAllowedOrigins());
+        configuration.setAllowedOriginPatterns(cors.getAllowedOriginPatterns());
         configuration.setAllowedMethods(cors.getAllowedMethods());
         configuration.setAllowedHeaders(cors.getAllowedHeaders());
         configuration.setExposedHeaders(cors.getExposedHeaders());
