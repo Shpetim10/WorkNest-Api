@@ -9,6 +9,8 @@ import com.worknest.domain.enums.AttendanceReviewStatus;
 import com.worknest.domain.enums.GeofenceDecision;
 import com.worknest.domain.enums.NetworkDecision;
 import jakarta.persistence.Column;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
@@ -159,6 +161,7 @@ public class AttendanceEvent {
     @Column(name = "risk_score", nullable = false)
     private Integer riskScore = 0;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "warning_flags_json", columnDefinition = "jsonb")
     private String warningFlagsJson;
 

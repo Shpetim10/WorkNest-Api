@@ -49,11 +49,13 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -257,8 +259,27 @@ public class MobileAttendanceService {
         }
 
         record.setSourceEventCount((record.getSourceEventCount() != null ? record.getSourceEventCount() : 0) + 1);
-        record.setHasWarnings(!warningCodes.isEmpty());
-        record.setWarningFlagsJson(writeWarningsJson(warningCodes));
+
+        List<AttendanceWarningCode> accumulatedWarnings = new ArrayList<>(warningCodes);
+        String existingJson = record.getWarningFlagsJson();
+        if (existingJson != null && !existingJson.isBlank()) {
+            try {
+                List<String> existingCodes = objectMapper.readValue(
+                        existingJson,
+                        objectMapper.getTypeFactory().constructCollectionType(List.class, String.class)
+                );
+                for (String code : existingCodes) {
+                    try {
+                        accumulatedWarnings.add(AttendanceWarningCode.valueOf(code));
+                    } catch (IllegalArgumentException ignored) {
+                    }
+                }
+            } catch (JsonProcessingException ignored) {
+            }
+        }
+        accumulatedWarnings = accumulatedWarnings.stream().distinct().toList();
+        record.setHasWarnings(!accumulatedWarnings.isEmpty());
+        record.setWarningFlagsJson(writeWarningsJson(accumulatedWarnings));
         return attendanceDayRecordRepository.save(record);
     }
 
@@ -411,7 +432,7 @@ public class MobileAttendanceService {
         if (dayRecord == null || dayRecord.getFirstCheckInAt() == null) {
             return AttendanceState.NOT_CHECKED_IN;
         }
-        if (dayRecord.getFirstCheckInAt() != null && dayRecord.getLastCheckOutAt() == null) {
+        if (dayRecord.getLastCheckOutAt() == null) {
             return AttendanceState.CHECKED_IN;
         }
         return AttendanceState.CHECKED_OUT;
@@ -482,10 +503,16 @@ public class MobileAttendanceService {
             );
             List<AttendanceWarningDto> warnings = new ArrayList<>();
             for (String code : codes) {
-                warnings.add(new AttendanceWarningDto(code, "LOW", code.replace('_', ' ').toLowerCase()));
+                try {
+                    AttendanceWarningCode warningCode = AttendanceWarningCode.valueOf(code);
+                    warnings.add(new AttendanceWarningDto(code, warningCode.getSeverity(), code.replace('_', ' ').toLowerCase()));
+                } catch (IllegalArgumentException e) {
+                    log.warn("Unknown warning code: {}", code);
+                }
             }
             return warnings;
         } catch (JsonProcessingException exception) {
+            log.warn("Failed to deserialize warning flags JSON", exception);
             return List.of();
         }
     }

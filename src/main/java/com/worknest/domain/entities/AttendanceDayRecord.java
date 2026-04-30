@@ -3,6 +3,8 @@ package com.worknest.domain.entities;
 import com.worknest.domain.enums.AttendanceDayStatus;
 import com.worknest.domain.enums.AttendanceReviewStatus;
 import jakarta.persistence.Column;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
@@ -96,6 +98,7 @@ public class AttendanceDayRecord {
     @Column(name = "has_warnings", nullable = false)
     private Boolean hasWarnings = false;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "warning_flags_json", columnDefinition = "jsonb")
     private String warningFlagsJson;
 

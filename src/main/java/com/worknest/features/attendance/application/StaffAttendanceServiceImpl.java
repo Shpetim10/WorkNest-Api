@@ -5,6 +5,7 @@ import com.worknest.domain.entities.AttendanceDayRecord;
 import com.worknest.domain.entities.AttendanceEvent;
 import com.worknest.domain.entities.CompanySite;
 import com.worknest.domain.entities.Employee;
+import com.worknest.domain.entities.User;
 import com.worknest.domain.enums.AttendanceCaptureMethod;
 import com.worknest.domain.enums.AttendanceDayStatus;
 import com.worknest.domain.enums.AttendanceDecision;
@@ -23,6 +24,7 @@ import com.worknest.features.attendance.dto.StaffTodayAttendanceItemDto;
 import com.worknest.features.attendance.dto.StaffTodayAttendanceResponse;
 import com.worknest.features.attendance.repository.AttendanceDayRecordRepository;
 import com.worknest.features.attendance.repository.AttendanceEventRepository;
+import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.companySite.exception.SiteNotFoundException;
 import com.worknest.features.companySite.repository.CompanySiteRepository;
 import com.worknest.features.employee.repository.EmployeeRepository;
@@ -46,6 +48,7 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
     private final CompanySiteRepository companySiteRepository;
     private final AttendanceDayRecordRepository attendanceDayRecordRepository;
     private final AttendanceEventRepository attendanceEventRepository;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -57,10 +60,13 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
                 departmentId
         );
 
-        LocalDate workDate = LocalDate.now();
         List<StaffTodayAttendanceItemDto> items = employees.stream()
                 .filter(emp -> siteId == null || (emp.getCompanySite() != null && siteId.equals(emp.getCompanySite().getId())))
                 .map(emp -> {
+                    CompanySite empSite = emp.getCompanySite();
+                    String timezone = empSite != null ? empSite.getTimezone() : "UTC";
+                    LocalDate workDate = LocalDate.now(ZoneId.of(timezone));
+
                     AttendanceDayRecord record = attendanceDayRecordRepository
                             .findByCompanyIdAndEmployeeIdAndWorkDate(principal.companyId(), emp.getId(), workDate)
                             .orElse(null);
@@ -76,7 +82,7 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
                             emp.getId(),
                             emp.getUser().getId(),
                             emp.getUser().getDisplayName() != null ? emp.getUser().getDisplayName() : (emp.getUser().getFirstName() + " " + emp.getUser().getLastName()),
-                            emp.getCompanySite() != null ? emp.getCompanySite().getId() : null,
+                            empSite != null ? empSite.getId() : null,
                             state,
                             record != null ? record.getFirstCheckInAt() : null,
                             record != null ? record.getLastCheckOutAt() : null,
@@ -85,7 +91,14 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
                 })
                 .toList();
 
-        return new StaffTodayAttendanceResponse(workDate, "UTC", items);
+        String responseTimezone = siteId != null
+                ? companySiteRepository.findById(siteId)
+                        .map(CompanySite::getTimezone)
+                        .orElse("UTC")
+                : "UTC";
+        LocalDate responseDate = LocalDate.now(ZoneId.of(responseTimezone));
+
+        return new StaffTodayAttendanceResponse(responseDate, responseTimezone, items);
     }
 
     @Override
@@ -148,6 +161,7 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         }
         dayRecord.setHasWarnings(true);
         dayRecord.setWarningFlagsJson("[\"MANUAL_ENTRY\"]");
+        dayRecord.setReviewStatus(AttendanceReviewStatus.PENDING_REVIEW);
         attendanceDayRecordRepository.save(dayRecord);
     }
 
@@ -156,8 +170,11 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         AuthSessionPrincipal principal = principal();
         AttendanceEvent event = attendanceEventRepository.findByIdAndCompanyId(eventId, principal.companyId())
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "EVENT_NOT_FOUND", "Attendance event was not found."));
+        User reviewer = userRepository.findById(principal.userId())
+                .orElseThrow(() -> new BusinessException(HttpStatus.UNAUTHORIZED, "REVIEWER_NOT_FOUND", "Current user not found."));
         event.setReviewStatus(request.reviewStatus());
         event.setReviewedAt(Instant.now());
+        event.setReviewedBy(reviewer);
         event.setReviewNote(request.note());
         attendanceEventRepository.save(event);
     }
@@ -179,6 +196,7 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
             record.setWorkedMinutes((int) Math.max(0L, java.time.Duration.between(request.firstCheckInAt(), request.lastCheckOutAt()).toMinutes()));
         }
         record.setDayStatus(request.dayStatus());
+        record.setReviewStatus(AttendanceReviewStatus.PENDING_REVIEW);
         attendanceDayRecordRepository.save(record);
     }
 

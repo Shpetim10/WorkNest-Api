@@ -1,13 +1,23 @@
 package com.worknest.domain.enums;
 
 public enum AttendanceWarningCode {
-    NETWORK_NOT_MATCHED,
-    NETWORK_NOT_CONFIGURED,
-    LOW_LOCATION_ACCURACY,
-    OUTSIDE_OFFICE_NETWORK,
-    CLIENT_TIME_SKEW,
-    POSSIBLE_VPN_OR_PROXY,
-    LOCATION_NEAR_BOUNDARY,
-    MANUAL_ENTRY,
-    MULTI_SITE_AMBIGUITY
+    LOW_LOCATION_ACCURACY("LOW"),
+    LOCATION_NEAR_BOUNDARY("MEDIUM"),
+    NETWORK_NOT_CONFIGURED("LOW"),
+    NETWORK_NOT_MATCHED("MEDIUM"),
+    OUTSIDE_OFFICE_NETWORK("HIGH"),
+    CLIENT_TIME_SKEW("MEDIUM"),
+    POSSIBLE_VPN_OR_PROXY("HIGH"),
+    MANUAL_ENTRY("MEDIUM"),
+    MULTI_SITE_AMBIGUITY("LOW");
+
+    private final String severity;
+
+    AttendanceWarningCode(String severity) {
+        this.severity = severity;
+    }
+
+    public String getSeverity() {
+        return severity;
+    }
 }
