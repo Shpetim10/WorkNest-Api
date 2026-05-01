@@ -1,6 +1,8 @@
 package com.worknest.domain.entities;
 
 import com.worknest.domain.enums.EmploymentStatus;
+import com.worknest.domain.enums.EmploymentType;
+import com.worknest.domain.enums.PaymentMethod;
 import com.worknest.domain.enums.PlatformRole;
 
 import jakarta.persistence.Column;
@@ -15,11 +17,11 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -35,7 +37,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(
         name = "employees",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_employees_user_id", columnNames = {"user_id"})
+                @UniqueConstraint(name = "uk_employees_user_company", columnNames = {"user_id", "company_id"})
         },
         indexes = {
                 @Index(name = "idx_employees_company", columnList = "company_id"),
@@ -54,7 +56,7 @@ public class Employee {
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
@@ -66,9 +68,6 @@ public class Employee {
     @JoinColumn(name = "company_site_id")
     private CompanySite companySite;
 
-    /**
-     * Identifies if this record corresponds to an EMPLOYEE or STAFF platform role.
-     */
     @Enumerated(EnumType.STRING)
     @Column(name = "employment_type_role", nullable = false, length = 30)
     private PlatformRole employmentTypeRole;
@@ -84,6 +83,36 @@ public class Employee {
     @Column(name = "employment_status", nullable = false, length = 30)
     private EmploymentStatus employmentStatus = EmploymentStatus.PENDING;
 
+    // --- Contract fields ---
+
+    @Column(name = "contract_document_key", length = 500)
+    private String contractDocumentKey;
+
+    @Column(name = "contract_document_path", length = 1000)
+    private String contractDocumentPath;
+
+    @Column(name = "contract_expiry_date")
+    private LocalDate contractExpiryDate;
+
+    @Column(name = "leave_days_per_year")
+    private Integer leaveDaysPerYear;
+
+    // --- Payment fields ---
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method", length = 30)
+    private PaymentMethod paymentMethod;
+
+    @Column(name = "monthly_salary", precision = 12, scale = 2)
+    private BigDecimal monthlySalary;
+
+    @Column(name = "hourly_rate", precision = 10, scale = 2)
+    private BigDecimal hourlyRate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "employment_type", length = 30)
+    private EmploymentType employmentType;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -95,10 +124,6 @@ public class Employee {
     @PrePersist
     @PreUpdate
     void validateBusinessRules() {
-        if (employmentTypeRole == PlatformRole.EMPLOYEE) {
-            // Unassigned state is dynamically allowed here to support the manager transfer UI.
-        }
-
         if (supervisorRoleAssignment != null) {
             if (supervisorRoleAssignment.getRole() != PlatformRole.STAFF) {
                 throw new IllegalStateException("Supervisor role assignment must be of STAFF platform role");

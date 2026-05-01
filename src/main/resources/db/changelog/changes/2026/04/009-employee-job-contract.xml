@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd"
+        objectQuotingStrategy="QUOTE_ONLY_RESERVED_WORDS">
+
+    <!-- Relax employees unique constraint to allow one user per company (multi-company support) -->
+    <changeSet id="009-1" author="codex">
+        <dropUniqueConstraint tableName="employees" constraintName="uk_employees_user_id"/>
+        <addUniqueConstraint tableName="employees"
+                             constraintName="uk_employees_user_company"
+                             columnNames="user_id, company_id"/>
+    </changeSet>
+
+    <!-- Add contract, payment, and employment-type fields to employees -->
+    <changeSet id="009-2" author="codex">
+        <addColumn tableName="employees">
+            <column name="contract_document_key" type="VARCHAR(500)"/>
+            <column name="contract_document_path" type="VARCHAR(1000)"/>
+            <column name="contract_expiry_date" type="DATE"/>
+            <column name="leave_days_per_year" type="INT"/>
+            <column name="payment_method" type="VARCHAR(30)"/>
+            <column name="monthly_salary" type="DECIMAL(12,2)"/>
+            <column name="hourly_rate" type="DECIMAL(10,2)"/>
+            <column name="employment_type" type="VARCHAR(30)"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- Add CASCADE DELETE on attendance records when an employee is deleted -->
+    <changeSet id="009-3" author="codex">
+        <dropForeignKeyConstraint baseTableName="attendance_day_records"
+                                  constraintName="fk_attendance_day_records_employee"/>
+        <addForeignKeyConstraint baseTableName="attendance_day_records"
+                                 baseColumnNames="employee_id"
+                                 constraintName="fk_attendance_day_records_employee"
+                                 referencedTableName="employees"
+                                 referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+
+        <dropForeignKeyConstraint baseTableName="attendance_events"
+                                  constraintName="fk_attendance_events_employee"/>
+        <addForeignKeyConstraint baseTableName="attendance_events"
+                                 baseColumnNames="employee_id"
+                                 constraintName="fk_attendance_events_employee"
+                                 referencedTableName="employees"
+                                 referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+    </changeSet>
+
+    <!-- Add CASCADE DELETE on review actions when their parent day-record or event is deleted -->
+    <changeSet id="009-4" author="codex">
+        <dropForeignKeyConstraint baseTableName="attendance_review_actions"
+                                  constraintName="fk_attendance_review_actions_day_record"/>
+        <addForeignKeyConstraint baseTableName="attendance_review_actions"
+                                 baseColumnNames="attendance_day_record_id"
+                                 constraintName="fk_attendance_review_actions_day_record"
+                                 referencedTableName="attendance_day_records"
+                                 referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+
+        <dropForeignKeyConstraint baseTableName="attendance_review_actions"
+                                  constraintName="fk_attendance_review_actions_event"/>
+        <addForeignKeyConstraint baseTableName="attendance_review_actions"
+                                 baseColumnNames="attendance_event_id"
+                                 constraintName="fk_attendance_review_actions_event"
+                                 referencedTableName="attendance_events"
+                                 referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+    </changeSet>
+
+    <!-- SET NULL on user-referencing audit FKs so user entity can be fully deleted -->
+    <changeSet id="009-5" author="codex">
+        <dropForeignKeyConstraint baseTableName="user_invitations"
+                                  constraintName="FK_USER_INVITATIONS_ON_INVITED_BY"/>
+        <addForeignKeyConstraint baseTableName="user_invitations"
+                                 baseColumnNames="invited_by"
+                                 constraintName="FK_USER_INVITATIONS_ON_INVITED_BY"
+                                 referencedTableName="users"
+                                 referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+
+        <dropForeignKeyConstraint baseTableName="employee_supervisor_history"
+                                  constraintName="fk_emp_sup_hist_changed_by"/>
+        <addForeignKeyConstraint baseTableName="employee_supervisor_history"
+                                 baseColumnNames="changed_by_user_id"
+                                 constraintName="fk_emp_sup_hist_changed_by"
+                                 referencedTableName="users"
+                                 referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+
+        <dropForeignKeyConstraint baseTableName="attendance_qr_challenges"
+                                  constraintName="fk_attendance_qr_challenges_used_by"/>
+        <addForeignKeyConstraint baseTableName="attendance_qr_challenges"
+                                 baseColumnNames="used_by_user_id"
+                                 constraintName="fk_attendance_qr_challenges_used_by"
+                                 referencedTableName="users"
+                                 referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+
+        <dropForeignKeyConstraint baseTableName="role_assignments"
+                                  constraintName="FK_ROLE_ASSIGNMENTS_ON_CREATED_BY"/>
+        <addForeignKeyConstraint baseTableName="role_assignments"
+                                 baseColumnNames="created_by"
+                                 constraintName="FK_ROLE_ASSIGNMENTS_ON_CREATED_BY"
+                                 referencedTableName="users"
+                                 referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+
+        <dropForeignKeyConstraint baseTableName="role_assignment_permissions"
+                                  constraintName="FK_ROLE_ASSIGNMENT_PERMISSIONS_ON_GRANTED_BY"/>
+        <addForeignKeyConstraint baseTableName="role_assignment_permissions"
+                                 baseColumnNames="granted_by"
+                                 constraintName="FK_ROLE_ASSIGNMENT_PERMISSIONS_ON_GRANTED_BY"
+                                 referencedTableName="users"
+                                 referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+    </changeSet>
+
+    <!-- SET NULL on supervisor history role-assignment FKs so role assignments can be deleted -->
+    <changeSet id="009-6" author="codex">
+        <dropForeignKeyConstraint baseTableName="employee_supervisor_history"
+                                  constraintName="fk_emp_sup_hist_from_sup"/>
+        <addForeignKeyConstraint baseTableName="employee_supervisor_history"
+                                 baseColumnNames="from_role_assignment_id"
+                                 constraintName="fk_emp_sup_hist_from_sup"
+                                 referencedTableName="role_assignments"
+                                 referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+
+        <dropForeignKeyConstraint baseTableName="employee_supervisor_history"
+                                  constraintName="fk_emp_sup_hist_to_sup"/>
+        <addForeignKeyConstraint baseTableName="employee_supervisor_history"
+                                 baseColumnNames="to_role_assignment_id"
+                                 constraintName="fk_emp_sup_hist_to_sup"
+                                 referencedTableName="role_assignments"
+                                 referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+    </changeSet>
+
+</databaseChangeLog>

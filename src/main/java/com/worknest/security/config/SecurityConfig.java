@@ -58,6 +58,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/reset-password").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/invitations/activate").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/media/files/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/storage/media/**").permitAll()
                         .anyRequest().authenticated()
                 );
 

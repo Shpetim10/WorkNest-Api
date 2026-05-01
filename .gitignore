@@ -45,3 +45,8 @@ Thumbs.db
 # Env files
 *.env
 *.env.example
+
+# Claude
+CLAUDE.md
+.claude
+docs

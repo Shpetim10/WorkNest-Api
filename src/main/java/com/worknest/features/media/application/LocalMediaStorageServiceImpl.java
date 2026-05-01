@@ -21,10 +21,15 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class LocalMediaStorageServiceImpl implements MediaStorageService {
 
-    private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
+    private static final Set<String> IMAGE_CONTENT_TYPES = Set.of(
             "image/jpeg",
             "image/png",
             "image/webp"
+    );
+
+    private static final Set<String> DOCUMENT_CONTENT_TYPES = Set.of(
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     );
 
     private final Path storageRoot;
@@ -35,7 +40,7 @@ public class LocalMediaStorageServiceImpl implements MediaStorageService {
 
     @Override
     public MediaUploadResponse upload(UUID companyId, UUID userId, MediaCategory category, MultipartFile file) {
-        validateFile(file);
+        validateFile(file, category);
 
         String extension = resolveExtension(file.getOriginalFilename(), file.getContentType());
         LocalDate today = LocalDate.now();
@@ -49,7 +54,7 @@ public class LocalMediaStorageServiceImpl implements MediaStorageService {
                     UUID.randomUUID(),
                     extension
             );
-            case USER_PROFILE -> (companyId == null || userId == null) 
+            case USER_PROFILE -> (companyId == null || userId == null)
                 ? String.format(
                     Locale.ROOT,
                     "public/users/profile/%04d/%02d/%s.%s",
@@ -71,6 +76,15 @@ public class LocalMediaStorageServiceImpl implements MediaStorageService {
             case REGISTRATION_LOGO -> String.format(
                     Locale.ROOT,
                     "public/registrations/logos/%04d/%02d/%s.%s",
+                    today.getYear(),
+                    today.getMonthValue(),
+                    UUID.randomUUID(),
+                    extension
+            );
+            case EMPLOYEE_CONTRACT -> String.format(
+                    Locale.ROOT,
+                    "companies/%s/employees/contracts/%04d/%02d/%s.%s",
+                    companyId,
                     today.getYear(),
                     today.getMonthValue(),
                     UUID.randomUUID(),
@@ -144,7 +158,7 @@ public class LocalMediaStorageServiceImpl implements MediaStorageService {
                 newKey,
                 target.toString().replace('\\', '/'),
                 source.getFileName().toString(),
-                "image/" + extension, // Best effort
+                "image/" + extension,
                 target.toFile().length(),
                 "Logo promoted successfully"
         );
@@ -193,15 +207,21 @@ public class LocalMediaStorageServiceImpl implements MediaStorageService {
         );
     }
 
-    private void validateFile(MultipartFile file) {
+    private void validateFile(MultipartFile file, MediaCategory category) {
         if (file == null || file.isEmpty()) {
             throw new InvalidConfigurationRequestException("file is required");
         }
         if (!StringUtils.hasText(file.getOriginalFilename())) {
             throw new InvalidConfigurationRequestException("file name is required");
         }
-        if (!ALLOWED_CONTENT_TYPES.contains(file.getContentType())) {
-            throw new InvalidConfigurationRequestException("Only JPEG, PNG, and WEBP images are supported");
+        if (category == MediaCategory.EMPLOYEE_CONTRACT) {
+            if (!DOCUMENT_CONTENT_TYPES.contains(file.getContentType())) {
+                throw new InvalidConfigurationRequestException("Only PDF and DOCX documents are supported for employee contracts");
+            }
+        } else {
+            if (!IMAGE_CONTENT_TYPES.contains(file.getContentType())) {
+                throw new InvalidConfigurationRequestException("Only JPEG, PNG, and WEBP images are supported");
+            }
         }
     }
 
@@ -217,6 +237,8 @@ public class LocalMediaStorageServiceImpl implements MediaStorageService {
             case "image/jpeg" -> "jpg";
             case "image/png" -> "png";
             case "image/webp" -> "webp";
+            case "application/pdf" -> "pdf";
+            case "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "docx";
             default -> throw new InvalidConfigurationRequestException("Unsupported media type");
         };
     }

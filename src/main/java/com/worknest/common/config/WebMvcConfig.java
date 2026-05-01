@@ -16,11 +16,15 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        Path mediaPath = Paths.get(mediaLocalRoot);
+        Path mediaPath = Paths.get(mediaLocalRoot).toAbsolutePath().normalize();
         String absolutePath = mediaPath.toFile().getAbsolutePath();
 
-        // Map URL pattern /api/v1/media/files/** to the physical storage location
+        // Primary media URL
         registry.addResourceHandler("/api/v1/media/files/**")
+                .addResourceLocations("file:" + absolutePath + "/");
+
+        // Backward-compatible URL used by some clients
+        registry.addResourceHandler("/storage/media/**")
                 .addResourceLocations("file:" + absolutePath + "/");
     }
 }

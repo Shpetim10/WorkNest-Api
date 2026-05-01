@@ -2,12 +2,16 @@ package com.worknest.features.attendance.web;
 
 import com.worknest.common.api.ApiResponse;
 import com.worknest.features.attendance.application.AdminAttendanceReportService;
+import com.worknest.features.attendance.application.StaffAttendanceService;
 import com.worknest.features.attendance.dto.AdminAttendanceMonthlyReportResponse;
+import com.worknest.features.attendance.dto.AttendanceDashboardResponse;
 import com.worknest.security.AuthSessionPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +26,19 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminAttendanceController {
 
     private final AdminAttendanceReportService adminAttendanceReportService;
+    private final StaffAttendanceService staffAttendanceService;
+
+    @GetMapping("/dashboard")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Get daily attendance dashboard — all company employees, optional site and department filters")
+    public ApiResponse<AttendanceDashboardResponse> dashboard(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) UUID siteId,
+            @RequestParam(required = false) UUID departmentId
+    ) {
+        return ApiResponse.success("Admin attendance dashboard loaded",
+                staffAttendanceService.dashboard(date, departmentId, siteId));
+    }
 
     @GetMapping("/reports/monthly")
     @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")

@@ -51,4 +51,8 @@ public interface UserInvitationRepository extends JpaRepository<UserInvitation, 
     @Modifying
     @Query("DELETE FROM UserInvitation ui WHERE ui.expiresAt < :now AND ui.usedAt IS NULL")
     void deleteExpired(@Param("now") Instant now);
+
+    @Modifying
+    @Query("DELETE FROM UserInvitation ui WHERE ui.user.id = :userId AND ui.company.id = :companyId")
+    void deleteAllByUserIdAndCompanyId(@Param("userId") UUID userId, @Param("companyId") UUID companyId);
 }

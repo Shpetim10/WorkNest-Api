@@ -1,6 +1,10 @@
 package com.worknest.features.employee.dto;
 
 import com.worknest.domain.enums.EmploymentStatus;
+import com.worknest.domain.enums.EmploymentType;
+import com.worknest.domain.enums.PaymentMethod;
+
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -19,5 +23,15 @@ public record EmployeeDetailsResponse(
         EmploymentStatus status,
         UUID supervisorRoleAssignmentId,
         String supervisorName,
-        String supervisorJobTitle
+        String supervisorJobTitle,
+
+        // Job & contract details
+        EmploymentType employmentType,
+        String contractDocumentKey,
+        String contractDocumentPath,
+        LocalDate contractExpiryDate,
+        Integer leaveDaysPerYear,
+        PaymentMethod paymentMethod,
+        BigDecimal monthlySalary,
+        BigDecimal hourlyRate
 ) {}

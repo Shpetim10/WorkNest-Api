@@ -10,12 +10,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -60,9 +60,8 @@ public class MediaController {
             @io.swagger.v3.oas.annotations.Parameter(description = "The raw file multipart data")
             @RequestParam("file") MultipartFile file,
 
-            Principal principal
+            @AuthenticationPrincipal AuthSessionPrincipal sessionPrincipal
     ) {
-        AuthSessionPrincipal sessionPrincipal = (AuthSessionPrincipal) principal;
         if (category == MediaCategory.COMPANY_LOGO
                 && sessionPrincipal.role() != PlatformRole.ADMIN
                 && sessionPrincipal.role() != PlatformRole.SUPERADMIN) {

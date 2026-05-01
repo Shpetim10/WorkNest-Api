@@ -1,8 +1,11 @@
 package com.worknest.features.attendance.application;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.worknest.common.exception.BusinessException;
 import com.worknest.domain.entities.AttendanceDayRecord;
 import com.worknest.domain.entities.AttendanceEvent;
+import com.worknest.domain.entities.AttendanceReviewAction;
 import com.worknest.domain.entities.CompanySite;
 import com.worknest.domain.entities.Employee;
 import com.worknest.domain.entities.User;
@@ -12,18 +15,26 @@ import com.worknest.domain.enums.AttendanceDecision;
 import com.worknest.domain.enums.AttendanceEventStatus;
 import com.worknest.domain.enums.AttendanceEventType;
 import com.worknest.domain.enums.AttendanceQrValidationStatus;
+import com.worknest.domain.enums.AttendanceReviewActionType;
 import com.worknest.domain.enums.AttendanceReviewStatus;
 import com.worknest.domain.enums.AttendanceState;
 import com.worknest.domain.enums.GeofenceDecision;
 import com.worknest.domain.enums.NetworkDecision;
 import com.worknest.domain.enums.PlatformRole;
 import com.worknest.features.attendance.dto.AdjustAttendanceDayRecordRequest;
+import com.worknest.features.attendance.dto.AttendanceDashboardResponse;
+import com.worknest.features.attendance.dto.AttendanceDashboardRowDto;
+import com.worknest.features.attendance.dto.AttendanceEventDetailDto;
+import com.worknest.features.attendance.dto.AttendanceSummaryDto;
+import com.worknest.features.attendance.dto.DismissWarningsRequest;
+import com.worknest.features.attendance.dto.EmployeeAttendanceDayDetailDto;
 import com.worknest.features.attendance.dto.ManualAttendanceRequest;
+import com.worknest.features.attendance.dto.ManualCheckInRequest;
+import com.worknest.features.attendance.dto.ManualCheckOutRequest;
 import com.worknest.features.attendance.dto.ReviewAttendanceEventRequest;
-import com.worknest.features.attendance.dto.StaffTodayAttendanceItemDto;
-import com.worknest.features.attendance.dto.StaffTodayAttendanceResponse;
 import com.worknest.features.attendance.repository.AttendanceDayRecordRepository;
 import com.worknest.features.attendance.repository.AttendanceEventRepository;
+import com.worknest.features.attendance.repository.AttendanceReviewActionRepository;
 import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.companySite.exception.SiteNotFoundException;
 import com.worknest.features.companySite.repository.CompanySiteRepository;
@@ -32,7 +43,12 @@ import com.worknest.security.AuthSessionPrincipal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -48,57 +64,149 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
     private final CompanySiteRepository companySiteRepository;
     private final AttendanceDayRecordRepository attendanceDayRecordRepository;
     private final AttendanceEventRepository attendanceEventRepository;
+    private final AttendanceReviewActionRepository attendanceReviewActionRepository;
     private final UserRepository userRepository;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional(readOnly = true)
-    public StaffTodayAttendanceResponse today(java.util.UUID siteId, java.util.UUID departmentId) {
+    public AttendanceDashboardResponse dashboard(LocalDate date, UUID departmentId, UUID siteId) {
         AuthSessionPrincipal principal = principal();
-        List<Employee> employees = employeeRepository.findByCompanyAndRolesAndDepartment(
-                principal.companyId(),
-                List.of(PlatformRole.EMPLOYEE, PlatformRole.STAFF),
-                departmentId
-        );
+        UUID companyId = principal.companyId();
 
-        List<StaffTodayAttendanceItemDto> items = employees.stream()
-                .filter(emp -> siteId == null || (emp.getCompanySite() != null && siteId.equals(emp.getCompanySite().getId())))
-                .map(emp -> {
-                    CompanySite empSite = emp.getCompanySite();
-                    String timezone = empSite != null ? empSite.getTimezone() : "UTC";
-                    LocalDate workDate = LocalDate.now(ZoneId.of(timezone));
+        List<Employee> employees;
+        if (principal.role() == PlatformRole.STAFF) {
+            employees = employeeRepository.findAllAssignedToManager(
+                    companyId, PlatformRole.EMPLOYEE, principal.roleAssignmentId()
+            );
+        } else {
+            employees = employeeRepository.findByCompanyAndRolesAndDepartment(
+                    companyId, List.of(PlatformRole.EMPLOYEE, PlatformRole.STAFF), departmentId
+            );
+            if (siteId != null) {
+                employees = employees.stream()
+                        .filter(e -> e.getCompanySite() != null && siteId.equals(e.getCompanySite().getId()))
+                        .toList();
+            }
+        }
 
-                    AttendanceDayRecord record = attendanceDayRecordRepository
-                            .findByCompanyIdAndEmployeeIdAndWorkDate(principal.companyId(), emp.getId(), workDate)
-                            .orElse(null);
-                    AttendanceState state;
-                    if (record == null || record.getFirstCheckInAt() == null) {
-                        state = AttendanceState.NOT_CHECKED_IN;
-                    } else if (record.getLastCheckOutAt() == null) {
-                        state = AttendanceState.CHECKED_IN;
-                    } else {
-                        state = AttendanceState.CHECKED_OUT;
-                    }
-                    return new StaffTodayAttendanceItemDto(
-                            emp.getId(),
-                            emp.getUser().getId(),
-                            emp.getUser().getDisplayName() != null ? emp.getUser().getDisplayName() : (emp.getUser().getFirstName() + " " + emp.getUser().getLastName()),
-                            empSite != null ? empSite.getId() : null,
-                            state,
-                            record != null ? record.getFirstCheckInAt() : null,
-                            record != null ? record.getLastCheckOutAt() : null,
-                            record != null && record.getWorkedMinutes() != null ? record.getWorkedMinutes() : 0
-                    );
-                })
+        LocalDate resolvedDate = date != null ? date : LocalDate.now(ZoneId.of("UTC"));
+
+        List<UUID> employeeIds = employees.stream().map(Employee::getId).toList();
+        Map<UUID, AttendanceDayRecord> recordByEmployeeId = employeeIds.isEmpty()
+                ? Collections.emptyMap()
+                : attendanceDayRecordRepository
+                        .findAllByCompanyIdAndEmployeeIdsAndWorkDate(companyId, employeeIds, resolvedDate)
+                        .stream()
+                        .collect(Collectors.toMap(r -> r.getEmployee().getId(), Function.identity()));
+
+        List<AttendanceDashboardRowDto> rows = employees.stream()
+                .map(emp -> buildDashboardRow(emp, recordByEmployeeId.get(emp.getId()), resolvedDate))
                 .toList();
 
-        String responseTimezone = siteId != null
-                ? companySiteRepository.findById(siteId)
-                        .map(CompanySite::getTimezone)
-                        .orElse("UTC")
-                : "UTC";
-        LocalDate responseDate = LocalDate.now(ZoneId.of(responseTimezone));
+        AttendanceSummaryDto summary = computeSummary(rows);
+        return new AttendanceDashboardResponse(resolvedDate, "UTC", summary, rows);
+    }
 
-        return new StaffTodayAttendanceResponse(responseDate, responseTimezone, items);
+    @Override
+    @Transactional(readOnly = true)
+    public EmployeeAttendanceDayDetailDto getEmployeeDetail(UUID employeeId, LocalDate date) {
+        AuthSessionPrincipal principal = principal();
+        Employee employee = loadAndAssertScope(employeeId, principal);
+
+        CompanySite site = employee.getCompanySite();
+        String timezone = site != null ? site.getTimezone() : "UTC";
+        LocalDate workDate = date != null ? date : LocalDate.now(ZoneId.of(timezone));
+
+        AttendanceDayRecord record = attendanceDayRecordRepository
+                .findByCompanyIdAndEmployeeIdAndWorkDate(principal.companyId(), employeeId, workDate)
+                .orElse(null);
+
+        List<AttendanceEvent> events = attendanceEventRepository
+                .findAllByCompanyIdAndEmployeeIdAndWorkDateOrderByServerRecordedAtAsc(
+                        principal.companyId(), employeeId, workDate
+                );
+
+        AttendanceState state = deriveState(record);
+
+        List<AttendanceEventDetailDto> eventDtos = events.stream()
+                .map(this::toEventDetailDto)
+                .toList();
+
+        return new EmployeeAttendanceDayDetailDto(
+                record != null ? record.getId() : null,
+                employee.getId(),
+                employee.getUser().getId(),
+                displayName(employee.getUser()),
+                employee.getDepartment() != null ? employee.getDepartment().getName() : null,
+                site != null ? site.getName() : null,
+                workDate,
+                timezone,
+                record != null ? record.getDayStatus() : AttendanceDayStatus.ABSENT,
+                state,
+                record != null ? record.getFirstCheckInAt() : null,
+                record != null ? record.getLastCheckOutAt() : null,
+                record != null && record.getWorkedMinutes() != null ? record.getWorkedMinutes() : 0,
+                record != null && record.getLateMinutes() != null ? record.getLateMinutes() : 0,
+                record != null && record.getEarlyLeaveMinutes() != null ? record.getEarlyLeaveMinutes() : 0,
+                record != null && record.getOvertimeMinutes() != null ? record.getOvertimeMinutes() : 0,
+                record != null && record.getBreakMinutes() != null ? record.getBreakMinutes() : 0,
+                record != null && Boolean.TRUE.equals(record.getHasWarnings()),
+                parseWarningFlags(record != null ? record.getWarningFlagsJson() : null),
+                record != null ? record.getReviewStatus() : AttendanceReviewStatus.NONE,
+                record != null && Boolean.TRUE.equals(record.getPayrollLocked()),
+                eventDtos
+        );
+    }
+
+    @Override
+    public void manualCheckIn(UUID employeeId, ManualCheckInRequest request) {
+        AuthSessionPrincipal principal = principal();
+        Employee employee = loadAndAssertScope(employeeId, principal);
+        CompanySite site = resolveSiteForEmployee(employee, principal.companyId());
+        createManualEventInternal(principal, employee, site, AttendanceEventType.MANUAL_CHECK_IN,
+                request.eventAt(), request.reason());
+    }
+
+    @Override
+    public void manualCheckOut(UUID employeeId, ManualCheckOutRequest request) {
+        AuthSessionPrincipal principal = principal();
+        Employee employee = loadAndAssertScope(employeeId, principal);
+        CompanySite site = resolveSiteForEmployee(employee, principal.companyId());
+        createManualEventInternal(principal, employee, site, AttendanceEventType.MANUAL_CHECK_OUT,
+                request.eventAt(), request.reason());
+    }
+
+    @Override
+    public void dismissWarnings(UUID recordId, DismissWarningsRequest request) {
+        AuthSessionPrincipal principal = principal();
+        AttendanceDayRecord record = attendanceDayRecordRepository
+                .findByIdAndCompanyId(recordId, principal.companyId())
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "DAY_RECORD_NOT_FOUND", "Attendance day record was not found."));
+
+        if (Boolean.TRUE.equals(record.getPayrollLocked())) {
+            throw new BusinessException(HttpStatus.CONFLICT, "PAYROLL_LOCKED", "Payroll-locked records cannot be modified.");
+        }
+
+        if (principal.role() == PlatformRole.STAFF) {
+            assertManagesEmployee(record.getEmployee().getId(), principal);
+        }
+
+        record.setHasWarnings(false);
+        record.setReviewStatus(AttendanceReviewStatus.APPROVED);
+        attendanceDayRecordRepository.save(record);
+
+        User actor = userRepository.findById(principal.userId())
+                .orElseThrow(() -> new BusinessException(HttpStatus.UNAUTHORIZED, "USER_NOT_FOUND", "Current user not found."));
+
+        AttendanceReviewAction action = new AttendanceReviewAction();
+        action.setCompany(record.getCompany());
+        action.setAttendanceDayRecord(record);
+        action.setActionType(AttendanceReviewActionType.WARNING_DISMISSED);
+        action.setReason(request.note());
+        action.setActedBy(actor);
+        action.setActedAt(Instant.now());
+        attendanceReviewActionRepository.save(action);
     }
 
     @Override
@@ -112,61 +220,11 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         CompanySite site = companySiteRepository.findByIdAndCompanyId(request.siteId(), principal.companyId())
                 .orElseThrow(SiteNotFoundException::new);
 
-        Instant eventAt = request.eventAt() != null ? request.eventAt() : Instant.now();
-        LocalDate workDate = LocalDate.now(ZoneId.of(site.getTimezone()));
-
-        AttendanceEvent event = new AttendanceEvent();
-        event.setCompany(employee.getCompany());
-        event.setEmployee(employee);
-        event.setUser(employee.getUser());
-        event.setSite(site);
-        event.setEventType(request.eventType());
-        event.setEventStatus(AttendanceEventStatus.ACCEPTED_WITH_WARNINGS);
-        event.setCaptureMethod(AttendanceCaptureMethod.MANUAL);
-        event.setAttendanceDecision(AttendanceDecision.ACCEPTED_WITH_WARNINGS);
-        event.setServerRecordedAt(eventAt);
-        event.setWorkDate(workDate);
-        event.setTimezone(site.getTimezone());
-        event.setQrValidationStatus(AttendanceQrValidationStatus.NOT_REQUIRED);
-        event.setGeofenceDecision(GeofenceDecision.NOT_REQUIRED);
-        event.setNetworkDecision(NetworkDecision.NOT_CONFIGURED);
-        event.setEmployeeNote(request.note());
-        event.setReviewStatus(AttendanceReviewStatus.NONE);
-        event.setWarningFlagsJson("[\"MANUAL_ENTRY\"]");
-        attendanceEventRepository.save(event);
-
-        AttendanceDayRecord dayRecord = attendanceDayRecordRepository
-                .findByCompanyIdAndEmployeeIdAndWorkDate(principal.companyId(), employee.getId(), workDate)
-                .orElseGet(() -> {
-                    AttendanceDayRecord created = new AttendanceDayRecord();
-                    created.setCompany(employee.getCompany());
-                    created.setEmployee(employee);
-                    created.setUser(employee.getUser());
-                    created.setSite(site);
-                    created.setWorkDate(workDate);
-                    created.setTimezone(site.getTimezone());
-                    created.setDayStatus(AttendanceDayStatus.PENDING_REVIEW);
-                    return created;
-                });
-
-        if (request.eventType() == AttendanceEventType.MANUAL_CHECK_IN) {
-            dayRecord.setFirstCheckInAt(eventAt);
-        } else if (request.eventType() == AttendanceEventType.MANUAL_CHECK_OUT) {
-            dayRecord.setLastCheckOutAt(eventAt);
-        }
-        if (dayRecord.getFirstCheckInAt() != null && dayRecord.getLastCheckOutAt() != null) {
-            int worked = (int) Math.max(0L, java.time.Duration.between(dayRecord.getFirstCheckInAt(), dayRecord.getLastCheckOutAt()).toMinutes());
-            dayRecord.setWorkedMinutes(worked);
-            dayRecord.setDayStatus(AttendanceDayStatus.PRESENT);
-        }
-        dayRecord.setHasWarnings(true);
-        dayRecord.setWarningFlagsJson("[\"MANUAL_ENTRY\"]");
-        dayRecord.setReviewStatus(AttendanceReviewStatus.PENDING_REVIEW);
-        attendanceDayRecordRepository.save(dayRecord);
+        createManualEventInternal(principal, employee, site, request.eventType(), request.eventAt(), request.reason());
     }
 
     @Override
-    public void reviewEvent(java.util.UUID eventId, ReviewAttendanceEventRequest request) {
+    public void reviewEvent(UUID eventId, ReviewAttendanceEventRequest request) {
         AuthSessionPrincipal principal = principal();
         AttendanceEvent event = attendanceEventRepository.findByIdAndCompanyId(eventId, principal.companyId())
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "EVENT_NOT_FOUND", "Attendance event was not found."));
@@ -180,7 +238,7 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
     }
 
     @Override
-    public void adjustDayRecord(java.util.UUID recordId, AdjustAttendanceDayRecordRequest request) {
+    public void adjustDayRecord(UUID recordId, AdjustAttendanceDayRecordRequest request) {
         AuthSessionPrincipal principal = principal();
         AttendanceDayRecord record = attendanceDayRecordRepository.findByIdAndCompanyId(recordId, principal.companyId())
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "DAY_RECORD_NOT_FOUND", "Attendance day record was not found."));
@@ -200,11 +258,191 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         attendanceDayRecordRepository.save(record);
     }
 
+    // --- helpers ---
+
+    private void createManualEventInternal(AuthSessionPrincipal principal, Employee employee,
+            CompanySite site, AttendanceEventType eventType, Instant eventAt, String reason) {
+        Instant resolvedAt = eventAt != null ? eventAt : Instant.now();
+        LocalDate workDate = LocalDate.now(ZoneId.of(site.getTimezone()));
+
+        AttendanceEvent event = new AttendanceEvent();
+        event.setCompany(employee.getCompany());
+        event.setEmployee(employee);
+        event.setUser(employee.getUser());
+        event.setSite(site);
+        event.setEventType(eventType);
+        event.setEventStatus(AttendanceEventStatus.ACCEPTED_WITH_WARNINGS);
+        event.setCaptureMethod(AttendanceCaptureMethod.MANUAL);
+        event.setAttendanceDecision(AttendanceDecision.ACCEPTED_WITH_WARNINGS);
+        event.setServerRecordedAt(resolvedAt);
+        event.setWorkDate(workDate);
+        event.setTimezone(site.getTimezone());
+        event.setQrValidationStatus(AttendanceQrValidationStatus.NOT_REQUIRED);
+        event.setGeofenceDecision(GeofenceDecision.NOT_REQUIRED);
+        event.setNetworkDecision(NetworkDecision.NOT_CONFIGURED);
+        event.setEmployeeNote(reason);
+        event.setReviewStatus(AttendanceReviewStatus.NONE);
+        event.setWarningFlagsJson("[\"MANUAL_ENTRY\"]");
+        attendanceEventRepository.save(event);
+
+        AttendanceDayRecord dayRecord = attendanceDayRecordRepository
+                .findByCompanyIdAndEmployeeIdAndWorkDate(principal.companyId(), employee.getId(), workDate)
+                .orElseGet(() -> {
+                    AttendanceDayRecord created = new AttendanceDayRecord();
+                    created.setCompany(employee.getCompany());
+                    created.setEmployee(employee);
+                    created.setUser(employee.getUser());
+                    created.setSite(site);
+                    created.setWorkDate(workDate);
+                    created.setTimezone(site.getTimezone());
+                    created.setDayStatus(AttendanceDayStatus.PENDING_REVIEW);
+                    return created;
+                });
+
+        if (eventType == AttendanceEventType.MANUAL_CHECK_IN) {
+            dayRecord.setFirstCheckInAt(resolvedAt);
+        } else if (eventType == AttendanceEventType.MANUAL_CHECK_OUT) {
+            dayRecord.setLastCheckOutAt(resolvedAt);
+        }
+        if (dayRecord.getFirstCheckInAt() != null && dayRecord.getLastCheckOutAt() != null) {
+            int worked = (int) Math.max(0L, java.time.Duration.between(dayRecord.getFirstCheckInAt(), dayRecord.getLastCheckOutAt()).toMinutes());
+            dayRecord.setWorkedMinutes(worked);
+            dayRecord.setDayStatus(AttendanceDayStatus.PRESENT);
+        }
+        dayRecord.setHasWarnings(true);
+        dayRecord.setWarningFlagsJson("[\"MANUAL_ENTRY\"]");
+        dayRecord.setReviewStatus(AttendanceReviewStatus.PENDING_REVIEW);
+        attendanceDayRecordRepository.save(dayRecord);
+    }
+
+    private AttendanceDashboardRowDto buildDashboardRow(Employee emp, AttendanceDayRecord record, LocalDate workDate) {
+        AttendanceState state = deriveState(record);
+        return new AttendanceDashboardRowDto(
+                record != null ? record.getId() : null,
+                emp.getId(),
+                emp.getUser().getId(),
+                displayName(emp.getUser()),
+                emp.getDepartment() != null ? emp.getDepartment().getId() : null,
+                emp.getDepartment() != null ? emp.getDepartment().getName() : null,
+                emp.getCompanySite() != null ? emp.getCompanySite().getId() : null,
+                emp.getCompanySite() != null ? emp.getCompanySite().getName() : null,
+                state,
+                record != null ? record.getDayStatus() : AttendanceDayStatus.ABSENT,
+                record != null ? record.getFirstCheckInAt() : null,
+                record != null ? record.getLastCheckOutAt() : null,
+                record != null && record.getWorkedMinutes() != null ? record.getWorkedMinutes() : 0,
+                record != null && record.getLateMinutes() != null ? record.getLateMinutes() : 0,
+                record != null && Boolean.TRUE.equals(record.getHasWarnings()),
+                record != null ? record.getReviewStatus() : AttendanceReviewStatus.NONE,
+                record != null && Boolean.TRUE.equals(record.getPayrollLocked())
+        );
+    }
+
+    private AttendanceSummaryDto computeSummary(List<AttendanceDashboardRowDto> rows) {
+        int total = rows.size();
+        int present = 0, absent = 0, late = 0, onLeave = 0, withWarnings = 0;
+        for (AttendanceDashboardRowDto row : rows) {
+            if (row.dayStatus() == AttendanceDayStatus.ON_LEAVE) {
+                onLeave++;
+            } else if (row.attendanceState() == AttendanceState.CHECKED_IN
+                    || row.attendanceState() == AttendanceState.CHECKED_OUT) {
+                present++;
+            } else {
+                absent++;
+            }
+            if (row.lateMinutes() > 0) {
+                late++;
+            }
+            if (row.hasWarnings()) {
+                withWarnings++;
+            }
+        }
+        return new AttendanceSummaryDto(total, present, absent, late, onLeave, withWarnings);
+    }
+
+    private AttendanceState deriveState(AttendanceDayRecord record) {
+        if (record == null || record.getFirstCheckInAt() == null) {
+            return AttendanceState.NOT_CHECKED_IN;
+        }
+        if (record.getLastCheckOutAt() == null) {
+            return AttendanceState.CHECKED_IN;
+        }
+        return AttendanceState.CHECKED_OUT;
+    }
+
+    private AttendanceEventDetailDto toEventDetailDto(AttendanceEvent event) {
+        String reviewedByName = event.getReviewedBy() != null ? displayName(event.getReviewedBy()) : null;
+        return new AttendanceEventDetailDto(
+                event.getId(),
+                event.getEventType(),
+                event.getCaptureMethod(),
+                event.getServerRecordedAt(),
+                event.getAttendanceDecision(),
+                parseWarningFlags(event.getWarningFlagsJson()),
+                event.getGeofenceDecision(),
+                event.getNetworkDecision(),
+                event.getReviewStatus(),
+                event.getEmployeeNote(),
+                event.getReviewNote(),
+                reviewedByName,
+                event.getReviewedAt()
+        );
+    }
+
+    private List<String> parseWarningFlags(String json) {
+        if (json == null || json.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+    }
+
+    private Employee loadAndAssertScope(UUID employeeId, AuthSessionPrincipal principal) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "EMPLOYEE_NOT_FOUND", "Employee was not found."));
+        if (!employee.getCompany().getId().equals(principal.companyId())) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Cross-tenant access is not allowed.");
+        }
+        if (principal.role() == PlatformRole.STAFF) {
+            assertManagesEmployee(employeeId, principal);
+        }
+        return employee;
+    }
+
+    private void assertManagesEmployee(UUID employeeId, AuthSessionPrincipal principal) {
+        boolean manages = employeeRepository
+                .findAllAssignedToManager(principal.companyId(), PlatformRole.EMPLOYEE, principal.roleAssignmentId())
+                .stream()
+                .anyMatch(e -> e.getId().equals(employeeId));
+        if (!manages) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "You do not manage this employee.");
+        }
+    }
+
+    private CompanySite resolveSiteForEmployee(Employee employee, UUID companyId) {
+        if (employee.getCompanySite() != null) {
+            return employee.getCompanySite();
+        }
+        return companySiteRepository.findAllByCompanyIdOrderByCreatedAtDesc(companyId).stream()
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(HttpStatus.UNPROCESSABLE_ENTITY, "NO_SITE_FOUND", "No site configured for this company."));
+    }
+
+    private String displayName(User user) {
+        if (user.getDisplayName() != null && !user.getDisplayName().isBlank()) {
+            return user.getDisplayName();
+        }
+        return user.getFirstName() + " " + user.getLastName();
+    }
+
     private AuthSessionPrincipal principal() {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !(authentication.getPrincipal() instanceof AuthSessionPrincipal principal)) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof AuthSessionPrincipal p)) {
             throw new BusinessException(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "No authentication session found.");
         }
-        return principal;
+        return p;
     }
 }

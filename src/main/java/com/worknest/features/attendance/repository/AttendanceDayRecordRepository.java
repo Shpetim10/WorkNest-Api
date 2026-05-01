@@ -3,6 +3,7 @@ package com.worknest.features.attendance.repository;
 import com.worknest.domain.entities.AttendanceDayRecord;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -39,4 +40,19 @@ public interface AttendanceDayRecordRepository extends JpaRepository<AttendanceD
     );
 
     List<AttendanceDayRecord> findAllByCompanyIdAndWorkDateBetweenOrderByWorkDateAsc(UUID companyId, LocalDate from, LocalDate to);
+
+    List<AttendanceDayRecord> findAllByCompanyIdAndWorkDate(UUID companyId, LocalDate workDate);
+
+    @Query("""
+            select r
+            from AttendanceDayRecord r
+            where r.company.id = :companyId
+              and r.employee.id in :employeeIds
+              and r.workDate = :workDate
+            """)
+    List<AttendanceDayRecord> findAllByCompanyIdAndEmployeeIdsAndWorkDate(
+            @Param("companyId") UUID companyId,
+            @Param("employeeIds") Collection<UUID> employeeIds,
+            @Param("workDate") LocalDate workDate
+    );
 }

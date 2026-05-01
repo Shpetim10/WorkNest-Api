@@ -27,4 +27,10 @@ public interface AttendanceEventRepository extends JpaRepository<AttendanceEvent
             LocalDate workDate,
             List<AttendanceEventStatus> statuses
     );
+
+    List<AttendanceEvent> findAllByCompanyIdAndEmployeeIdAndWorkDateOrderByServerRecordedAtAsc(
+            UUID companyId,
+            UUID employeeId,
+            LocalDate workDate
+    );
 }

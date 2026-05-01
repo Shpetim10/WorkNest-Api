@@ -11,9 +11,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -52,10 +52,9 @@ public class RoleSelectionController {
     )
     public ResponseEntity<ApiResponse<SelectRoleResponse>> selectRole(
             @RequestBody @Valid SelectRoleRequest request,
-            Principal principal,
+            @AuthenticationPrincipal AuthSessionPrincipal sessionPrincipal,
             HttpServletRequest servletRequest
     ) {
-        AuthSessionPrincipal sessionPrincipal = (AuthSessionPrincipal) principal;
         String ipAddress = servletRequest.getRemoteAddr();
         String userAgent = servletRequest.getHeader("User-Agent");
         SelectRoleResponse response = roleSelectionService.selectRole(

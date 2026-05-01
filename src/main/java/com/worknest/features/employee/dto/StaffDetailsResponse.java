@@ -1,7 +1,11 @@
 package com.worknest.features.employee.dto;
 
-import com.worknest.domain.enums.PlatformRole;
 import com.worknest.domain.enums.EmploymentStatus;
+import com.worknest.domain.enums.EmploymentType;
+import com.worknest.domain.enums.PaymentMethod;
+import com.worknest.domain.enums.PlatformRole;
+
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -22,5 +26,14 @@ public record StaffDetailsResponse(
         EmploymentStatus status,
         List<String> permissionCodes,
         long assignedEmployeesCount,
-        List<EmployeeSummaryDto> assignedEmployees
+        List<EmployeeSummaryDto> assignedEmployees,
+
+        // Job & contract details
+        EmploymentType employmentType,
+        String contractDocumentKey,
+        LocalDate contractExpiryDate,
+        Integer leaveDaysPerYear,
+        PaymentMethod paymentMethod,
+        BigDecimal monthlySalary,
+        BigDecimal hourlyRate
 ) {}

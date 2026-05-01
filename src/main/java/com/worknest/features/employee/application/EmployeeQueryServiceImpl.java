@@ -27,9 +27,7 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
     @Override
     @Transactional(readOnly = true)
     public List<StaffListResponse> listStaff(UUID companyId) {
-        // Staff and Admins are typically listed in the staff management view
         List<PlatformRole> roles = List.of(PlatformRole.STAFF, PlatformRole.ADMIN, PlatformRole.SUPERADMIN);
-        
         return employeeRepository.findAllByCompanyIdAndEmploymentTypeRoleIn(companyId, roles)
                 .stream()
                 .map(this::mapToStaffResponse)
@@ -40,7 +38,6 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
     @Transactional(readOnly = true)
     public List<EmployeeListResponse> listEmployees(UUID companyId) {
         List<PlatformRole> roles = List.of(PlatformRole.EMPLOYEE);
-
         return employeeRepository.findAllByCompanyIdAndEmploymentTypeRoleIn(companyId, roles)
                 .stream()
                 .map(this::mapToEmployeeResponse)
@@ -60,11 +57,7 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
     @Transactional(readOnly = true)
     public List<EmployeeListResponse> listAssignedEmployees(UUID companyId, UUID departmentId, UUID supervisorRoleAssignmentId) {
         return employeeRepository.findAssignedEmployeesByDepartmentAndSupervisor(
-                        companyId,
-                        PlatformRole.EMPLOYEE,
-                        departmentId,
-                        supervisorRoleAssignmentId
-                )
+                        companyId, PlatformRole.EMPLOYEE, departmentId, supervisorRoleAssignmentId)
                 .stream()
                 .map(this::mapToEmployeeResponse)
                 .collect(Collectors.toList());
@@ -74,22 +67,17 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
     @Transactional(readOnly = true)
     public List<StaffLookup> lookupStaff(UUID companyId, UUID departmentId) {
         List<PlatformRole> roles = List.of(PlatformRole.STAFF, PlatformRole.ADMIN, PlatformRole.SUPERADMIN);
-        
         return employeeRepository.findByCompanyAndRolesAndDepartment(companyId, roles, departmentId)
                 .stream()
                 .map(e -> {
-                    String fullName = (e.getUser() != null) 
-                            ? (e.getUser().getFirstName() + " " + e.getUser().getLastName()).trim() 
+                    String fullName = (e.getUser() != null)
+                            ? (e.getUser().getFirstName() + " " + e.getUser().getLastName()).trim()
                             : "Unknown";
-                    
-                    // Use the ACTIVE RoleAssignment ID so it matches what the assignment
-                    // board endpoint looks up via validateManager.
                     UUID raId = (e.getUser() != null)
                             ? roleAssignmentRepository.findFirstByUserIdAndCompanyIdAndIsActiveTrue(e.getUser().getId(), companyId)
                                 .map(com.worknest.domain.entities.RoleAssignment::getId)
                                 .orElse(null)
                             : null;
-                            
                     return new StaffLookup(raId, fullName);
                 })
                 .filter(sl -> sl.id() != null)
@@ -134,7 +122,15 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
                 e.getEmploymentStatus(),
                 supervisorRa != null ? supervisorRa.getId() : null,
                 supervisorName,
-                supervisorJobTitle
+                supervisorJobTitle,
+                e.getEmploymentType(),
+                e.getContractDocumentKey(),
+                e.getContractDocumentPath(),
+                e.getContractExpiryDate(),
+                e.getLeaveDaysPerYear(),
+                e.getPaymentMethod(),
+                e.getMonthlySalary(),
+                e.getHourlyRate()
         );
     }
 
@@ -149,31 +145,25 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
             throw new ResourceNotFoundException("Target record is a basic EMPLOYEE, not Staff");
         }
 
-        // Fetch RoleAssignment
         com.worknest.domain.entities.RoleAssignment ra = roleAssignmentRepository
                 .findFirstByUserIdAndCompanyIdOrderByCreatedAtAsc(e.getUser().getId(), companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Role assignment not found for staff member"));
 
-        // Fetch Permission Codes
         List<String> permissionCodes = roleAssignmentPermissionRepository
                 .findAllByRoleAssignmentIdAndIsGranted(ra.getId(), true)
                 .stream()
                 .map(rap -> rap.getPermission().getCode())
                 .collect(Collectors.toList());
 
-        // Fetch Assigned Employees
         List<EmployeeSummaryDto> assignedEmployees = employeeRepository.findAllAssignedToManager(companyId, PlatformRole.EMPLOYEE, ra.getId())
                 .stream()
                 .map(emp -> {
                     String empJobTitle = roleAssignmentRepository.findFirstByUserIdAndCompanyIdOrderByCreatedAtAsc(emp.getUser().getId(), companyId)
                             .map(com.worknest.domain.entities.RoleAssignment::getJobTitle)
                             .orElse(null);
-                    
                     return new EmployeeSummaryDto(
-                            emp.getId(),
-                            emp.getUser().getId(),
-                            emp.getUser().getFirstName(),
-                            emp.getUser().getLastName(),
+                            emp.getId(), emp.getUser().getId(),
+                            emp.getUser().getFirstName(), emp.getUser().getLastName(),
                             emp.getUser().getEmail(),
                             emp.getDepartment() != null ? emp.getDepartment().getName() : null,
                             empJobTitle
@@ -199,21 +189,24 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
                 e.getEmploymentStatus(),
                 permissionCodes,
                 assignedEmployeesCount,
-                assignedEmployees
+                assignedEmployees,
+                e.getEmploymentType(),
+                e.getContractDocumentKey(),
+                e.getContractExpiryDate(),
+                e.getLeaveDaysPerYear(),
+                e.getPaymentMethod(),
+                e.getMonthlySalary(),
+                e.getHourlyRate()
         );
     }
 
     private StaffListResponse mapToStaffResponse(Employee e) {
-        // Fetch the ACTIVE RoleAssignment — must use isActive=true so the ID matches
-        // what validateManager expects (it does findById and checks role == STAFF on the
-        // active record, not an old PENDING invite row).
         var ra = roleAssignmentRepository.findFirstByUserIdAndCompanyIdAndIsActiveTrue(e.getUser().getId(), e.getCompany().getId())
                 .orElse(null);
-        
+
         String jobTitle = (ra != null) ? ra.getJobTitle() : null;
         long assignedEmployeesCount = (ra != null) ? employeeRepository.countBySupervisorRoleAssignmentId(ra.getId()) : 0;
 
-        // Fetch Permission Codes
         List<String> permissionCodes = (ra != null)
                 ? roleAssignmentPermissionRepository.findAllByRoleAssignmentIdAndIsGranted(ra.getId(), true)
                 .stream()
@@ -245,8 +238,7 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
         String name = (e.getUser() != null) ? (e.getUser().getFirstName() + " " + e.getUser().getLastName()).trim() : null;
         String email = (e.getUser() != null) ? e.getUser().getEmail() : null;
 
-        // Fetch jobTitle from RoleAssignment (active or pending)
-        String jobTitle = (e.getUser() != null) 
+        String jobTitle = (e.getUser() != null)
                 ? roleAssignmentRepository.findFirstByUserIdAndCompanyIdOrderByCreatedAtAsc(e.getUser().getId(), e.getCompany().getId())
                     .map(com.worknest.domain.entities.RoleAssignment::getJobTitle)
                     .orElse(null)

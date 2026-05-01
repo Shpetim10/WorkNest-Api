@@ -14,6 +14,10 @@ public interface RoleAssignmentRepository extends JpaRepository<RoleAssignment, 
 
     List<RoleAssignment> findAllByUserIdAndCompanyIdAndIsActiveTrue(UUID userId, UUID companyId);
 
+    List<RoleAssignment> findAllByUserIdAndCompanyId(UUID userId, UUID companyId);
+
+    long countByUserId(UUID userId);
+
     @Query("""
             select ra
             from RoleAssignment ra
