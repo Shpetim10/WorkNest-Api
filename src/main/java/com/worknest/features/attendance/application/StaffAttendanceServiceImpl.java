@@ -36,6 +36,7 @@ import com.worknest.features.attendance.repository.AttendanceDayRecordRepository
 import com.worknest.features.attendance.repository.AttendanceEventRepository;
 import com.worknest.features.attendance.repository.AttendanceReviewActionRepository;
 import com.worknest.features.auth.repository.UserRepository;
+import com.worknest.features.company.repository.CompanyRepository;
 import com.worknest.features.companySite.exception.SiteNotFoundException;
 import com.worknest.features.companySite.repository.CompanySiteRepository;
 import com.worknest.features.employee.repository.EmployeeRepository;
@@ -66,6 +67,7 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
     private final AttendanceEventRepository attendanceEventRepository;
     private final AttendanceReviewActionRepository attendanceReviewActionRepository;
     private final UserRepository userRepository;
+    private final CompanyRepository companyRepository;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -74,12 +76,12 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         AuthSessionPrincipal principal = principal();
         UUID companyId = principal.companyId();
 
+        com.worknest.domain.entities.Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "COMPANY_NOT_FOUND", "Company not found."));
+        ZoneId companyZone = ZoneId.of(company.getTimezone());
+
         List<Employee> employees;
-        if (principal.role() == PlatformRole.STAFF) {
-            employees = employeeRepository.findAllAssignedToManager(
-                    companyId, PlatformRole.EMPLOYEE, principal.roleAssignmentId()
-            );
-        } else {
+        if (isAdmin(principal.role())) {
             employees = employeeRepository.findByCompanyAndRolesAndDepartment(
                     companyId, List.of(PlatformRole.EMPLOYEE, PlatformRole.STAFF), departmentId
             );
@@ -88,9 +90,17 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
                         .filter(e -> e.getCompanySite() != null && siteId.equals(e.getCompanySite().getId()))
                         .toList();
             }
+        } else {
+            employees = employeeRepository.findAllAssignedToManager(
+                    companyId, PlatformRole.EMPLOYEE, principal.roleAssignmentId()
+            );
         }
 
-        LocalDate resolvedDate = date != null ? date : LocalDate.now(ZoneId.of("UTC"));
+        LocalDate resolvedDate = date != null ? date : LocalDate.now(companyZone);
+
+        employees = employees.stream()
+                .filter(emp -> emp.getStartDate() == null || !emp.getStartDate().isAfter(resolvedDate))
+                .toList();
 
         List<UUID> employeeIds = employees.stream().map(Employee::getId).toList();
         Map<UUID, AttendanceDayRecord> recordByEmployeeId = employeeIds.isEmpty()
@@ -105,7 +115,7 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
                 .toList();
 
         AttendanceSummaryDto summary = computeSummary(rows);
-        return new AttendanceDashboardResponse(resolvedDate, "UTC", summary, rows);
+        return new AttendanceDashboardResponse(resolvedDate, company.getTimezone(), summary, rows);
     }
 
     @Override
@@ -192,6 +202,9 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
             assertManagesEmployee(record.getEmployee().getId(), principal);
         }
 
+        ZoneId recordZone = ZoneId.of(record.getTimezone());
+        assertTodayOrAdmin(record.getWorkDate(), recordZone, principal.role());
+
         record.setHasWarnings(false);
         record.setReviewStatus(AttendanceReviewStatus.APPROVED);
         attendanceDayRecordRepository.save(record);
@@ -228,6 +241,10 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         AuthSessionPrincipal principal = principal();
         AttendanceEvent event = attendanceEventRepository.findByIdAndCompanyId(eventId, principal.companyId())
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "EVENT_NOT_FOUND", "Attendance event was not found."));
+
+        ZoneId eventZone = ZoneId.of(event.getTimezone() != null ? event.getTimezone() : "UTC");
+        assertTodayOrAdmin(event.getWorkDate(), eventZone, principal.role());
+
         User reviewer = userRepository.findById(principal.userId())
                 .orElseThrow(() -> new BusinessException(HttpStatus.UNAUTHORIZED, "REVIEWER_NOT_FOUND", "Current user not found."));
         event.setReviewStatus(request.reviewStatus());
@@ -246,6 +263,19 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
             throw new BusinessException(HttpStatus.CONFLICT, "PAYROLL_LOCKED", "Payroll-locked records cannot be adjusted.");
         }
 
+        ZoneId recordZone = ZoneId.of(record.getTimezone());
+        assertTodayOrAdmin(record.getWorkDate(), recordZone, principal.role());
+
+        if (request.firstCheckInAt() != null && request.lastCheckOutAt() != null
+                && request.lastCheckOutAt().isBefore(request.firstCheckInAt())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "INVALID_TIME_RANGE",
+                    "Check-out time must not be before check-in time.");
+        }
+        if (request.workedMinutes() != null && request.workedMinutes() < 0) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "INVALID_WORKED_MINUTES",
+                    "Worked minutes must not be negative.");
+        }
+
         record.setFirstCheckInAt(request.firstCheckInAt());
         record.setLastCheckOutAt(request.lastCheckOutAt());
         if (request.workedMinutes() != null) {
@@ -260,10 +290,19 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
 
     // --- helpers ---
 
-    private void createManualEventInternal(AuthSessionPrincipal principal, Employee employee,
-            CompanySite site, AttendanceEventType eventType, Instant eventAt, String reason) {
+    private void createManualEventInternal(
+            AuthSessionPrincipal principal,
+            Employee employee,
+            CompanySite site,
+            AttendanceEventType eventType,
+            Instant eventAt,
+            String reason
+    ) {
         Instant resolvedAt = eventAt != null ? eventAt : Instant.now();
-        LocalDate workDate = LocalDate.now(ZoneId.of(site.getTimezone()));
+        ZoneId siteZone = ZoneId.of(site.getTimezone());
+        LocalDate workDate = resolvedAt.atZone(siteZone).toLocalDate();
+
+        assertTodayOrAdmin(workDate, siteZone, principal.role());
 
         AttendanceEvent event = new AttendanceEvent();
         event.setCompany(employee.getCompany());
@@ -295,7 +334,6 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
                     created.setSite(site);
                     created.setWorkDate(workDate);
                     created.setTimezone(site.getTimezone());
-                    created.setDayStatus(AttendanceDayStatus.PENDING_REVIEW);
                     return created;
                 });
 
@@ -304,16 +342,24 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         } else if (eventType == AttendanceEventType.MANUAL_CHECK_OUT) {
             dayRecord.setLastCheckOutAt(resolvedAt);
         }
-        if (dayRecord.getFirstCheckInAt() != null && dayRecord.getLastCheckOutAt() != null) {
-            int worked = (int) Math.max(0L, java.time.Duration.between(dayRecord.getFirstCheckInAt(), dayRecord.getLastCheckOutAt()).toMinutes());
-            dayRecord.setWorkedMinutes(worked);
+
+        if (dayRecord.getFirstCheckInAt() != null) {
             dayRecord.setDayStatus(AttendanceDayStatus.PRESENT);
+            if (dayRecord.getLastCheckOutAt() != null) {
+                int worked = (int) Math.max(
+                        0L,
+                        java.time.Duration.between(dayRecord.getFirstCheckInAt(), dayRecord.getLastCheckOutAt()).toMinutes()
+                );
+                dayRecord.setWorkedMinutes(worked);
+            }
         }
+
         dayRecord.setHasWarnings(true);
         dayRecord.setWarningFlagsJson("[\"MANUAL_ENTRY\"]");
         dayRecord.setReviewStatus(AttendanceReviewStatus.PENDING_REVIEW);
         attendanceDayRecordRepository.save(dayRecord);
     }
+
 
     private AttendanceDashboardRowDto buildDashboardRow(Employee emp, AttendanceDayRecord record, LocalDate workDate) {
         AttendanceState state = deriveState(record);
@@ -436,6 +482,17 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
             return user.getDisplayName();
         }
         return user.getFirstName() + " " + user.getLastName();
+    }
+
+    private static boolean isAdmin(PlatformRole role) {
+        return role == PlatformRole.ADMIN || role == PlatformRole.SUPERADMIN;
+    }
+
+    private static void assertTodayOrAdmin(LocalDate workDate, ZoneId siteZone, PlatformRole role) {
+        if (!isAdmin(role) && workDate.isBefore(LocalDate.now(siteZone))) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "PREVIOUS_DAY_NOT_ALLOWED",
+                    "Only admins can modify attendance records for previous dates.");
+        }
     }
 
     private AuthSessionPrincipal principal() {
