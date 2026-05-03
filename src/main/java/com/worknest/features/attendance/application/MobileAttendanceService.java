@@ -44,10 +44,7 @@ import com.worknest.security.AuthSessionPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
+import java.time.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -91,6 +88,8 @@ public class MobileAttendanceService {
         AttendanceState state = resolveState(dayRecord);
         NextAttendanceAction nextAction = resolveNextAction(state);
 
+        ZoneId timeZoneId= ZoneId.of(site.getTimezone());
+
         return new TodayAttendanceResponse(
                 state,
                 nextAction,
@@ -105,7 +104,9 @@ public class MobileAttendanceService {
                 site.getTimezone(),
                 workDate,
                 mapDayRecord(dayRecord),
-                List.of()
+                List.of(),
+                (dayRecord != null && dayRecord.getFirstCheckInAt() != null) ? LocalDateTime.ofInstant(dayRecord.getFirstCheckInAt(), timeZoneId) : null,
+                (dayRecord != null && dayRecord.getLastCheckOutAt() != null) ? LocalDateTime.ofInstant(dayRecord.getLastCheckOutAt(), timeZoneId) : null
         );
     }
 
@@ -217,7 +218,7 @@ public class MobileAttendanceService {
         ZoneId zoneId = ZoneId.of(site.getTimezone());
         LocalDate today = LocalDate.now(zoneId);
 
-        LocalDate from = LocalDate.of(year, month, 1);
+        LocalDate from = LocalDate.of(year, month, 1).isAfter(employee.getStartDate()) ? LocalDate.of(year, month, 1) : employee.getStartDate();
         LocalDate lastOfMonth = from.withDayOfMonth(from.lengthOfMonth());
         // Do not include future days — no record will ever exist for them yet.
         LocalDate effectiveTo = lastOfMonth.isAfter(today) ? today : lastOfMonth;
@@ -297,7 +298,7 @@ public class MobileAttendanceService {
             record.setWorkedMinutes((int) worked);
             record.setDayStatus(AttendanceDayStatus.PRESENT);
         } else if (record.getFirstCheckInAt() != null) {
-            record.setDayStatus(AttendanceDayStatus.PENDING_REVIEW);
+            record.setDayStatus(AttendanceDayStatus.PRESENT);
         }
 
         record.setSourceEventCount((record.getSourceEventCount() != null ? record.getSourceEventCount() : 0) + 1);

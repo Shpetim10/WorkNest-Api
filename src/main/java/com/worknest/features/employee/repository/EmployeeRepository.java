@@ -54,4 +54,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
 
     @Query("SELECT COUNT(e) FROM Employee e WHERE e.supervisorRoleAssignment.id = :managerId")
     long countBySupervisorRoleAssignmentId(@Param("managerId") UUID managerId);
+
+    @Query("SELECT COUNT(e) FROM Employee e WHERE e.department.id=:departmentId")
+    int countByDepartmentId(@Param("departmentId") UUID departmentId);
 }
