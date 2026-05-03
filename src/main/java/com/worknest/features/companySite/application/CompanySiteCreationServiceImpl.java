@@ -10,8 +10,7 @@ import com.worknest.domain.entities.CompanySite;
 import com.worknest.domain.entities.SiteTrustedNetwork;
 import com.worknest.domain.enums.AttendancePolicySource;
 import com.worknest.domain.enums.SiteStatus;
-import com.worknest.features.attendance.application.AttendanceQrService;
-import com.worknest.features.attendance.repository.AttendancePolicyRepository;
+import com.worknest.features.companySite.application.SiteAttendanceProvisioningPort;
 import com.worknest.features.companySite.dto.CreateSiteRequest;
 import com.worknest.features.companySite.dto.CreateSiteResponse;
 import com.worknest.features.companySite.dto.LinkedQrTerminalResponse;
@@ -69,13 +68,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CompanySiteCreationServiceImpl implements CompanySiteCreationService {
 
-    private final CompanySiteRepository       siteRepository;
-    private final SiteTrustedNetworkRepository networkRepository;
-    private final CompanyRepository            companyRepository;
-    private final SiteSetupAuditService        auditService;
-    private final AttendancePolicyRepository   attendancePolicyRepository;
-    private final AttendanceQrService          attendanceQrService;
-    private final EntityManager                entityManager;
+    private final CompanySiteRepository            siteRepository;
+    private final SiteTrustedNetworkRepository     networkRepository;
+    private final CompanyRepository                companyRepository;
+    private final SiteSetupAuditService            auditService;
+    private final SiteAttendanceProvisioningPort   attendanceProvisioning;
+    private final EntityManager                    entityManager;
 
     @Override
     @Transactional
@@ -121,16 +119,16 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
         site = siteRepository.save(site);
 
         // ── 8. Persist trusted-network rules ─────────────────────────────────────
-        List<SiteTrustedNetwork> savedNetworks = new ArrayList<>();
+        List<SiteTrustedNetwork> networkEntities = new ArrayList<>();
         for (TrustedNetworkRequest netReq : networks) {
-            SiteTrustedNetwork rule = buildNetworkEntity(site, netReq);
-            savedNetworks.add(networkRepository.save(rule));
+            networkEntities.add(buildNetworkEntity(site, netReq));
         }
+        List<SiteTrustedNetwork> savedNetworks = networkRepository.saveAll(networkEntities);
 
         AttendancePolicy attendancePolicy = buildAttendancePolicy(companyRef, site, request);
-        attendancePolicy = attendancePolicyRepository.save(attendancePolicy);
+        attendancePolicy = attendanceProvisioning.savePolicy(attendancePolicy);
         AttendanceQrTerminal defaultTerminal = Boolean.TRUE.equals(attendancePolicy.getRequireQr())
-                ? attendanceQrService.ensureDefaultTerminal(companyRef, site)
+                ? attendanceProvisioning.ensureDefaultTerminal(companyRef, site)
                 : null;
 
         // ── 9. Audit ─────────────────────────────────────────────────────────────
@@ -266,10 +264,10 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
         CompanySite site = new CompanySite();
         site.setCompany(company);
         site.setCode(normalizedCode);
-        site.setName(req.name() != null ? req.name().trim() : "Unnamed Site");
+        site.setName(req.name().trim());
         site.setType(req.type());
         site.setStatus(SiteStatus.PENDING_REVIEW);
-        site.setCountryCode(req.countryCode() != null ? req.countryCode().trim().toUpperCase() : "??");
+        site.setCountryCode(req.countryCode().trim().toUpperCase());
         site.setTimezone(req.timezone() != null ? req.timezone().trim() : "UTC");
         site.setNotes(req.notes());
 

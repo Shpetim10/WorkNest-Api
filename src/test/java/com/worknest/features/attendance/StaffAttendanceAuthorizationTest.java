@@ -167,12 +167,9 @@ class StaffAttendanceAuthorizationTest {
 
         service.manualCheckIn(employeeId, request);
 
-        // Verify the saved event has the correct workDate (site-timezone derived)
-        ZoneId siteZone = ZoneId.of(SITE_TIMEZONE);
-        LocalDate expectedWorkDate = eventAt.atZone(siteZone).toLocalDate();
-        assertEquals(LocalDate.of(2026, 5, 2), expectedWorkDate);
+        // 2026-05-02T00:30:00Z = 2026-05-02T02:30:00+02:00 in Europe/Tirane → workDate 2026-05-02
+        LocalDate expectedWorkDate = LocalDate.of(2026, 5, 2);
 
-        // Verify repository was queried with the site-timezone-derived workDate
         verify(attendanceDayRecordRepository)
                 .findByCompanyIdAndEmployeeIdAndWorkDate(companyId, employeeId, expectedWorkDate);
     }
@@ -229,5 +226,34 @@ class StaffAttendanceAuthorizationTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
         assertEquals("INVALID_TIME_RANGE", ex.getCode());
+    }
+
+    // --- Test 6: cross-tenant isolation — employee from different company is rejected ---
+
+    @Test
+    void manualCheckInRejectsEmployeeFromDifferentCompany() {
+        setAuthentication(PlatformRole.ADMIN);
+
+        UUID otherCompanyId = UUID.randomUUID();
+        Company otherCompany = mock(Company.class);
+        when(otherCompany.getId()).thenReturn(otherCompanyId);
+
+        CompanySite site = mock(CompanySite.class);
+        when(site.getTimezone()).thenReturn(SITE_TIMEZONE);
+
+        Employee employee = mock(Employee.class);
+        when(employee.getId()).thenReturn(employeeId);
+        when(employee.getCompany()).thenReturn(otherCompany);
+        when(employee.getCompanySite()).thenReturn(site);
+        when(employee.getUser()).thenReturn(mock(User.class));
+        when(employeeRepository.findById(employeeId)).thenReturn(Optional.of(employee));
+
+        Instant now = Instant.now();
+        ManualCheckInRequest request = new ManualCheckInRequest(now, "cross-tenant attempt");
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.manualCheckIn(employeeId, request));
+
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatus());
     }
 }

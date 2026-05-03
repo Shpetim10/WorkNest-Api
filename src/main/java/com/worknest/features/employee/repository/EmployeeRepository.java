@@ -27,6 +27,12 @@ public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
             @Param("roles") List<PlatformRole> roles, 
             @Param("deptId") UUID deptId);
 
+    @Query("SELECT e FROM Employee e WHERE e.company.id = :companyId AND e.employmentTypeRole IN (:roles) AND (:deptId IS NULL OR e.department.id = :deptId) AND e.employmentStatus!=EmploymentStatus.PENDING AND e.startDate <= CURRENT_DATE AND e.contractExpiryDate>=CURRENT_DATE ")
+    List<Employee> findByCompanyAndRolesAndDepartmentAndEmploymentStatusNotPendingAndTimeWithinContract(
+            @Param("companyId") UUID companyId,
+            @Param("roles") List<PlatformRole> roles,
+            @Param("deptId") UUID deptId);
+
     @Query("SELECT e FROM Employee e WHERE e.company.id = :companyId AND e.employmentTypeRole = :role AND e.supervisorRoleAssignment IS NULL AND e.department.id = :deptId")
     List<Employee> findUnassignedEmployeesByDepartment(@Param("companyId") UUID companyId, @Param("role") PlatformRole role, @Param("deptId") UUID deptId);
 

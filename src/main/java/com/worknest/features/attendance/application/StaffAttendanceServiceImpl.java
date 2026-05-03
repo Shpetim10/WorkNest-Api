@@ -82,7 +82,7 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
 
         List<Employee> employees;
         if (isAdmin(principal.role())) {
-            employees = employeeRepository.findByCompanyAndRolesAndDepartment(
+            employees = employeeRepository.findByCompanyAndRolesAndDepartmentAndEmploymentStatusNotPendingAndTimeWithinContract(
                     companyId, List.of(PlatformRole.EMPLOYEE, PlatformRole.STAFF), departmentId
             );
             if (siteId != null) {
