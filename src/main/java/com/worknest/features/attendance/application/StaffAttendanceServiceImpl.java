@@ -230,6 +230,9 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         if (!employee.getCompany().getId().equals(principal.companyId())) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Cross-tenant access is not allowed.");
         }
+        if (principal.role() == PlatformRole.STAFF) {
+            assertManagesEmployee(request.employeeId(), principal);
+        }
         CompanySite site = companySiteRepository.findByIdAndCompanyId(request.siteId(), principal.companyId())
                 .orElseThrow(SiteNotFoundException::new);
 
