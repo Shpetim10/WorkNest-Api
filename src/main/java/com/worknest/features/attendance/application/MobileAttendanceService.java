@@ -152,7 +152,9 @@ public class MobileAttendanceService {
         NetworkResult networkResult = evaluateNetwork(site, httpRequest);
         List<AttendanceWarningCode> warningCodes = new ArrayList<>();
         warningCodes.addAll(geofenceResult.warningCodes());
-        warningCodes.addAll(networkResult.warningCodes());
+        if (resolvedPolicy.dto().useNetworkAsWarning()) {
+            warningCodes.addAll(networkResult.warningCodes());
+        }
 
         AttendanceDecision decision = warningCodes.isEmpty() ? AttendanceDecision.ACCEPTED : AttendanceDecision.ACCEPTED_WITH_WARNINGS;
         AttendanceEventStatus status = warningCodes.isEmpty() ? AttendanceEventStatus.ACCEPTED : AttendanceEventStatus.ACCEPTED_WITH_WARNINGS;

@@ -17,7 +17,11 @@ import com.worknest.domain.entities.Employee;
 import com.worknest.domain.entities.User;
 import com.worknest.domain.enums.PlatformAccess;
 import com.worknest.domain.enums.PlatformRole;
+import com.worknest.domain.enums.AttendancePolicySource;
+import com.worknest.features.attendance.application.AttendancePolicyResolver;
+import com.worknest.features.attendance.application.ResolvedAttendancePolicy;
 import com.worknest.features.attendance.application.StaffAttendanceServiceImpl;
+import com.worknest.features.attendance.dto.EffectiveAttendancePolicyDto;
 import com.worknest.features.attendance.dto.ManualCheckInRequest;
 import com.worknest.features.attendance.repository.AttendanceDayRecordRepository;
 import com.worknest.features.attendance.repository.AttendanceEventRepository;
@@ -59,6 +63,7 @@ class StaffAttendanceAuthorizationTest {
     @Mock private UserRepository userRepository;
     @Mock private CompanyRepository companyRepository;
     @Mock private ObjectMapper objectMapper;
+    @Mock private AttendancePolicyResolver attendancePolicyResolver;
 
     @InjectMocks private StaffAttendanceServiceImpl service;
 
@@ -70,6 +75,12 @@ class StaffAttendanceAuthorizationTest {
     @BeforeEach
     void setUp() {
         SecurityContextHolder.clearContext();
+        EffectiveAttendancePolicyDto permissivePolicy = new EffectiveAttendancePolicyDto(
+                null, AttendancePolicySource.COMPANY_DEFAULT,
+                true, true, true, true, true, true, false, true, true
+        );
+        when(attendancePolicyResolver.resolveForSite(any(), any()))
+                .thenReturn(new ResolvedAttendancePolicy(null, permissivePolicy));
     }
 
     @AfterEach

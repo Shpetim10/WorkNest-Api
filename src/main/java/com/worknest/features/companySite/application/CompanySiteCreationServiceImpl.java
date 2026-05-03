@@ -120,8 +120,8 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
 
         // ── 8. Persist trusted-network rules ─────────────────────────────────────
         List<SiteTrustedNetwork> networkEntities = new ArrayList<>();
-        for (TrustedNetworkRequest netReq : networks) {
-            networkEntities.add(buildNetworkEntity(site, netReq));
+        for (int i = 0; i < networks.size(); i++) {
+            networkEntities.add(buildNetworkEntity(site, networks.get(i), i + 1));
         }
         List<SiteTrustedNetwork> savedNetworks = networkRepository.saveAll(networkEntities);
 
@@ -306,34 +306,25 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
      * The CIDR is normalized to lowercase. IP version is re-derived from the CIDR
      * rather than trusted directly from the request payload.
      */
-    private SiteTrustedNetwork buildNetworkEntity(CompanySite site, TrustedNetworkRequest req) {
+    private SiteTrustedNetwork buildNetworkEntity(CompanySite site, TrustedNetworkRequest req, int priorityOrder) {
         SiteTrustedNetwork rule = new SiteTrustedNetwork();
         rule.setSite(site);
         rule.setName(req.name().trim());
         rule.setNetworkType(req.networkType());
         rule.setCidrBlock(CidrValidator.normalize(req.cidrBlock()));
-        // Re-derive IP version server-side from the CIDR — never trust the frontend value directly.
         rule.setIpVersion(CidrValidator.resolveIpVersion(req.cidrBlock()));
         rule.setIsActive(true);
-        rule.setPriorityOrder(req.priorityOrder());
+        rule.setPriorityOrder(priorityOrder);
         rule.setNotes(req.notes());
         rule.setExpiresAt(req.expiresAt());
         return rule;
     }
 
     private void validateAttendancePolicy(CreateSiteRequest request, List<FieldValidationError> fieldErrors) {
-        var policy = request.attendancePolicy();
-        if (policy == null) {
+        if (request.attendancePolicy() == null) {
             fieldErrors.add(new FieldValidationError(
                     "attendancePolicy",
                     "Attendance policy is required. Send the 'attendancePolicy' object with all attendance settings."
-            ));
-            return;
-        }
-        if (Boolean.TRUE.equals(policy.missingCheckoutAutoCloseEnabled()) && policy.autoCheckoutAfterMinutes() == null) {
-            fieldErrors.add(new FieldValidationError(
-                    "attendancePolicy.autoCheckoutAfterMinutes",
-                    "Auto check-out minutes is required when missing check-out auto-close is enabled."
             ));
         }
     }
@@ -368,10 +359,6 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
         policy.setRejectPoorAccuracy(input.rejectPoorAccuracy());
         policy.setAllowManualCorrection(input.allowManualCorrection());
         policy.setAllowManagerManualEntry(input.allowManagerManualEntry());
-        policy.setMissingCheckoutAutoCloseEnabled(input.missingCheckoutAutoCloseEnabled());
-        policy.setAutoCheckoutAfterMinutes(input.autoCheckoutAfterMinutes());
-        policy.setLateGraceMinutes(input.lateGraceMinutes());
-        policy.setEarlyClockInWindowMinutes(input.earlyClockInWindowMinutes());
         return policy;
     }
 
@@ -387,11 +374,7 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
                 Boolean.TRUE.equals(policy.getRejectOutsideGeofence()),
                 Boolean.TRUE.equals(policy.getRejectPoorAccuracy()),
                 Boolean.TRUE.equals(policy.getAllowManualCorrection()),
-                Boolean.TRUE.equals(policy.getAllowManagerManualEntry()),
-                Boolean.TRUE.equals(policy.getMissingCheckoutAutoCloseEnabled()),
-                policy.getAutoCheckoutAfterMinutes(),
-                policy.getLateGraceMinutes() != null ? policy.getLateGraceMinutes() : 0,
-                policy.getEarlyClockInWindowMinutes() != null ? policy.getEarlyClockInWindowMinutes() : 0
+                Boolean.TRUE.equals(policy.getAllowManagerManualEntry())
         );
     }
 

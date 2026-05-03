@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd"
+        objectQuotingStrategy="QUOTE_ONLY_RESERVED_WORDS">
+
+    <!--
+        Removes deprecated attendance policy columns that are no longer used
+        by the application domain model.
+    -->
+    <changeSet id="001-1" author="codex">
+        <dropColumn tableName="attendance_policies" columnName="missing_checkout_auto_close_enabled"/>
+        <dropColumn tableName="attendance_policies" columnName="auto_checkout_after_minutes"/>
+        <dropColumn tableName="attendance_policies" columnName="late_grace_minutes"/>
+        <dropColumn tableName="attendance_policies" columnName="early_clock_in_window_minutes"/>
+
+        <rollback>
+            <addColumn tableName="attendance_policies">
+                <column name="missing_checkout_auto_close_enabled" type="BOOLEAN" defaultValueBoolean="false">
+                    <constraints nullable="false"/>
+                </column>
+                <column name="auto_checkout_after_minutes" type="INT"/>
+                <column name="late_grace_minutes" type="INT" defaultValueNumeric="0">
+                    <constraints nullable="false"/>
+                </column>
+                <column name="early_clock_in_window_minutes" type="INT" defaultValueNumeric="0">
+                    <constraints nullable="false"/>
+                </column>
+            </addColumn>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
