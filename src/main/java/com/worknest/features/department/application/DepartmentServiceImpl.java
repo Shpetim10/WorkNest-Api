@@ -8,9 +8,11 @@ import com.worknest.features.department.dto.DepartmentListResponse;
 import com.worknest.features.department.dto.DepartmentLookup;
 import com.worknest.features.department.dto.DepartmentResponse;
 import com.worknest.features.department.dto.UpdateDepartmentRequest;
+import com.worknest.features.department.exception.DepartmentCannotBeDeleted;
 import com.worknest.features.department.exception.DepartmentNotFoundException;
 import com.worknest.features.department.exception.DuplicateDepartmentNameException;
 import com.worknest.features.department.repository.DepartmentRepository;
+import com.worknest.features.employee.repository.EmployeeRepository;
 import com.worknest.tenant.TenantContextHolder;
 import jakarta.persistence.EntityManager;
 import java.util.List;
@@ -25,6 +27,7 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     private final DepartmentRepository departmentRepository;
     private final EntityManager entityManager;
+    private final EmployeeRepository employeeRepository;
 
     private UUID getCurrentCompanyId() {
         return TenantContextHolder.get()
@@ -68,7 +71,10 @@ public class DepartmentServiceImpl implements DepartmentService {
     public List<DepartmentListResponse> listDepartments(UUID companyId) {
         return departmentRepository.findAllByCompanyId(companyId)
                 .stream()
-                .map(DepartmentListResponse::fromEntity)
+                .map(e->{
+                    int employeeCount= employeeRepository.countByDepartmentId(e.getId());
+                    return DepartmentListResponse.fromEntity(e,employeeCount);
+                })
                 .toList();
     }
 
@@ -98,8 +104,9 @@ public class DepartmentServiceImpl implements DepartmentService {
         Department department = departmentRepository.findByIdAndCompanyId(id, getCurrentCompanyId())
                 .orElseThrow(DepartmentNotFoundException::new);
 
-        // TODO: Deletion must later be blocked if employees are assigned to the department.
-        // Employee-assignment check is not implemented yet in this codebase.
+        if(employeeRepository.countByDepartmentId(department.getId()) > 0) {
+            throw new DepartmentCannotBeDeleted("There are some employees in this department");
+        }
 
         departmentRepository.delete(department);
     }

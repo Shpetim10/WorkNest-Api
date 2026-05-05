@@ -3,8 +3,6 @@ package com.worknest.features.companySite.application;
 import com.worknest.common.exception.BusinessException;
 import com.worknest.domain.entities.CompanySite;
 import com.worknest.domain.entities.SiteTrustedNetwork;
-import com.worknest.features.companySite.dto.CreateNetworkRequest;
-import com.worknest.features.companySite.dto.ToggleNetworkStatusRequest;
 import com.worknest.features.companySite.dto.TrustedNetworkResponse;
 import com.worknest.features.companySite.dto.UpdateNetworkRequest;
 import com.worknest.features.companySite.exception.DuplicateTrustedNetworkException;

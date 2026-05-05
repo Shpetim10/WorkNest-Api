@@ -14,10 +14,6 @@ public record EffectiveAttendancePolicyDto(
         boolean rejectOutsideGeofence,
         boolean rejectPoorAccuracy,
         boolean allowManualCorrection,
-        boolean allowManagerManualEntry,
-        boolean missingCheckoutAutoCloseEnabled,
-        Integer autoCheckoutAfterMinutes,
-        int lateGraceMinutes,
-        int earlyClockInWindowMinutes
+        boolean allowManagerManualEntry
 ) {
 }
