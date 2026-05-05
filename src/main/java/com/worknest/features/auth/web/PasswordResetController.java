@@ -1,20 +1,26 @@
 package com.worknest.features.auth.web;
 
+import com.worknest.features.auth.application.ChangePasswordService;
+import com.worknest.features.auth.dto.ChangePasswordRequest;
 import com.worknest.features.auth.dto.ForgotPasswordRequest;
 import com.worknest.features.auth.dto.GenericMessageResponse;
 import com.worknest.features.auth.dto.ResetPasswordRequest;
 import com.worknest.features.auth.application.PasswordResetRequestService;
 import com.worknest.features.auth.application.PasswordResetService;
 import com.worknest.common.api.ApiResponse;
+import com.worknest.security.AuthSessionPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,6 +37,7 @@ public class PasswordResetController {
 
     private final PasswordResetRequestService requestService;
     private final PasswordResetService resetService;
+    private final ChangePasswordService changePasswordService;
 
     @PostMapping("/forgot-password")
     @Operation(
@@ -88,6 +95,32 @@ public class PasswordResetController {
         String ipAddress = servletRequest.getRemoteAddr();
         GenericMessageResponse response = resetService.resetPassword(request, ipAddress);
         
+        return ResponseEntity.ok(ApiResponse.success(response.message(), response));
+    }
+
+    @PostMapping("/change-password")
+    @PreAuthorize("isAuthenticated()")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+            summary = "Change Password",
+            description = "Changes the password for the currently authenticated user. Requires the current password for verification."
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Password changed successfully")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "400",
+            description = "New password does not meet strength requirements",
+            content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "401",
+            description = "Current password is incorrect",
+            content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
+    )
+    public ResponseEntity<ApiResponse<GenericMessageResponse>> changePassword(
+            @RequestBody @Valid ChangePasswordRequest request,
+            @AuthenticationPrincipal AuthSessionPrincipal principal
+    ) {
+        GenericMessageResponse response = changePasswordService.changePassword(request, principal);
         return ResponseEntity.ok(ApiResponse.success(response.message(), response));
     }
 }
