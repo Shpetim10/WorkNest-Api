@@ -4,6 +4,7 @@ import com.worknest.domain.enums.AttendanceState;
 import com.worknest.domain.enums.NextAttendanceAction;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,6 +22,8 @@ public record TodayAttendanceResponse(
         String timezone,
         LocalDate workDate,
         AttendanceRecordDto todayRecord,
-        List<AttendanceWarningDto> warnings
+        List<AttendanceWarningDto> warnings,
+        LocalDateTime clockIn,
+        LocalDateTime clockOut
 ) {
 }

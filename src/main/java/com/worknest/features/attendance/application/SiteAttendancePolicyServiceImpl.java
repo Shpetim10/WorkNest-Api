@@ -72,14 +72,6 @@ public class SiteAttendancePolicyServiceImpl implements SiteAttendancePolicyServ
     }
 
     private void applyRequest(AttendancePolicy policy, SiteAttendancePolicyRequest request) {
-        if (Boolean.TRUE.equals(request.missingCheckoutAutoCloseEnabled()) && request.autoCheckoutAfterMinutes() == null) {
-            throw new BusinessException(
-                    HttpStatus.BAD_REQUEST,
-                    "AUTO_CHECKOUT_MINUTES_REQUIRED",
-                    "autoCheckoutAfterMinutes is required when missing checkout auto-close is enabled."
-            );
-        }
-
         policy.setRequireQr(request.requireQr());
         policy.setRequireLocation(request.requireLocation());
         policy.setCheckInEnabled(request.checkInEnabled());
@@ -89,10 +81,6 @@ public class SiteAttendancePolicyServiceImpl implements SiteAttendancePolicyServ
         policy.setRejectPoorAccuracy(request.rejectPoorAccuracy());
         policy.setAllowManualCorrection(request.allowManualCorrection());
         policy.setAllowManagerManualEntry(request.allowManagerManualEntry());
-        policy.setMissingCheckoutAutoCloseEnabled(request.missingCheckoutAutoCloseEnabled());
-        policy.setAutoCheckoutAfterMinutes(request.autoCheckoutAfterMinutes());
-        policy.setLateGraceMinutes(request.lateGraceMinutes());
-        policy.setEarlyClockInWindowMinutes(request.earlyClockInWindowMinutes());
     }
 
     private void validateTenant(UUID companyId) {
