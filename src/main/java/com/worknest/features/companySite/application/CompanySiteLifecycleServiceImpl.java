@@ -3,6 +3,7 @@ package com.worknest.features.companySite.application;
 import com.worknest.audit.service.SiteSetupAuditService;
 import com.worknest.common.exception.BusinessException;
 import com.worknest.domain.entities.CompanySite;
+import com.worknest.domain.enums.GeofenceShapeType;
 import com.worknest.domain.enums.SiteStatus;
 import com.worknest.features.companySite.dto.CompanySiteResponse;
 import com.worknest.features.companySite.exception.SiteNotFoundException;
@@ -48,6 +49,8 @@ public class CompanySiteLifecycleServiceImpl implements CompanySiteLifecycleServ
                     "Site must be in PENDING_REVIEW or DISABLED status to be activated. Current status: " + site.getStatus()
             );
         }
+
+        validateGeofenceCompleteness(site);
 
         site.setStatus(SiteStatus.ACTIVE);
         site = siteRepository.save(site);
@@ -104,6 +107,27 @@ public class CompanySiteLifecycleServiceImpl implements CompanySiteLifecycleServ
                 site.getCode(), siteId, actor.userId());
 
         return CompanySiteResponse.fromEntity(site);
+    }
+
+    private void validateGeofenceCompleteness(CompanySite site) {
+        if (!Boolean.TRUE.equals(site.getLocationRequired())) {
+            return;
+        }
+        if (site.getGeofenceShapeType() == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "INCOMPLETE_GEOFENCE",
+                    "Site requires location verification but has no geofence configured. Set a geofence before activating.");
+        }
+        if (site.getGeofenceShapeType() == GeofenceShapeType.CIRCLE) {
+            if (site.getLatitude() == null || site.getLongitude() == null || site.getGeofenceRadiusMeters() == null) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "INCOMPLETE_GEOFENCE",
+                        "CIRCLE geofence requires latitude, longitude, and radius before activation.");
+            }
+        } else if (site.getGeofenceShapeType() == GeofenceShapeType.POLYGON) {
+            if (site.getGeofencePolygonGeoJson() == null || site.getGeofencePolygonGeoJson().isBlank()) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "INCOMPLETE_GEOFENCE",
+                        "POLYGON geofence requires GeoJSON data before activation.");
+            }
+        }
     }
 
     private void validateTenant(UUID companyId) {

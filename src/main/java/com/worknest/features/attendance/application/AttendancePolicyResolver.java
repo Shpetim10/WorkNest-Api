@@ -47,11 +47,7 @@ public class AttendancePolicyResolver {
                 Boolean.TRUE.equals(policy.getRejectOutsideGeofence()),
                 Boolean.TRUE.equals(policy.getRejectPoorAccuracy()),
                 Boolean.TRUE.equals(policy.getAllowManualCorrection()),
-                Boolean.TRUE.equals(policy.getAllowManagerManualEntry()),
-                Boolean.TRUE.equals(policy.getMissingCheckoutAutoCloseEnabled()),
-                policy.getAutoCheckoutAfterMinutes(),
-                policy.getLateGraceMinutes() != null ? policy.getLateGraceMinutes() : 0,
-                policy.getEarlyClockInWindowMinutes() != null ? policy.getEarlyClockInWindowMinutes() : 0
+                Boolean.TRUE.equals(policy.getAllowManagerManualEntry())
         );
     }
 
@@ -68,9 +64,6 @@ public class AttendancePolicyResolver {
         fallback.setRejectPoorAccuracy(false);
         fallback.setAllowManualCorrection(true);
         fallback.setAllowManagerManualEntry(true);
-        fallback.setMissingCheckoutAutoCloseEnabled(false);
-        fallback.setLateGraceMinutes(0);
-        fallback.setEarlyClockInWindowMinutes(0);
         return fallback;
     }
 }
