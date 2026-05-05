@@ -5,8 +5,8 @@ spring:
     name: worknest-api
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:worknest_db}
-    username: ${DB_USERNAME:dev}
-    password: ${DB_PASSWORD:dev}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
     driver-class-name: org.postgresql.Driver
   jpa:
     open-in-view: false

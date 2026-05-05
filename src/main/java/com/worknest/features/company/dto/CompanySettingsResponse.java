@@ -13,6 +13,18 @@ public record CompanySettingsResponse(
         @Schema(description = "Display name of the company", example = "Acme Corp")
         String name,
 
+        @Schema(description = "Company email address", example = "info@acme.com")
+        String email,
+
+        @Schema(description = "Tax identification number (NIPT)", example = "K12345678A")
+        String nipt,
+
+        @Schema(description = "Primary contact phone number", example = "+355 69 123 4567")
+        String phoneNumber,
+
+        @Schema(description = "Business sector or industry", example = "Technology")
+        String industry,
+
         @Schema(description = "IANA timezone identifier used for scheduling and display", example = "Europe/Tirane")
         String timezone,
 
@@ -28,6 +40,9 @@ public record CompanySettingsResponse(
         @Schema(description = "ISO 3166-1 alpha-2 country code", example = "AL")
         String countryCode,
 
-        @Schema(description = "Public URL of the company logo, or null if not set", example = "https://cdn.example.com/logos/acme.png")
+        @Schema(description = "Storage key of the company logo used to construct the serve URL, or null if not set")
+        String logoKey,
+
+        @Schema(description = "Absolute storage path of the company logo, or null if not set")
         String logoPath
 ) {}
