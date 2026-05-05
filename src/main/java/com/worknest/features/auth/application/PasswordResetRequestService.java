@@ -15,3 +15,4 @@ public interface PasswordResetRequestService {
      */
     void requestPasswordReset(ForgotPasswordRequest request, String ipAddress);
 }
+
