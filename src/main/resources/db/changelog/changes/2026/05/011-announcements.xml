@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd"
+        objectQuotingStrategy="QUOTE_ONLY_RESERVED_WORDS">
+
+    <changeSet id="011-1" author="worknest">
+        <createTable tableName="announcements">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="company_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="title" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_audience" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="priority" type="VARCHAR(20)" defaultValue="NORMAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by_user_id" type="UUID"/>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="announcements" baseColumnNames="company_id"
+                                 constraintName="fk_announcements_company"
+                                 referencedTableName="companies" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="announcements" baseColumnNames="created_by_user_id"
+                                 constraintName="fk_announcements_created_by_user"
+                                 referencedTableName="users" referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+
+        <createIndex tableName="announcements" indexName="idx_announcements_company">
+            <column name="company_id"/>
+        </createIndex>
+        <createIndex tableName="announcements" indexName="idx_announcements_company_created">
+            <column name="company_id"/>
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="011-2" author="worknest">
+        <createTable tableName="announcement_departments">
+            <column name="announcement_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="department_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addPrimaryKey tableName="announcement_departments"
+                       constraintName="pk_announcement_departments"
+                       columnNames="announcement_id, department_id"/>
+
+        <addForeignKeyConstraint baseTableName="announcement_departments" baseColumnNames="announcement_id"
+                                 constraintName="fk_announcement_departments_announcement"
+                                 referencedTableName="announcements" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="announcement_departments" baseColumnNames="department_id"
+                                 constraintName="fk_announcement_departments_department"
+                                 referencedTableName="departments" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+    </changeSet>
+
+    <changeSet id="011-3" author="worknest">
+        <createTable tableName="announcement_employees">
+            <column name="announcement_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="employee_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addPrimaryKey tableName="announcement_employees"
+                       constraintName="pk_announcement_employees"
+                       columnNames="announcement_id, employee_id"/>
+
+        <addForeignKeyConstraint baseTableName="announcement_employees" baseColumnNames="announcement_id"
+                                 constraintName="fk_announcement_employees_announcement"
+                                 referencedTableName="announcements" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="announcement_employees" baseColumnNames="employee_id"
+                                 constraintName="fk_announcement_employees_employee"
+                                 referencedTableName="employees" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+    </changeSet>
+
+    <changeSet id="011-4" author="worknest">
+        <createTable tableName="announcement_reads">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="announcement_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="employee_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="read_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="announcement_reads" baseColumnNames="announcement_id"
+                                 constraintName="fk_announcement_reads_announcement"
+                                 referencedTableName="announcements" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="announcement_reads" baseColumnNames="employee_id"
+                                 constraintName="fk_announcement_reads_employee"
+                                 referencedTableName="employees" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+
+        <addUniqueConstraint tableName="announcement_reads"
+                             constraintName="uk_announcement_reads_announcement_employee"
+                             columnNames="announcement_id, employee_id"/>
+
+        <createIndex tableName="announcement_reads" indexName="idx_announcement_reads_employee">
+            <column name="employee_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
