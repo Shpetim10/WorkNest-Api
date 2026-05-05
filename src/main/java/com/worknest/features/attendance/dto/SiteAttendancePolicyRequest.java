@@ -13,10 +13,6 @@ public record SiteAttendancePolicyRequest(
         @NotNull Boolean rejectOutsideGeofence,
         @NotNull Boolean rejectPoorAccuracy,
         @NotNull Boolean allowManualCorrection,
-        @NotNull Boolean allowManagerManualEntry,
-        @NotNull Boolean missingCheckoutAutoCloseEnabled,
-        @Min(1) @Max(1440) Integer autoCheckoutAfterMinutes,
-        @NotNull @Min(0) @Max(300) Integer lateGraceMinutes,
-        @NotNull @Min(0) @Max(300) Integer earlyClockInWindowMinutes
+        @NotNull Boolean allowManagerManualEntry
 ) {
 }

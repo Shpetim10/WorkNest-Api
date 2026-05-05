@@ -123,11 +123,7 @@ public class CompanySiteQueryServiceImpl implements CompanySiteQueryService {
                 dto.rejectOutsideGeofence(),
                 dto.rejectPoorAccuracy(),
                 dto.allowManualCorrection(),
-                dto.allowManagerManualEntry(),
-                dto.missingCheckoutAutoCloseEnabled(),
-                dto.autoCheckoutAfterMinutes(),
-                dto.lateGraceMinutes(),
-                dto.earlyClockInWindowMinutes()
+                dto.allowManagerManualEntry()
         );
     }
 }

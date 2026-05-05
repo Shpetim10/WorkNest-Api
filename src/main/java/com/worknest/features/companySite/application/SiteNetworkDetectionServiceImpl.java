@@ -4,8 +4,6 @@ import com.worknest.common.web.ClientIpResolver;
 import com.worknest.domain.enums.NetworkIpVersion;
 import com.worknest.domain.enums.NetworkType;
 import com.worknest.features.companySite.dto.DetectNetworkResponse;
-import com.worknest.features.companySite.repository.CompanySiteRepository;
-import com.worknest.tenant.TenantContextHolder;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -29,8 +27,6 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class SiteNetworkDetectionServiceImpl implements SiteNetworkDetectionService {
 
-    private final CompanySiteRepository companySiteRepository;
-
     @Override
     public DetectNetworkResponse detect(HttpServletRequest request) {
         // 1. Resolve the trusted client IP from server-side headers only.
@@ -50,8 +46,8 @@ public class SiteNetworkDetectionServiceImpl implements SiteNetworkDetectionServ
         // 3. Classify the network type based on the IP characteristics.
         NetworkType networkType = classifyNetworkType(address, isIpv6);
 
-        // 4. Suggest a priority order based on existing site count for the company.
-        int suggestedPriority = computeSuggestedPriority();
+        // 4. Default suggested priority — caller adjusts once they know which site this applies to.
+        int suggestedPriority = 1;
 
         // 5. Build warnings and hints for admin UX.
         List<String> warnings = buildWarnings(address, networkType, isIpv6);
@@ -99,19 +95,6 @@ public class SiteNetworkDetectionServiceImpl implements SiteNetworkDetectionServ
         return NetworkType.DEDICATED_HOST;
     }
 
-    /**
-     * Suggests a priority order of (existing site count + 1) so the new rule
-     * is appended after existing ones by default. Falls back to 1 if no tenant context.
-     */
-    private int computeSuggestedPriority() {
-        return TenantContextHolder.get()
-                .map(ctx -> {
-                    long count = companySiteRepository.countByCompanyId(ctx.companyId());
-                    return (int) Math.min(count + 1, 999);
-                })
-                .orElse(1);
-    }
-
     private List<String> buildWarnings(InetAddress address, NetworkType type, boolean isIpv6) {
         List<String> warnings = new ArrayList<>();
 
@@ -122,10 +105,6 @@ public class SiteNetworkDetectionServiceImpl implements SiteNetworkDetectionServ
         if (isIpv6) {
             warnings.add("An IPv6 /128 rule will only match the exact detected address. "
                     + "Consider widening the prefix if multiple IPv6 addresses are used.");
-        }
-        if (type == NetworkType.VPN_GATEWAY) {
-            warnings.add("This IP appears to be a VPN egress address. "
-                    + "Trusting a VPN range may grant access to users outside your organisation.");
         }
         return warnings;
     }

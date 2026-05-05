@@ -20,7 +20,7 @@ public record DepartmentListResponse(
         DepartmentStatus status,
 
         @Schema(description = "Number of employees in the department")
-        Integer employeeCount, // TODO: Replace with actual count when employees are linked
+        Integer employeeCount,
         
         @Schema(description = "Creation timestamp")
         Instant createdAt,
@@ -28,13 +28,13 @@ public record DepartmentListResponse(
         @Schema(description = "Last update timestamp")
         Instant updatedAt
 ) {
-    public static DepartmentListResponse fromEntity(Department department) {
+    public static DepartmentListResponse fromEntity(Department department, int employeeCount) {
         return new DepartmentListResponse(
                 department.getId(),
                 department.getName(),
                 department.getDescription(),
                 department.getStatus(),
-                0, // Placeholder
+                employeeCount,
                 department.getCreatedAt(),
                 department.getUpdatedAt()
         );

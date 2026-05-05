@@ -21,6 +21,8 @@ import com.worknest.domain.enums.AttendanceState;
 import com.worknest.domain.enums.GeofenceDecision;
 import com.worknest.domain.enums.NetworkDecision;
 import com.worknest.domain.enums.PlatformRole;
+import com.worknest.features.attendance.application.AttendancePolicyResolver;
+import com.worknest.features.attendance.application.ResolvedAttendancePolicy;
 import com.worknest.features.attendance.dto.AdjustAttendanceDayRecordRequest;
 import com.worknest.features.attendance.dto.AttendanceDashboardResponse;
 import com.worknest.features.attendance.dto.AttendanceDashboardRowDto;
@@ -69,6 +71,7 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
     private final ObjectMapper objectMapper;
+    private final AttendancePolicyResolver attendancePolicyResolver;
 
     @Override
     @Transactional(readOnly = true)
@@ -82,7 +85,7 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
 
         List<Employee> employees;
         if (isAdmin(principal.role())) {
-            employees = employeeRepository.findByCompanyAndRolesAndDepartment(
+            employees = employeeRepository.findByCompanyAndRolesAndDepartmentAndEmploymentStatusNotPendingAndTimeWithinContract(
                     companyId, List.of(PlatformRole.EMPLOYEE, PlatformRole.STAFF), departmentId
             );
             if (siteId != null) {
@@ -174,6 +177,7 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         AuthSessionPrincipal principal = principal();
         Employee employee = loadAndAssertScope(employeeId, principal);
         CompanySite site = resolveSiteForEmployee(employee, principal.companyId());
+        assertManagerManualEntryAllowed(employee.getCompany(), site);
         createManualEventInternal(principal, employee, site, AttendanceEventType.MANUAL_CHECK_IN,
                 request.eventAt(), request.reason());
     }
@@ -183,6 +187,7 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         AuthSessionPrincipal principal = principal();
         Employee employee = loadAndAssertScope(employeeId, principal);
         CompanySite site = resolveSiteForEmployee(employee, principal.companyId());
+        assertManagerManualEntryAllowed(employee.getCompany(), site);
         createManualEventInternal(principal, employee, site, AttendanceEventType.MANUAL_CHECK_OUT,
                 request.eventAt(), request.reason());
     }
@@ -230,9 +235,13 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         if (!employee.getCompany().getId().equals(principal.companyId())) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Cross-tenant access is not allowed.");
         }
+        if (principal.role() == PlatformRole.STAFF) {
+            assertManagesEmployee(request.employeeId(), principal);
+        }
         CompanySite site = companySiteRepository.findByIdAndCompanyId(request.siteId(), principal.companyId())
                 .orElseThrow(SiteNotFoundException::new);
 
+        assertManagerManualEntryAllowed(employee.getCompany(), site);
         createManualEventInternal(principal, employee, site, request.eventType(), request.eventAt(), request.reason());
     }
 
@@ -261,6 +270,14 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "DAY_RECORD_NOT_FOUND", "Attendance day record was not found."));
         if (Boolean.TRUE.equals(record.getPayrollLocked())) {
             throw new BusinessException(HttpStatus.CONFLICT, "PAYROLL_LOCKED", "Payroll-locked records cannot be adjusted.");
+        }
+
+        if (record.getSite() != null) {
+            ResolvedAttendancePolicy resolved = attendancePolicyResolver.resolveForSite(record.getCompany(), record.getSite());
+            if (!resolved.dto().allowManualCorrection()) {
+                throw new BusinessException(HttpStatus.FORBIDDEN, "MANUAL_CORRECTION_DISABLED",
+                        "Manual correction is disabled by attendance policy.");
+            }
         }
 
         ZoneId recordZone = ZoneId.of(record.getTimezone());
@@ -482,6 +499,14 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
             return user.getDisplayName();
         }
         return user.getFirstName() + " " + user.getLastName();
+    }
+
+    private void assertManagerManualEntryAllowed(com.worknest.domain.entities.Company company, CompanySite site) {
+        ResolvedAttendancePolicy resolved = attendancePolicyResolver.resolveForSite(company, site);
+        if (!resolved.dto().allowManagerManualEntry()) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "MANUAL_ENTRY_DISABLED",
+                    "Manual attendance entry is disabled by attendance policy.");
+        }
     }
 
     private static boolean isAdmin(PlatformRole role) {
