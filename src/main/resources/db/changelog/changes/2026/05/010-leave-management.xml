@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd"
+        objectQuotingStrategy="QUOTE_ONLY_RESERVED_WORDS">
+
+    <changeSet id="010-1" author="codex">
+        <createTable tableName="leave_requests">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="company_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="employee_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="leave_type" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="start_date" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="end_date" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_days" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(30)" defaultValue="PENDING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="note" type="TEXT"/>
+            <column name="rejection_reason" type="TEXT"/>
+            <column name="reviewed_by_user_id" type="UUID"/>
+            <column name="reviewed_at" type="DATETIME"/>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="leave_requests" baseColumnNames="company_id"
+                                 constraintName="fk_leave_requests_company"
+                                 referencedTableName="companies" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="leave_requests" baseColumnNames="employee_id"
+                                 constraintName="fk_leave_requests_employee"
+                                 referencedTableName="employees" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="leave_requests" baseColumnNames="reviewed_by_user_id"
+                                 constraintName="fk_leave_requests_reviewed_by"
+                                 referencedTableName="users" referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+
+        <createIndex tableName="leave_requests" indexName="idx_leave_requests_company_status">
+            <column name="company_id"/>
+            <column name="status"/>
+        </createIndex>
+        <createIndex tableName="leave_requests" indexName="idx_leave_requests_company_employee">
+            <column name="company_id"/>
+            <column name="employee_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="010-2" author="codex">
+        <createTable tableName="leave_balances">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="company_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="employee_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="year" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="leave_type" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_days" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="used_days" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="leave_balances" baseColumnNames="company_id"
+                                 constraintName="fk_leave_balances_company"
+                                 referencedTableName="companies" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="leave_balances" baseColumnNames="employee_id"
+                                 constraintName="fk_leave_balances_employee"
+                                 referencedTableName="employees" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+
+        <addUniqueConstraint tableName="leave_balances"
+                             constraintName="uk_leave_balances_employee_year_type"
+                             columnNames="company_id, employee_id, year, leave_type"/>
+        <createIndex tableName="leave_balances" indexName="idx_leave_balances_employee_year">
+            <column name="employee_id"/>
+            <column name="year"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

@@ -6,6 +6,7 @@ import com.worknest.features.companySite.dto.DetectLocationRequest;
 import com.worknest.features.companySite.dto.DetectLocationResponse;
 import com.worknest.features.companySite.dto.LocationDetailsReadDto;
 import com.worknest.features.companySite.dto.LocationDetailsUpdateRequest;
+import com.worknest.features.companySite.application.SiteAttendanceProvisioningPort;
 import com.worknest.features.companySite.exception.SiteNotFoundException;
 import com.worknest.features.companySite.exception.StaleSiteDataException;
 import com.worknest.features.companySite.repository.CompanySiteRepository;
@@ -26,6 +27,7 @@ import org.springframework.http.HttpStatus;
 public class CompanySiteLocationServiceImpl implements CompanySiteLocationService {
 
     private final CompanySiteRepository repository;
+    private final SiteAttendanceProvisioningPort attendanceProvisioning;
 
     @Override
     @Transactional(readOnly = true)
@@ -62,6 +64,9 @@ public class CompanySiteLocationServiceImpl implements CompanySiteLocationServic
         site.setMaxLocationAccuracyMeters(request.maxLocationAccuracyMeters());
         site.setEntryBufferMeters(request.entryBufferMeters());
         site.setExitBufferMeters(request.exitBufferMeters());
+
+        // Keep AttendancePolicy.requireLocation in sync — policy is the canonical source.
+        attendanceProvisioning.syncRequireLocation(companyId, siteId, Boolean.TRUE.equals(request.locationRequired()));
 
         // Strict normalization
         if (Boolean.FALSE.equals(request.locationRequired())) {
@@ -110,16 +115,20 @@ public class CompanySiteLocationServiceImpl implements CompanySiteLocationServic
         boolean isWithin = false;
         Double distance = null;
 
-        if (Boolean.TRUE.equals(site.getLocationRequired()) && site.getGeofenceShapeType() == GeofenceShapeType.CIRCLE) {
-            if (site.getLatitude() != null && site.getLongitude() != null) {
-                distance = calculateDistanceMeters(
-                    site.getLatitude().doubleValue(), site.getLongitude().doubleValue(),
-                    request.latitude().doubleValue(), request.longitude().doubleValue()
-                );
-                isWithin = distance <= (site.getGeofenceRadiusMeters() != null ? site.getGeofenceRadiusMeters() : 100);
-                if (!isWithin) {
-                    warnings.add("The detected location is outside the established geofence radius.");
+        if (Boolean.TRUE.equals(site.getLocationRequired())) {
+            if (site.getGeofenceShapeType() == GeofenceShapeType.CIRCLE) {
+                if (site.getLatitude() != null && site.getLongitude() != null) {
+                    distance = calculateDistanceMeters(
+                        site.getLatitude().doubleValue(), site.getLongitude().doubleValue(),
+                        request.latitude().doubleValue(), request.longitude().doubleValue()
+                    );
+                    isWithin = distance <= (site.getGeofenceRadiusMeters() != null ? site.getGeofenceRadiusMeters() : 100);
+                    if (!isWithin) {
+                        warnings.add("The detected location is outside the established geofence radius.");
+                    }
                 }
+            } else if (site.getGeofenceShapeType() == GeofenceShapeType.POLYGON) {
+                warnings.add("Polygon geofence proximity check is not supported in the detection preview. Verify location on the map.");
             }
         }
         

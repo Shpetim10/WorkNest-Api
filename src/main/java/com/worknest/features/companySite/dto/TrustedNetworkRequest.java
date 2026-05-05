@@ -3,8 +3,6 @@ package com.worknest.features.companySite.dto;
 import com.worknest.domain.enums.NetworkIpVersion;
 import com.worknest.domain.enums.NetworkType;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -38,11 +36,6 @@ public record TrustedNetworkRequest(
         @NotNull(message = "IP version is required")
         @Schema(description = "IP version of the CIDR block. Server will cross-validate against the actual block.", example = "IPV4")
         NetworkIpVersion ipVersion,
-
-        @Min(value = 1, message = "Priority order must be at least 1")
-        @Max(value = 999, message = "Priority order must not exceed 999")
-        @Schema(description = "Evaluation priority (1 = highest). Lower number wins when multiple rules match.", example = "1")
-        int priorityOrder,
 
         @Schema(description = "Optional notes or description for this rule.", example = "Main office static IP range")
         String notes,

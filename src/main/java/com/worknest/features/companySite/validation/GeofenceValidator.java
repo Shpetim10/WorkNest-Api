@@ -1,5 +1,6 @@
 package com.worknest.features.companySite.validation;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.worknest.domain.enums.GeofenceShapeType;
 import com.worknest.features.companySite.dto.SiteLocationRequest;
 import com.worknest.features.companySite.exception.InvalidGeofenceException;
@@ -18,6 +19,8 @@ import com.worknest.features.companySite.exception.InvalidGeofenceException;
  * <p>All methods throw {@link InvalidGeofenceException} on failure.
  */
 public final class GeofenceValidator {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private GeofenceValidator() {
         // utility class
@@ -57,9 +60,11 @@ public final class GeofenceValidator {
                     );
                 }
                 String geoJson = location.geofencePolygonGeoJson().trim();
-                if (!geoJson.startsWith("{")) {
+                try {
+                    MAPPER.readTree(geoJson);
+                } catch (Exception e) {
                     throw new InvalidGeofenceException(
-                            "'geofencePolygonGeoJson' does not appear to be valid GeoJSON (must start with '{')."
+                            "'geofencePolygonGeoJson' is not valid JSON."
                     );
                 }
                 if (location.geofenceRadiusMeters() != null) {

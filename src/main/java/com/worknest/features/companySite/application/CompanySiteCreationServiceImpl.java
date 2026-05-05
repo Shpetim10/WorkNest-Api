@@ -10,8 +10,7 @@ import com.worknest.domain.entities.CompanySite;
 import com.worknest.domain.entities.SiteTrustedNetwork;
 import com.worknest.domain.enums.AttendancePolicySource;
 import com.worknest.domain.enums.SiteStatus;
-import com.worknest.features.attendance.application.AttendanceQrService;
-import com.worknest.features.attendance.repository.AttendancePolicyRepository;
+import com.worknest.features.companySite.application.SiteAttendanceProvisioningPort;
 import com.worknest.features.companySite.dto.CreateSiteRequest;
 import com.worknest.features.companySite.dto.CreateSiteResponse;
 import com.worknest.features.companySite.dto.LinkedQrTerminalResponse;
@@ -69,13 +68,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CompanySiteCreationServiceImpl implements CompanySiteCreationService {
 
-    private final CompanySiteRepository       siteRepository;
-    private final SiteTrustedNetworkRepository networkRepository;
-    private final CompanyRepository            companyRepository;
-    private final SiteSetupAuditService        auditService;
-    private final AttendancePolicyRepository   attendancePolicyRepository;
-    private final AttendanceQrService          attendanceQrService;
-    private final EntityManager                entityManager;
+    private final CompanySiteRepository            siteRepository;
+    private final SiteTrustedNetworkRepository     networkRepository;
+    private final CompanyRepository                companyRepository;
+    private final SiteSetupAuditService            auditService;
+    private final SiteAttendanceProvisioningPort   attendanceProvisioning;
+    private final EntityManager                    entityManager;
 
     @Override
     @Transactional
@@ -121,16 +119,16 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
         site = siteRepository.save(site);
 
         // ── 8. Persist trusted-network rules ─────────────────────────────────────
-        List<SiteTrustedNetwork> savedNetworks = new ArrayList<>();
-        for (TrustedNetworkRequest netReq : networks) {
-            SiteTrustedNetwork rule = buildNetworkEntity(site, netReq);
-            savedNetworks.add(networkRepository.save(rule));
+        List<SiteTrustedNetwork> networkEntities = new ArrayList<>();
+        for (int i = 0; i < networks.size(); i++) {
+            networkEntities.add(buildNetworkEntity(site, networks.get(i), i + 1));
         }
+        List<SiteTrustedNetwork> savedNetworks = networkRepository.saveAll(networkEntities);
 
         AttendancePolicy attendancePolicy = buildAttendancePolicy(companyRef, site, request);
-        attendancePolicy = attendancePolicyRepository.save(attendancePolicy);
+        attendancePolicy = attendanceProvisioning.savePolicy(attendancePolicy);
         AttendanceQrTerminal defaultTerminal = Boolean.TRUE.equals(attendancePolicy.getRequireQr())
-                ? attendanceQrService.ensureDefaultTerminal(companyRef, site)
+                ? attendanceProvisioning.ensureDefaultTerminal(companyRef, site)
                 : null;
 
         // ── 9. Audit ─────────────────────────────────────────────────────────────
@@ -266,10 +264,10 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
         CompanySite site = new CompanySite();
         site.setCompany(company);
         site.setCode(normalizedCode);
-        site.setName(req.name() != null ? req.name().trim() : "Unnamed Site");
+        site.setName(req.name().trim());
         site.setType(req.type());
         site.setStatus(SiteStatus.PENDING_REVIEW);
-        site.setCountryCode(req.countryCode() != null ? req.countryCode().trim().toUpperCase() : "??");
+        site.setCountryCode(req.countryCode().trim().toUpperCase());
         site.setTimezone(req.timezone() != null ? req.timezone().trim() : "UTC");
         site.setNotes(req.notes());
 
@@ -308,34 +306,25 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
      * The CIDR is normalized to lowercase. IP version is re-derived from the CIDR
      * rather than trusted directly from the request payload.
      */
-    private SiteTrustedNetwork buildNetworkEntity(CompanySite site, TrustedNetworkRequest req) {
+    private SiteTrustedNetwork buildNetworkEntity(CompanySite site, TrustedNetworkRequest req, int priorityOrder) {
         SiteTrustedNetwork rule = new SiteTrustedNetwork();
         rule.setSite(site);
         rule.setName(req.name().trim());
         rule.setNetworkType(req.networkType());
         rule.setCidrBlock(CidrValidator.normalize(req.cidrBlock()));
-        // Re-derive IP version server-side from the CIDR — never trust the frontend value directly.
         rule.setIpVersion(CidrValidator.resolveIpVersion(req.cidrBlock()));
         rule.setIsActive(true);
-        rule.setPriorityOrder(req.priorityOrder());
+        rule.setPriorityOrder(priorityOrder);
         rule.setNotes(req.notes());
         rule.setExpiresAt(req.expiresAt());
         return rule;
     }
 
     private void validateAttendancePolicy(CreateSiteRequest request, List<FieldValidationError> fieldErrors) {
-        var policy = request.attendancePolicy();
-        if (policy == null) {
+        if (request.attendancePolicy() == null) {
             fieldErrors.add(new FieldValidationError(
                     "attendancePolicy",
                     "Attendance policy is required. Send the 'attendancePolicy' object with all attendance settings."
-            ));
-            return;
-        }
-        if (Boolean.TRUE.equals(policy.missingCheckoutAutoCloseEnabled()) && policy.autoCheckoutAfterMinutes() == null) {
-            fieldErrors.add(new FieldValidationError(
-                    "attendancePolicy.autoCheckoutAfterMinutes",
-                    "Auto check-out minutes is required when missing check-out auto-close is enabled."
             ));
         }
     }
@@ -370,10 +359,6 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
         policy.setRejectPoorAccuracy(input.rejectPoorAccuracy());
         policy.setAllowManualCorrection(input.allowManualCorrection());
         policy.setAllowManagerManualEntry(input.allowManagerManualEntry());
-        policy.setMissingCheckoutAutoCloseEnabled(input.missingCheckoutAutoCloseEnabled());
-        policy.setAutoCheckoutAfterMinutes(input.autoCheckoutAfterMinutes());
-        policy.setLateGraceMinutes(input.lateGraceMinutes());
-        policy.setEarlyClockInWindowMinutes(input.earlyClockInWindowMinutes());
         return policy;
     }
 
@@ -389,11 +374,7 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
                 Boolean.TRUE.equals(policy.getRejectOutsideGeofence()),
                 Boolean.TRUE.equals(policy.getRejectPoorAccuracy()),
                 Boolean.TRUE.equals(policy.getAllowManualCorrection()),
-                Boolean.TRUE.equals(policy.getAllowManagerManualEntry()),
-                Boolean.TRUE.equals(policy.getMissingCheckoutAutoCloseEnabled()),
-                policy.getAutoCheckoutAfterMinutes(),
-                policy.getLateGraceMinutes() != null ? policy.getLateGraceMinutes() : 0,
-                policy.getEarlyClockInWindowMinutes() != null ? policy.getEarlyClockInWindowMinutes() : 0
+                Boolean.TRUE.equals(policy.getAllowManagerManualEntry())
         );
     }
 

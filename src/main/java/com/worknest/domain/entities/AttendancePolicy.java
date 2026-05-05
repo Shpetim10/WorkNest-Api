@@ -76,18 +76,6 @@ public class AttendancePolicy {
     @Column(name = "allow_manager_manual_entry", nullable = false)
     private Boolean allowManagerManualEntry = true;
 
-    @Column(name = "missing_checkout_auto_close_enabled", nullable = false)
-    private Boolean missingCheckoutAutoCloseEnabled = false;
-
-    @Column(name = "auto_checkout_after_minutes")
-    private Integer autoCheckoutAfterMinutes;
-
-    @Column(name = "late_grace_minutes", nullable = false)
-    private Integer lateGraceMinutes = 0;
-
-    @Column(name = "early_clock_in_window_minutes", nullable = false)
-    private Integer earlyClockInWindowMinutes = 0;
-
     @Version
     @Column(name = "version", nullable = false)
     private Long version = 0L;

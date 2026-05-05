@@ -16,6 +16,8 @@ import com.worknest.domain.entities.User;
 import com.worknest.domain.enums.CompanyStatus;
 import com.worknest.domain.enums.AttendanceCaptureMethod;
 import com.worknest.domain.enums.AttendanceDayStatus;
+import com.worknest.domain.enums.AttendanceReviewStatus;
+import com.worknest.domain.enums.AttendanceDayStatus;
 import com.worknest.domain.enums.AttendanceDecision;
 import com.worknest.domain.enums.AttendanceEventStatus;
 import com.worknest.domain.enums.AttendanceEventType;
@@ -42,12 +44,12 @@ import com.worknest.security.AuthSessionPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
+import java.time.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -86,6 +88,8 @@ public class MobileAttendanceService {
         AttendanceState state = resolveState(dayRecord);
         NextAttendanceAction nextAction = resolveNextAction(state);
 
+        ZoneId timeZoneId= ZoneId.of(site.getTimezone());
+
         return new TodayAttendanceResponse(
                 state,
                 nextAction,
@@ -100,7 +104,9 @@ public class MobileAttendanceService {
                 site.getTimezone(),
                 workDate,
                 mapDayRecord(dayRecord),
-                List.of()
+                List.of(),
+                (dayRecord != null && dayRecord.getFirstCheckInAt() != null) ? LocalDateTime.ofInstant(dayRecord.getFirstCheckInAt(), timeZoneId) : null,
+                (dayRecord != null && dayRecord.getLastCheckOutAt() != null) ? LocalDateTime.ofInstant(dayRecord.getLastCheckOutAt(), timeZoneId) : null
         );
     }
 
@@ -146,7 +152,9 @@ public class MobileAttendanceService {
         NetworkResult networkResult = evaluateNetwork(site, httpRequest);
         List<AttendanceWarningCode> warningCodes = new ArrayList<>();
         warningCodes.addAll(geofenceResult.warningCodes());
-        warningCodes.addAll(networkResult.warningCodes());
+        if (resolvedPolicy.dto().useNetworkAsWarning()) {
+            warningCodes.addAll(networkResult.warningCodes());
+        }
 
         AttendanceDecision decision = warningCodes.isEmpty() ? AttendanceDecision.ACCEPTED : AttendanceDecision.ACCEPTED_WITH_WARNINGS;
         AttendanceEventStatus status = warningCodes.isEmpty() ? AttendanceEventStatus.ACCEPTED : AttendanceEventStatus.ACCEPTED_WITH_WARNINGS;
@@ -196,30 +204,67 @@ public class MobileAttendanceService {
 
     @Transactional(readOnly = true)
     public MonthlyAttendanceResponse month(int year, int month) {
+        if (month < 1 || month > 12) {
+            throw new com.worknest.common.exception.BusinessException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "INVALID_MONTH", "Month must be between 1 and 12.");
+        }
+        if (year < 2000 || year > 2100) {
+            throw new com.worknest.common.exception.BusinessException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "INVALID_YEAR", "Year must be between 2000 and 2100.");
+        }
+
         Employee employee = resolveCurrentEmployee();
         CompanySite site = resolveEmployeeSite(employee);
         ZoneId zoneId = ZoneId.of(site.getTimezone());
+        LocalDate today = LocalDate.now(zoneId);
 
-        LocalDate from = LocalDate.of(year, month, 1);
-        LocalDate to = from.withDayOfMonth(from.lengthOfMonth());
+        LocalDate from = LocalDate.of(year, month, 1).isAfter(employee.getStartDate()) ? LocalDate.of(year, month, 1) : employee.getStartDate();
+        LocalDate lastOfMonth = from.withDayOfMonth(from.lengthOfMonth());
+        // Do not include future days — no record will ever exist for them yet.
+        LocalDate effectiveTo = lastOfMonth.isAfter(today) ? today : lastOfMonth;
 
-        List<MonthlyAttendanceDayDto> days = attendanceDayRecordRepository
-                .findAllByCompanyIdAndEmployeeIdAndWorkDateBetweenOrderByWorkDateAsc(
-                        employee.getCompany().getId(),
-                        employee.getId(),
-                        from,
-                        to
-                ).stream()
-                .map(r -> new MonthlyAttendanceDayDto(
-                        r.getWorkDate(),
-                        r.getDayStatus(),
-                        r.getFirstCheckInAt(),
-                        r.getLastCheckOutAt(),
-                        r.getWorkedMinutes() != null ? r.getWorkedMinutes() : 0,
-                        Boolean.TRUE.equals(r.getHasWarnings()),
-                        r.getReviewStatus()
-                ))
-                .toList();
+        Map<LocalDate, com.worknest.domain.entities.AttendanceDayRecord> recordMap =
+                attendanceDayRecordRepository
+                        .findAllByCompanyIdAndEmployeeIdAndWorkDateBetweenOrderByWorkDateAsc(
+                                employee.getCompany().getId(),
+                                employee.getId(),
+                                from,
+                                effectiveTo
+                        ).stream()
+                        .collect(Collectors.toMap(
+                                com.worknest.domain.entities.AttendanceDayRecord::getWorkDate,
+                                Function.identity()
+                        ));
+
+        List<MonthlyAttendanceDayDto> days = new ArrayList<>();
+        LocalDate cursor = from;
+        while (!cursor.isAfter(effectiveTo)) {
+            com.worknest.domain.entities.AttendanceDayRecord record = recordMap.get(cursor);
+            if (record != null) {
+                days.add(new MonthlyAttendanceDayDto(
+                        cursor,
+                        record.getDayStatus(),
+                        record.getFirstCheckInAt(),
+                        record.getLastCheckOutAt(),
+                        record.getWorkedMinutes() != null ? record.getWorkedMinutes() : 0,
+                        Boolean.TRUE.equals(record.getHasWarnings()),
+                        record.getReviewStatus()
+                ));
+            } else {
+                days.add(new MonthlyAttendanceDayDto(
+                        cursor,
+                        AttendanceDayStatus.ABSENT,
+                        null,
+                        null,
+                        0,
+                        false,
+                        AttendanceReviewStatus.NONE
+                ));
+            }
+            cursor = cursor.plusDays(1);
+        }
 
         return new MonthlyAttendanceResponse(year, month, zoneId.getId(), days);
     }
@@ -255,7 +300,7 @@ public class MobileAttendanceService {
             record.setWorkedMinutes((int) worked);
             record.setDayStatus(AttendanceDayStatus.PRESENT);
         } else if (record.getFirstCheckInAt() != null) {
-            record.setDayStatus(AttendanceDayStatus.PENDING_REVIEW);
+            record.setDayStatus(AttendanceDayStatus.PRESENT);
         }
 
         record.setSourceEventCount((record.getSourceEventCount() != null ? record.getSourceEventCount() : 0) + 1);
