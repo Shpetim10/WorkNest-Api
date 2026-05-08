@@ -11,7 +11,9 @@ import com.worknest.domain.entities.SiteTrustedNetwork;
 import com.worknest.domain.enums.AttendancePolicySource;
 import com.worknest.domain.enums.SiteStatus;
 import com.worknest.features.companySite.application.SiteAttendanceProvisioningPort;
+import com.worknest.features.companySite.dto.CompanySiteResponse;
 import com.worknest.features.companySite.dto.CreateSiteRequest;
+import com.worknest.realtime.event.CompanySiteCreatedDomainEvent;
 import com.worknest.features.companySite.dto.CreateSiteResponse;
 import com.worknest.features.companySite.dto.LinkedQrTerminalResponse;
 import com.worknest.features.companySite.dto.SiteAttendancePolicySummaryResponse;
@@ -40,6 +42,7 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -74,6 +77,7 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
     private final SiteSetupAuditService            auditService;
     private final SiteAttendanceProvisioningPort   attendanceProvisioning;
     private final EntityManager                    entityManager;
+    private final ApplicationEventPublisher        eventPublisher;
 
     @Override
     @Transactional
@@ -161,6 +165,11 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
         List<TrustedNetworkResponse> networkResponses = savedNetworks.stream()
                 .map(TrustedNetworkResponse::fromEntity)
                 .toList();
+
+        CompanySiteResponse siteSnapshot = CompanySiteResponse.fromEntity(site);
+        eventPublisher.publishEvent(new CompanySiteCreatedDomainEvent(
+                companyId, site.getId(), actor.userId(), siteSnapshot.version(), siteSnapshot
+        ));
 
         return CreateSiteResponse.fromEntity(
                 site,

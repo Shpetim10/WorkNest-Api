@@ -18,6 +18,8 @@ import com.worknest.features.announcement.exception.AnnouncementNotFoundExceptio
 import com.worknest.features.announcement.repository.AnnouncementReadRepository;
 import com.worknest.features.announcement.repository.AnnouncementRepository;
 import com.worknest.features.employee.repository.EmployeeRepository;
+import com.worknest.realtime.event.AnnouncementCreatedDomainEvent;
+import com.worknest.realtime.event.AnnouncementDeletedDomainEvent;
 import com.worknest.security.AuthSessionPrincipal;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
@@ -26,6 +28,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -40,6 +43,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     private final AnnouncementReadRepository announcementReadRepository;
     private final EmployeeRepository employeeRepository;
     private final EntityManager entityManager;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public AnnouncementListResponse create(UUID companyId, CreateAnnouncementRequest request) {
@@ -69,7 +73,9 @@ public class AnnouncementServiceImpl implements AnnouncementService {
         }
 
         announcement = announcementRepository.save(announcement);
-        return toListResponse(announcement);
+        AnnouncementListResponse response = toListResponse(announcement);
+        eventPublisher.publishEvent(new AnnouncementCreatedDomainEvent(companyId, announcement.getId(), principal.userId(), response));
+        return response;
     }
 
     @Override
@@ -83,9 +89,11 @@ public class AnnouncementServiceImpl implements AnnouncementService {
 
     @Override
     public void delete(UUID companyId, UUID id) {
+        AuthSessionPrincipal actor = principal();
         Announcement announcement = announcementRepository.findByIdAndCompanyId(id, companyId)
                 .orElseThrow(AnnouncementNotFoundException::new);
         announcementRepository.delete(announcement);
+        eventPublisher.publishEvent(new AnnouncementDeletedDomainEvent(companyId, id, actor.userId()));
     }
 
     @Override

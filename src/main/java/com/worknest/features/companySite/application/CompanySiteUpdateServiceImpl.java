@@ -1,7 +1,9 @@
 package com.worknest.features.companySite.application;
 
+import com.worknest.common.exception.BusinessException;
 import com.worknest.domain.entities.CompanySite;
 import com.worknest.domain.enums.SiteStatus;
+import com.worknest.features.companySite.dto.CompanySiteResponse;
 import com.worknest.features.companySite.dto.MainDetailsReadDto;
 import com.worknest.features.companySite.dto.MainDetailsUpdateRequest;
 import com.worknest.features.companySite.exception.InvalidStatusTransitionException;
@@ -9,14 +11,17 @@ import com.worknest.features.companySite.exception.SiteCodeAlreadyExistsExceptio
 import com.worknest.features.companySite.exception.SiteNotFoundException;
 import com.worknest.features.companySite.exception.StaleSiteDataException;
 import com.worknest.features.companySite.repository.CompanySiteRepository;
+import com.worknest.realtime.event.CompanySiteUpdatedDomainEvent;
+import com.worknest.security.AuthSessionPrincipal;
 import java.time.DateTimeException;
 import java.time.ZoneId;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.worknest.common.exception.BusinessException;
-import org.springframework.http.HttpStatus;
 
 @Service
 @Transactional
@@ -24,6 +29,7 @@ import org.springframework.http.HttpStatus;
 public class CompanySiteUpdateServiceImpl implements CompanySiteUpdateService {
 
     private final CompanySiteRepository repository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -69,6 +75,13 @@ public class CompanySiteUpdateServiceImpl implements CompanySiteUpdateService {
         site.setNotes(request.notes());
 
         CompanySite updatedSite = repository.save(site);
+
+        UUID actorUserId = resolveActorUserId();
+        CompanySiteResponse snapshot = CompanySiteResponse.fromEntity(updatedSite);
+        eventPublisher.publishEvent(new CompanySiteUpdatedDomainEvent(
+                companyId, siteId, actorUserId, snapshot.version(), snapshot
+        ));
+
         return mapToDto(updatedSite);
     }
 
@@ -80,6 +93,14 @@ public class CompanySiteUpdateServiceImpl implements CompanySiteUpdateService {
         }
         
         // Let them disable it or keep it disabled
+    }
+
+    private UUID resolveActorUserId() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof AuthSessionPrincipal principal) {
+            return principal.userId();
+        }
+        return null;
     }
 
     private MainDetailsReadDto mapToDto(CompanySite site) {

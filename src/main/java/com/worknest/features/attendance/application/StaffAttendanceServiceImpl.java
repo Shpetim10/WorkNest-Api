@@ -42,6 +42,10 @@ import com.worknest.features.company.repository.CompanyRepository;
 import com.worknest.features.companySite.exception.SiteNotFoundException;
 import com.worknest.features.companySite.repository.CompanySiteRepository;
 import com.worknest.features.employee.repository.EmployeeRepository;
+import com.worknest.realtime.event.AttendanceDayAdjustedDomainEvent;
+import com.worknest.realtime.event.AttendanceEventReviewedDomainEvent;
+import com.worknest.realtime.event.AttendanceManualEventDomainEvent;
+import com.worknest.realtime.event.AttendanceRealtimeEventType;
 import com.worknest.security.AuthSessionPrincipal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -53,6 +57,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -72,6 +77,7 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
     private final CompanyRepository companyRepository;
     private final ObjectMapper objectMapper;
     private final AttendancePolicyResolver attendancePolicyResolver;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -261,6 +267,10 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         event.setReviewedBy(reviewer);
         event.setReviewNote(request.note());
         attendanceEventRepository.save(event);
+        eventPublisher.publishEvent(new AttendanceEventReviewedDomainEvent(
+                principal.companyId(), eventId, event.getEmployee().getId(),
+                principal.userId(), request.reviewStatus().name()
+        ));
     }
 
     @Override
@@ -303,6 +313,10 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         record.setDayStatus(request.dayStatus());
         record.setReviewStatus(AttendanceReviewStatus.PENDING_REVIEW);
         attendanceDayRecordRepository.save(record);
+        eventPublisher.publishEvent(new AttendanceDayAdjustedDomainEvent(
+                principal.companyId(), recordId, record.getEmployee().getId(),
+                principal.userId(), record.getWorkDate()
+        ));
     }
 
     // --- helpers ---
@@ -340,6 +354,11 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         event.setReviewStatus(AttendanceReviewStatus.NONE);
         event.setWarningFlagsJson("[\"MANUAL_ENTRY\"]");
         attendanceEventRepository.save(event);
+        String realtimeType = eventType == AttendanceEventType.MANUAL_CHECK_IN
+                ? AttendanceRealtimeEventType.ATTENDANCE_MANUAL_CHECK_IN
+                : AttendanceRealtimeEventType.ATTENDANCE_MANUAL_CHECK_OUT;
+        eventPublisher.publishEvent(new AttendanceManualEventDomainEvent(
+                principal.companyId(), employee.getId(), principal.userId(), realtimeType, resolvedAt));
 
         AttendanceDayRecord dayRecord = attendanceDayRecordRepository
                 .findByCompanyIdAndEmployeeIdAndWorkDate(principal.companyId(), employee.getId(), workDate)

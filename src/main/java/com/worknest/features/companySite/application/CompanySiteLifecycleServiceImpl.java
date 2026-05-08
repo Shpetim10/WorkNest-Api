@@ -8,11 +8,14 @@ import com.worknest.domain.enums.SiteStatus;
 import com.worknest.features.companySite.dto.CompanySiteResponse;
 import com.worknest.features.companySite.exception.SiteNotFoundException;
 import com.worknest.features.companySite.repository.CompanySiteRepository;
+import com.worknest.realtime.event.CompanySiteActivatedDomainEvent;
+import com.worknest.realtime.event.CompanySiteDisabledDomainEvent;
 import com.worknest.security.AuthSessionPrincipal;
 import com.worknest.tenant.TenantContextHolder;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -28,6 +31,7 @@ public class CompanySiteLifecycleServiceImpl implements CompanySiteLifecycleServ
 
     private final CompanySiteRepository siteRepository;
     private final SiteSetupAuditService  auditService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -65,10 +69,14 @@ public class CompanySiteLifecycleServiceImpl implements CompanySiteLifecycleServ
                 actorIp
         );
 
-        log.info("CompanySiteLifecycle: site '{}' (id={}) activated by actor={}", 
+        log.info("CompanySiteLifecycle: site '{}' (id={}) activated by actor={}",
                 site.getCode(), siteId, actor.userId());
 
-        return CompanySiteResponse.fromEntity(site);
+        CompanySiteResponse response = CompanySiteResponse.fromEntity(site);
+        eventPublisher.publishEvent(new CompanySiteActivatedDomainEvent(
+                companyId, siteId, actor.userId(), response.version(), response
+        ));
+        return response;
     }
 
     @Override
@@ -103,10 +111,14 @@ public class CompanySiteLifecycleServiceImpl implements CompanySiteLifecycleServ
                 actorIp
         );
 
-        log.info("CompanySiteLifecycle: site '{}' (id={}) disabled by actor={}", 
+        log.info("CompanySiteLifecycle: site '{}' (id={}) disabled by actor={}",
                 site.getCode(), siteId, actor.userId());
 
-        return CompanySiteResponse.fromEntity(site);
+        CompanySiteResponse response = CompanySiteResponse.fromEntity(site);
+        eventPublisher.publishEvent(new CompanySiteDisabledDomainEvent(
+                companyId, siteId, actor.userId(), response.version(), response
+        ));
+        return response;
     }
 
     private void validateGeofenceCompleteness(CompanySite site) {

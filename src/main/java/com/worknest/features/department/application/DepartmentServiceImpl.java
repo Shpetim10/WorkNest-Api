@@ -13,11 +13,17 @@ import com.worknest.features.department.exception.DepartmentNotFoundException;
 import com.worknest.features.department.exception.DuplicateDepartmentNameException;
 import com.worknest.features.department.repository.DepartmentRepository;
 import com.worknest.features.employee.repository.EmployeeRepository;
+import com.worknest.realtime.event.DepartmentCreatedDomainEvent;
+import com.worknest.realtime.event.DepartmentDeletedDomainEvent;
+import com.worknest.realtime.event.DepartmentUpdatedDomainEvent;
+import com.worknest.security.AuthSessionPrincipal;
 import com.worknest.tenant.TenantContextHolder;
 import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +34,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     private final DepartmentRepository departmentRepository;
     private final EntityManager entityManager;
     private final EmployeeRepository employeeRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     private UUID getCurrentCompanyId() {
         return TenantContextHolder.get()
@@ -55,7 +62,9 @@ public class DepartmentServiceImpl implements DepartmentService {
         department.setStatus(request.statusOrDefault());
 
         department = departmentRepository.save(department);
-        return DepartmentResponse.fromEntity(department);
+        DepartmentResponse response = DepartmentResponse.fromEntity(department);
+        eventPublisher.publishEvent(new DepartmentCreatedDomainEvent(companyId, department.getId(), resolveActorUserId(), response));
+        return response;
     }
 
     @Override
@@ -95,7 +104,9 @@ public class DepartmentServiceImpl implements DepartmentService {
         department.setStatus(request.status());
 
         department = departmentRepository.save(department);
-        return DepartmentResponse.fromEntity(department);
+        DepartmentResponse response = DepartmentResponse.fromEntity(department);
+        eventPublisher.publishEvent(new DepartmentUpdatedDomainEvent(companyId, department.getId(), resolveActorUserId(), response));
+        return response;
     }
 
     @Override
@@ -108,7 +119,18 @@ public class DepartmentServiceImpl implements DepartmentService {
             throw new DepartmentCannotBeDeleted("There are some employees in this department");
         }
 
+        UUID companyId = department.getCompany().getId();
+        String name = department.getName();
         departmentRepository.delete(department);
+        eventPublisher.publishEvent(new DepartmentDeletedDomainEvent(companyId, id, resolveActorUserId(), name));
+    }
+
+    private UUID resolveActorUserId() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof AuthSessionPrincipal p) {
+            return p.userId();
+        }
+        return null;
     }
 
     @Override
