@@ -41,6 +41,7 @@ import com.worknest.features.employee.repository.EmployeeRepository;
 import com.worknest.features.invitation.exception.InvalidInvitationRequestException;
 import com.worknest.features.invitation.repository.UserInvitationRepository;
 import com.worknest.features.notification.email.service.InvitationEmailService;
+import com.worknest.realtime.event.EmployeeProvisionedDomainEvent;
 
 import java.time.Instant;
 import java.util.Comparator;
@@ -49,6 +50,7 @@ import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -73,6 +75,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
     private final Sha256TokenHashUtility sha256TokenHashUtility;
     private final InvitationEmailService invitationEmailService;
     private final AuthAuditService authAuditService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${app.frontend.activation-link-base:https://app.worknest.local/activate-invitation}")
     private String activationLinkBase;
@@ -116,7 +119,9 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         employee.setHourlyRate(request.hourlyRate());
         Employee savedEmployee = employeeRepository.save(employee);
 
-        return processInvitation(normalizedEmail, user, company, roleAssignment, savedEmployee, authenticatedUser, inviterRole, PlatformRole.EMPLOYEE, request.jobTitle(), null);
+        ProvisioningResponse response = processInvitation(normalizedEmail, user, company, roleAssignment, savedEmployee, authenticatedUser, inviterRole, PlatformRole.EMPLOYEE, request.jobTitle(), null);
+        eventPublisher.publishEvent(new EmployeeProvisionedDomainEvent(company.getId(), savedEmployee.getId(), authenticatedUser.getId(), PlatformRole.EMPLOYEE, normalizedEmail));
+        return response;
     }
 
     @Override
@@ -159,7 +164,9 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
 
         assignEmployeesToStaff(request.assignedEmployeeIds(), roleAssignment, company);
 
-        return processInvitation(normalizedEmail, user, company, roleAssignment, savedEmployee, authenticatedUser, inviterRole, PlatformRole.STAFF, request.jobTitle(), request.preferredLanguage());
+        ProvisioningResponse response = processInvitation(normalizedEmail, user, company, roleAssignment, savedEmployee, authenticatedUser, inviterRole, PlatformRole.STAFF, request.jobTitle(), request.preferredLanguage());
+        eventPublisher.publishEvent(new EmployeeProvisionedDomainEvent(company.getId(), savedEmployee.getId(), authenticatedUser.getId(), PlatformRole.STAFF, normalizedEmail));
+        return response;
     }
 
     @Override

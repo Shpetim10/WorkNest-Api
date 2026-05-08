@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
+import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
@@ -48,7 +49,7 @@ public class EmailI18nServiceImpl implements EmailI18nService {
             context.setVariables(message.getTemplateModel());
             String htmlContent = templateEngine.process(message.getTemplateName(), context);
 
-            helper.setFrom(formatFromHeader());
+            helper.setFrom(mailProperties.getFromAddress(), mailProperties.getFromName());
             helper.setReplyTo(mailProperties.getReplyTo());
             helper.setTo(message.getTo());
             helper.setSubject(subject);
@@ -57,13 +58,9 @@ public class EmailI18nServiceImpl implements EmailI18nService {
             javaMailSender.send(mimeMessage);
             log.info("Email sent to {} with subject: {}", message.getTo(), subject);
 
-        } catch (MessagingException e) {
+        } catch (MessagingException | UnsupportedEncodingException e) {
             log.error("Failed to send email to {}", message.getTo(), e);
             throw new RuntimeException("Email delivery failed", e);
         }
-    }
-
-    private String formatFromHeader() {
-        return "%s <%s>".formatted(mailProperties.getFromName(), mailProperties.getFromAddress());
     }
 }

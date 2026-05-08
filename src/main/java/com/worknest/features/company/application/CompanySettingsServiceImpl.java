@@ -5,10 +5,14 @@ import com.worknest.domain.entities.Company;
 import com.worknest.features.company.dto.CompanySettingsResponse;
 import com.worknest.features.company.dto.UpdateCompanySettingsRequest;
 import com.worknest.features.company.repository.CompanyRepository;
+import com.worknest.realtime.event.CompanySettingsUpdatedDomainEvent;
+import com.worknest.security.AuthSessionPrincipal;
 import com.worknest.tenant.TenantContextHolder;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -18,6 +22,7 @@ import org.springframework.util.StringUtils;
 public class CompanySettingsServiceImpl implements CompanySettingsService {
 
     private final CompanyRepository companyRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -53,7 +58,17 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
             company.setLogoPath(request.logoPath());
         }
 
-        return toResponse(companyRepository.save(company));
+        CompanySettingsResponse response = toResponse(companyRepository.save(company));
+        eventPublisher.publishEvent(new CompanySettingsUpdatedDomainEvent(companyId, resolveActorUserId(), response));
+        return response;
+    }
+
+    private UUID resolveActorUserId() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof AuthSessionPrincipal p) {
+            return p.userId();
+        }
+        return null;
     }
 
     private Company resolveCompany(UUID companyId) {

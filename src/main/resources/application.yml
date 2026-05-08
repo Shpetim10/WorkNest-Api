@@ -5,8 +5,8 @@ spring:
     name: worknest-api
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:worknest_db}
-    username: ${POSTGRES_USER:root}
-    password: ${POSTGRES_PASSWORD:root}
+    username: ${POSTGRES_USER:dev}
+    password: ${POSTGRES_PASSWORD:dev}
     driver-class-name: org.postgresql.Driver
   jpa:
     open-in-view: false
@@ -40,8 +40,11 @@ spring:
       mail:
         smtp:
           auth: ${MAIL_SMTP_AUTH:true}
+          ssl:
+            enable: ${MAIL_SMTP_SSL_ENABLE:false}
           starttls:
             enable: ${MAIL_SMTP_STARTTLS_ENABLE:true}
+            required: ${MAIL_SMTP_STARTTLS_REQUIRED:false}
           connectiontimeout: ${MAIL_SMTP_CONNECTION_TIMEOUT_MS:5000}
           timeout: ${MAIL_SMTP_TIMEOUT_MS:5000}
           writetimeout: ${MAIL_SMTP_WRITE_TIMEOUT_MS:5000}
@@ -53,6 +56,7 @@ server:
   # servlet container (Tomcat) which handles the full RFC 7239 Forwarded header
   # in addition to X-Forwarded-{For,Proto,Host,Port}.
   forward-headers-strategy: NATIVE
+  address: 0.0.0.0
 
 management:
   endpoints:
@@ -99,6 +103,12 @@ app:
       access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:PT30M}
       refresh-token-expiry: ${JWT_REFRESH_TOKEN_EXPIRY:P7D}
       secret-base64: ${JWT_SECRET_BASE64}
+
+  realtime:
+    websocket-endpoint: ${APP_REALTIME_WEBSOCKET_ENDPOINT:/ws}
+    allowed-origin-patterns: ${APP_REALTIME_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*,exp://127.0.0.1:*,exp://localhost:*}
+    broker:
+      simple-enabled: ${APP_REALTIME_BROKER_SIMPLE_ENABLED:true}
 
 logging:
   level:

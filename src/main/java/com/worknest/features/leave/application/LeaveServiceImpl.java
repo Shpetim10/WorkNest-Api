@@ -14,6 +14,9 @@ import com.worknest.features.leave.dto.CreateLeaveRequestDto;
 import com.worknest.features.leave.dto.LeaveBalanceDto;
 import com.worknest.features.leave.dto.LeaveRequestDto;
 import com.worknest.features.leave.dto.RejectLeaveRequestDto;
+import com.worknest.realtime.event.LeaveRequestApprovedDomainEvent;
+import com.worknest.realtime.event.LeaveRequestRejectedDomainEvent;
+import com.worknest.realtime.event.LeaveRequestSubmittedDomainEvent;
 import com.worknest.features.leave.repository.LeaveBalanceRepository;
 import com.worknest.features.leave.repository.LeaveRequestRepository;
 import com.worknest.security.AuthSessionPrincipal;
@@ -24,6 +27,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -40,6 +44,7 @@ public class LeaveServiceImpl implements LeaveService {
     private final LeaveBalanceRepository leaveBalanceRepository;
     private final EmployeeRepository employeeRepository;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public List<LeaveBalanceDto> getMyBalance() {
@@ -97,7 +102,11 @@ public class LeaveServiceImpl implements LeaveService {
         leaveRequest.setTotalDays(totalDays);
         leaveRequest.setNote(request.note());
         leaveRequest.setStatus(LeaveStatus.PENDING);
-        leaveRequestRepository.save(leaveRequest);
+        LeaveRequest saved = leaveRequestRepository.save(leaveRequest);
+        eventPublisher.publishEvent(new LeaveRequestSubmittedDomainEvent(
+                principal.companyId(), saved.getId(), employee.getId(), principal.userId(),
+                saved.getLeaveType(), saved.getStartDate(), saved.getEndDate(), saved.getTotalDays()
+        ));
     }
 
     @Override
@@ -145,6 +154,11 @@ public class LeaveServiceImpl implements LeaveService {
         balance.setUsedDays(balance.getUsedDays() + request.getTotalDays());
         leaveBalanceRepository.save(balance);
         leaveRequestRepository.save(request);
+        UUID employeeUserId = request.getEmployee().getUser().getId();
+        eventPublisher.publishEvent(new LeaveRequestApprovedDomainEvent(
+                principal.companyId(), requestId, request.getEmployee().getId(),
+                employeeUserId, principal.userId(), request.getLeaveType()
+        ));
     }
 
     @Override
@@ -163,6 +177,11 @@ public class LeaveServiceImpl implements LeaveService {
         request.setReviewedByUser(reviewer);
         request.setReviewedAt(Instant.now());
         leaveRequestRepository.save(request);
+        UUID employeeUserId = request.getEmployee().getUser().getId();
+        eventPublisher.publishEvent(new LeaveRequestRejectedDomainEvent(
+                principal.companyId(), requestId, request.getEmployee().getId(),
+                employeeUserId, principal.userId(), request.getLeaveType(), dto.reason()
+        ));
     }
 
     private LeaveRequest loadRequest(UUID requestId, UUID companyId) {
