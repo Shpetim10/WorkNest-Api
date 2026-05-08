@@ -30,25 +30,6 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
-  mail:
-    host: ${MAIL_HOST:localhost}
-    port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:admin@example.com}
-    password: ${MAIL_PASSWORD:password}
-    protocol: ${MAIL_PROTOCOL:smtp}
-    properties:
-      mail:
-        smtp:
-          auth: ${MAIL_SMTP_AUTH:true}
-          ssl:
-            enable: ${MAIL_SMTP_SSL_ENABLE:false}
-          starttls:
-            enable: ${MAIL_SMTP_STARTTLS_ENABLE:true}
-            required: ${MAIL_SMTP_STARTTLS_REQUIRED:false}
-          connectiontimeout: ${MAIL_SMTP_CONNECTION_TIMEOUT_MS:5000}
-          timeout: ${MAIL_SMTP_TIMEOUT_MS:5000}
-          writetimeout: ${MAIL_SMTP_WRITE_TIMEOUT_MS:5000}
-
 server:
   port: ${APP_PORT:8080}
   # Honour X-Forwarded-* / Forwarded headers sent by trusted reverse-proxies
@@ -79,6 +60,7 @@ app:
   media:
     local-root: ${APP_MEDIA_LOCAL_ROOT:storage/media}
   mail:
+    api-key: ${RESEND_API_KEY}
     from-address: ${MAIL_FROM_ADDRESS:info@worknest.com}
     from-name: ${MAIL_FROM_NAME:WorkNest}
     reply-to: ${MAIL_REPLY_TO:${MAIL_FROM_ADDRESS:info@worknest.com}}

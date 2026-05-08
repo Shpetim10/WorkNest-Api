@@ -14,6 +14,9 @@ import org.springframework.validation.annotation.Validated;
 public class MailProperties {
 
     @NotBlank
+    private String apiKey;
+
+    @NotBlank
     @Email
     private String fromAddress;
 
