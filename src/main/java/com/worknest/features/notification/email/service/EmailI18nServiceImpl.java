@@ -1,21 +1,18 @@
 package com.worknest.features.notification.email.service;
 
+import com.resend.Resend;
+import com.resend.core.exception.ResendException;
+import com.resend.services.emails.model.CreateEmailOptions;
 import com.worknest.common.config.MailProperties;
 import com.worknest.features.notification.email.dto.EmailMessage;
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
-import java.io.UnsupportedEncodingException;
-import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 @Slf4j
@@ -23,7 +20,7 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class EmailI18nServiceImpl implements EmailI18nService {
 
-    private final JavaMailSender javaMailSender;
+    private final Resend resend;
     private final SpringTemplateEngine templateEngine;
     private final MessageSource messageSource;
     private final MailProperties mailProperties;
@@ -32,13 +29,6 @@ public class EmailI18nServiceImpl implements EmailI18nService {
     @Override
     public void sendMail(EmailMessage message, Locale locale) {
         try {
-            MimeMessage mimeMessage = javaMailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(
-                    mimeMessage,
-                    MimeMessageHelper.MULTIPART_MODE_MIXED_RELATED,
-                    StandardCharsets.UTF_8.name()
-            );
-
             String subject = messageSource.getMessage(
                     message.getSubjectKey(),
                     message.getSubjectArgs(),
@@ -49,18 +39,24 @@ public class EmailI18nServiceImpl implements EmailI18nService {
             context.setVariables(message.getTemplateModel());
             String htmlContent = templateEngine.process(message.getTemplateName(), context);
 
-            helper.setFrom(mailProperties.getFromAddress(), mailProperties.getFromName());
-            helper.setReplyTo(mailProperties.getReplyTo());
-            helper.setTo(message.getTo());
-            helper.setSubject(subject);
-            helper.setText(htmlContent, true);
+            CreateEmailOptions email = CreateEmailOptions.builder()
+                    .from(formatFromHeader())
+                    .replyTo(mailProperties.getReplyTo())
+                    .to(message.getTo())
+                    .subject(subject)
+                    .html(htmlContent)
+                    .build();
 
-            javaMailSender.send(mimeMessage);
+            resend.emails().send(email);
             log.info("Email sent to {} with subject: {}", message.getTo(), subject);
 
-        } catch (MessagingException | UnsupportedEncodingException e) {
+        } catch (ResendException | RuntimeException e) {
             log.error("Failed to send email to {}", message.getTo(), e);
             throw new RuntimeException("Email delivery failed", e);
         }
+    }
+
+    private String formatFromHeader() {
+        return "%s <%s>".formatted(mailProperties.getFromName(), mailProperties.getFromAddress());
     }
 }
