@@ -14,7 +14,7 @@ public interface LeaveService {
 
     List<LeaveBalanceDto> getMyBalance();
 
-    List<LeaveRequestDto> getMyRequests();
+    Page<LeaveRequestDto> getMyRequests(Pageable pageable);
 
     void submitRequest(CreateLeaveRequestDto request);
 

@@ -6,10 +6,12 @@ import com.worknest.features.companySite.dto.TrustedNetworkResponse;
 import com.worknest.features.companySite.dto.UpdateNetworkRequest;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface SiteTrustedNetworkService {
     
-    List<TrustedNetworkResponse> listNetworks(UUID companyId, UUID siteId);
+    Page<TrustedNetworkResponse> listNetworks(UUID companyId, UUID siteId, Pageable pageable);
     
     TrustedNetworkResponse updateNetwork(UUID companyId, UUID siteId, UUID networkId, UpdateNetworkRequest request);
 }

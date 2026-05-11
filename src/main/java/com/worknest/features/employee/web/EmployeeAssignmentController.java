@@ -1,6 +1,8 @@
 package com.worknest.features.employee.web;
 
 import com.worknest.common.api.ApiResponse;
+import com.worknest.common.api.PaginatedResponse;
+import com.worknest.common.api.PaginationSupport;
 import com.worknest.features.employee.application.EmployeeAssignmentService;
 import com.worknest.features.employee.dto.EmployeeAssignmentBoardResponse;
 import com.worknest.features.employee.dto.ManagerSummaryDto;
@@ -13,7 +15,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -27,9 +28,17 @@ public class EmployeeAssignmentController {
     @GetMapping("/managers")
     @Operation(summary = "List Assignable Managers", description = "Retrieves all STAFF members in the company capable of supervising employees.")
     //@PreAuthorize("@teamSecurity.hasPermission(#companyId, 'MANAGE_ASSIGNMENTS')")
-    public ResponseEntity<ApiResponse<List<ManagerSummaryDto>>> listManagers(@PathVariable UUID companyId) {
-        List<ManagerSummaryDto> managers = employeeAssignmentService.listAssignableManagers(companyId);
-        return ResponseEntity.ok(ApiResponse.success("Managers retrieved successfully", managers));
+    public ResponseEntity<ApiResponse<PaginatedResponse<ManagerSummaryDto>>> listManagers(
+            @PathVariable UUID companyId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Managers retrieved successfully",
+                PaginatedResponse.from(employeeAssignmentService.listAssignableManagers(
+                        companyId,
+                        PaginationSupport.pageable(page, size)))
+        ));
     }
 
     @GetMapping("/{roleAssignmentId}/employee-assignments")
@@ -37,8 +46,17 @@ public class EmployeeAssignmentController {
     //@PreAuthorize("@teamSecurity.hasPermission(#companyId, 'MANAGE_ASSIGNMENTS')")
     public ResponseEntity<ApiResponse<EmployeeAssignmentBoardResponse>> getAssignmentBoard(
             @PathVariable UUID companyId,
-            @PathVariable UUID roleAssignmentId) {
-        EmployeeAssignmentBoardResponse board = employeeAssignmentService.getManagerAssignmentBoard(companyId, roleAssignmentId);
+            @PathVariable UUID roleAssignmentId,
+            @RequestParam(required = false) Integer assignedPage,
+            @RequestParam(required = false) Integer assignedSize,
+            @RequestParam(required = false) Integer unassignedPage,
+            @RequestParam(required = false) Integer unassignedSize) {
+        EmployeeAssignmentBoardResponse board = employeeAssignmentService.getManagerAssignmentBoard(
+                companyId,
+                roleAssignmentId,
+                PaginationSupport.pageable(assignedPage, assignedSize),
+                PaginationSupport.pageable(unassignedPage, unassignedSize)
+        );
         return ResponseEntity.ok(ApiResponse.success("Assignment board retrieved successfully", board));
     }
 

@@ -1,6 +1,7 @@
 package com.worknest.features.department.application;
 
 import com.worknest.domain.entities.Company;
+import com.worknest.common.api.PaginationSupport;
 import com.worknest.domain.entities.Department;
 import com.worknest.domain.enums.DepartmentStatus;
 import com.worknest.features.department.dto.CreateDepartmentRequest;
@@ -22,6 +23,8 @@ import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -77,14 +80,15 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<DepartmentListResponse> listDepartments(UUID companyId) {
-        return departmentRepository.findAllByCompanyId(companyId)
+    public Page<DepartmentListResponse> listDepartments(UUID companyId, Pageable pageable) {
+        List<DepartmentListResponse> departments = departmentRepository.findAllByCompanyId(companyId)
                 .stream()
                 .map(e->{
                     int employeeCount= employeeRepository.countByDepartmentId(e.getId());
                     return DepartmentListResponse.fromEntity(e,employeeCount);
                 })
                 .toList();
+        return PaginationSupport.page(departments, pageable);
     }
 
     @Override

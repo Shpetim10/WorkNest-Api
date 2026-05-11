@@ -1,13 +1,14 @@
 package com.worknest.features.announcement.web;
 
 import com.worknest.common.api.ApiResponse;
+import com.worknest.common.api.PaginatedResponse;
+import com.worknest.common.api.PaginationSupport;
 import com.worknest.features.announcement.application.AnnouncementService;
 import com.worknest.features.announcement.dto.MobileAnnouncementDetail;
 import com.worknest.features.announcement.dto.MobileAnnouncementListItem;
 import com.worknest.features.announcement.dto.UnreadCountResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -28,8 +30,14 @@ public class MobileAnnouncementController {
     @GetMapping
     @PreAuthorize("@companySecurity.hasCurrentCompanyRole('EMPLOYEE', 'STAFF', 'ADMIN', 'SUPERADMIN')")
     @Operation(summary = "List announcements", description = "Returns all announcements visible to the current employee")
-    public ApiResponse<List<MobileAnnouncementListItem>> list() {
-        return ApiResponse.success("Announcements loaded", announcementService.listForEmployee());
+    public ApiResponse<PaginatedResponse<MobileAnnouncementListItem>> list(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        return ApiResponse.success(
+                "Announcements loaded",
+                PaginatedResponse.from(announcementService.listForEmployee(PaginationSupport.pageable(page, size)))
+        );
     }
 
     @GetMapping("/unread-count")

@@ -1,6 +1,7 @@
 package com.worknest.features.attendance.web;
 
 import com.worknest.common.api.ApiResponse;
+import com.worknest.common.api.PaginationSupport;
 import com.worknest.features.attendance.application.StaffAttendanceService;
 import com.worknest.features.attendance.dto.AdjustAttendanceDayRecordRequest;
 import com.worknest.features.attendance.dto.AttendanceDashboardResponse;
@@ -40,9 +41,14 @@ public class StaffAttendanceController {
     public ApiResponse<AttendanceDashboardResponse> dashboard(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) UUID departmentId,
-            @RequestParam(required = false) UUID siteId
+            @RequestParam(required = false) UUID siteId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
     ) {
-        return ApiResponse.success("Attendance dashboard loaded", staffAttendanceService.dashboard(date, departmentId, siteId));
+        return ApiResponse.success(
+                "Attendance dashboard loaded",
+                staffAttendanceService.dashboard(date, departmentId, siteId, PaginationSupport.pageable(page, size))
+        );
     }
 
     @PostMapping("/employees/{employeeId}/check-in")
