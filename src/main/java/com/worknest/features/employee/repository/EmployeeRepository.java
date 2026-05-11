@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.time.LocalDate;
 import java.util.UUID;
 
 public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
@@ -52,9 +53,27 @@ public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
 
     java.util.Optional<Employee> findByUserIdAndCompanyId(UUID userId, UUID companyId);
 
+    java.util.Optional<Employee> findByIdAndCompanyId(UUID id, UUID companyId);
+
+    List<Employee> findAllByCompanyId(UUID companyId);
+
     @Query("SELECT COUNT(e) FROM Employee e WHERE e.supervisorRoleAssignment.id = :managerId")
     long countBySupervisorRoleAssignmentId(@Param("managerId") UUID managerId);
 
     @Query("SELECT COUNT(e) FROM Employee e WHERE e.department.id=:departmentId")
     int countByDepartmentId(@Param("departmentId") UUID departmentId);
+
+    @Query("""
+            SELECT e FROM Employee e
+            WHERE e.company.id = :companyId
+              AND (:employeeIds IS NULL OR e.id IN :employeeIds)
+              AND e.startDate <= :periodEnd
+              AND (e.contractExpiryDate IS NULL OR e.contractExpiryDate >= :periodStart)
+            ORDER BY e.createdAt ASC
+            """)
+    List<Employee> findPayrollCandidates(
+            @Param("companyId") UUID companyId,
+            @Param("employeeIds") List<UUID> employeeIds,
+            @Param("periodStart") LocalDate periodStart,
+            @Param("periodEnd") LocalDate periodEnd);
 }

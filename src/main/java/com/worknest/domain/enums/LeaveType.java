@@ -3,5 +3,9 @@ package com.worknest.domain.enums;
 public enum LeaveType {
     VACATION,
     SICK,
-    PERSONAL
+    PERSONAL,
+    UNPAID,
+    MATERNITY,
+    PATERNITY,
+    OTHER
 }

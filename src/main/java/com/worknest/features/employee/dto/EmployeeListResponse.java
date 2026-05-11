@@ -3,6 +3,8 @@ package com.worknest.features.employee.dto;
 import java.util.UUID;
 import java.time.LocalDate;
 import com.worknest.domain.enums.EmploymentStatus;
+import com.worknest.domain.enums.EmploymentType;
+import com.worknest.domain.enums.PlatformRole;
 
 public record EmployeeListResponse(
         UUID id,
@@ -16,6 +18,8 @@ public record EmployeeListResponse(
         String jobTitle,
         String companySiteName,
         UUID companySiteId,
+        PlatformRole platformRole,
+        EmploymentType employmentType,
         LocalDate hireDate,
         EmploymentStatus status
 ) {}
