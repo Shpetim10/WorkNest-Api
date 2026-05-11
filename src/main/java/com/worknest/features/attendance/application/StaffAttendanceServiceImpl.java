@@ -2,6 +2,8 @@ package com.worknest.features.attendance.application;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.worknest.common.api.PaginationMetadata;
+import com.worknest.common.api.PaginationSupport;
 import com.worknest.common.exception.BusinessException;
 import com.worknest.domain.entities.AttendanceDayRecord;
 import com.worknest.domain.entities.AttendanceEvent;
@@ -58,6 +60,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -81,7 +84,7 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
 
     @Override
     @Transactional(readOnly = true)
-    public AttendanceDashboardResponse dashboard(LocalDate date, UUID departmentId, UUID siteId) {
+    public AttendanceDashboardResponse dashboard(LocalDate date, UUID departmentId, UUID siteId, Pageable pageable) {
         AuthSessionPrincipal principal = principal();
         UUID companyId = principal.companyId();
 
@@ -124,7 +127,14 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
                 .toList();
 
         AttendanceSummaryDto summary = computeSummary(rows);
-        return new AttendanceDashboardResponse(resolvedDate, company.getTimezone(), summary, rows);
+        var pagedRows = PaginationSupport.page(rows, pageable);
+        return new AttendanceDashboardResponse(
+                resolvedDate,
+                company.getTimezone(),
+                summary,
+                pagedRows.getContent(),
+                PaginationMetadata.from(pagedRows)
+        );
     }
 
     @Override
@@ -508,7 +518,7 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         if (employee.getCompanySite() != null) {
             return employee.getCompanySite();
         }
-        return companySiteRepository.findAllByCompanyIdOrderByCreatedAtDesc(companyId).stream()
+        return companySiteRepository.findAllByCompanyIdOrderByCreatedAtDesc(companyId, Pageable.unpaged()).stream()
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(HttpStatus.UNPROCESSABLE_ENTITY, "NO_SITE_FOUND", "No site configured for this company."));
     }

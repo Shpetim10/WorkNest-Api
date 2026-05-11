@@ -7,16 +7,18 @@ import com.worknest.features.announcement.dto.MobileAnnouncementListItem;
 import com.worknest.features.announcement.dto.UnreadCountResponse;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface AnnouncementService {
 
     AnnouncementListResponse create(UUID companyId, CreateAnnouncementRequest request);
 
-    List<AnnouncementListResponse> listForAdmin(UUID companyId);
+    Page<AnnouncementListResponse> listForAdmin(UUID companyId, Pageable pageable);
 
     void delete(UUID companyId, UUID id);
 
-    List<MobileAnnouncementListItem> listForEmployee();
+    Page<MobileAnnouncementListItem> listForEmployee(Pageable pageable);
 
     MobileAnnouncementDetail getDetail(UUID id);
 

@@ -7,11 +7,13 @@ import com.worknest.features.department.dto.DepartmentResponse;
 import com.worknest.features.department.dto.UpdateDepartmentRequest;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface DepartmentService {
     DepartmentResponse createDepartment(CreateDepartmentRequest request);
     DepartmentResponse getDepartment(UUID id);
-    List<DepartmentListResponse> listDepartments(UUID companyId);
+    Page<DepartmentListResponse> listDepartments(UUID companyId, Pageable pageable);
     DepartmentResponse updateDepartment(UUID id, UpdateDepartmentRequest request);
     void deleteDepartment(UUID id);
     List<DepartmentLookup> lookupDepartments(UUID companyId);

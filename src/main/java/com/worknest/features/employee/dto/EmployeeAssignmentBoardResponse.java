@@ -1,11 +1,11 @@
 package com.worknest.features.employee.dto;
 
-import java.util.List;
+import com.worknest.common.api.PaginatedResponse;
 
 public record EmployeeAssignmentBoardResponse(
     ManagerSummaryDto manager,
-    List<EmployeeSummaryDto> assignedEmployees,
-    List<EmployeeSummaryDto> unassignedEmployees,
+    PaginatedResponse<EmployeeSummaryDto> assignedEmployees,
+    PaginatedResponse<EmployeeSummaryDto> unassignedEmployees,
     int assignedCount,
     int unassignedCount
 ) {}

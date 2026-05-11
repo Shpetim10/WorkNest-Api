@@ -1,5 +1,7 @@
 package com.worknest.features.attendance.application;
 
+import com.worknest.common.api.PaginationMetadata;
+import com.worknest.common.api.PaginationSupport;
 import com.worknest.common.exception.BusinessException;
 import com.worknest.domain.entities.AttendanceDayRecord;
 import com.worknest.features.attendance.dto.AdminAttendanceMonthlyReportResponse;
@@ -10,6 +12,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,7 +25,7 @@ public class AdminAttendanceReportServiceImpl implements AdminAttendanceReportSe
     private final AttendanceDayRecordRepository attendanceDayRecordRepository;
 
     @Override
-    public AdminAttendanceMonthlyReportResponse monthly(UUID companyId, int year, int month, UUID siteId) {
+    public AdminAttendanceMonthlyReportResponse monthly(UUID companyId, int year, int month, UUID siteId, Pageable pageable) {
         UUID tenantCompanyId = TenantContextHolder.get()
                 .orElseThrow(() -> new BusinessException(HttpStatus.UNAUTHORIZED, "TENANT_CONTEXT_MISSING", "No tenant context found."))
                 .companyId();
@@ -50,6 +53,12 @@ public class AdminAttendanceReportServiceImpl implements AdminAttendanceReportSe
                 ))
                 .toList();
 
-        return new AdminAttendanceMonthlyReportResponse(year, month, rows);
+        var pagedRows = PaginationSupport.page(rows, pageable);
+        return new AdminAttendanceMonthlyReportResponse(
+                year,
+                month,
+                pagedRows.getContent(),
+                PaginationMetadata.from(pagedRows)
+        );
     }
 }

@@ -1,6 +1,8 @@
 package com.worknest.features.companySite.web;
 
 import com.worknest.common.api.ApiResponse;
+import com.worknest.common.api.PaginatedResponse;
+import com.worknest.common.api.PaginationSupport;
 import com.worknest.common.web.ClientIpResolver;
 import com.worknest.features.companySite.application.CompanySiteCreationService;
 import com.worknest.features.companySite.application.CompanySiteLifecycleService;
@@ -39,6 +41,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
 
 /**
@@ -73,8 +76,15 @@ public class CompanySiteController {
             description = "Returns all sites for the given company ordered by createdAt descending. " +
                           "The response includes the full site payload needed by the frontend list and future edit-prefill flows."
     )
-    public ApiResponse<List<CompanySiteResponse>> listSites(@PathVariable UUID companyId) {
-        return ApiResponse.success("Sites retrieved successfully", queryService.listSites(companyId));
+    public ApiResponse<PaginatedResponse<CompanySiteResponse>> listSites(
+            @PathVariable UUID companyId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        return ApiResponse.success(
+                "Sites retrieved successfully",
+                PaginatedResponse.from(queryService.listSites(companyId, PaginationSupport.pageable(page, size)))
+        );
     }
 
     @GetMapping("/{siteId}")
@@ -175,11 +185,16 @@ public class CompanySiteController {
     @GetMapping("/{siteId}/networks")
     @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     @Operation(summary = "List site trusted networks", description = "Returns all trusted networks for a specific site.")
-    public ApiResponse<List<TrustedNetworkResponse>> listNetworks(
+    public ApiResponse<PaginatedResponse<TrustedNetworkResponse>> listNetworks(
             @PathVariable UUID companyId,
-            @PathVariable UUID siteId
+            @PathVariable UUID siteId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
     ) {
-        return ApiResponse.success("Networks retrieved successfully", networkService.listNetworks(companyId, siteId));
+        return ApiResponse.success(
+                "Networks retrieved successfully",
+                PaginatedResponse.from(networkService.listNetworks(companyId, siteId, PaginationSupport.pageable(page, size)))
+        );
     }
 
     @PutMapping("/{siteId}/networks/{networkId}")

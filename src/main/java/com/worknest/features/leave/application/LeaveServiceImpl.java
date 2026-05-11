@@ -63,14 +63,12 @@ public class LeaveServiceImpl implements LeaveService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<LeaveRequestDto> getMyRequests() {
+    public Page<LeaveRequestDto> getMyRequests(Pageable pageable) {
         AuthSessionPrincipal principal = principal();
         Employee employee = resolveCurrentEmployee(principal);
         return leaveRequestRepository
-                .findAllByCompanyIdAndEmployeeIdOrderByCreatedAtDesc(principal.companyId(), employee.getId())
-                .stream()
-                .map(this::toDto)
-                .toList();
+                .findAllByCompanyIdAndEmployeeIdOrderByCreatedAtDesc(principal.companyId(), employee.getId(), pageable)
+                .map(this::toDto);
     }
 
     @Override
