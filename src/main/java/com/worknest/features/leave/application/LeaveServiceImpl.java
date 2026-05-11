@@ -63,14 +63,12 @@ public class LeaveServiceImpl implements LeaveService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<LeaveRequestDto> getMyRequests() {
+    public Page<LeaveRequestDto> getMyRequests(Pageable pageable) {
         AuthSessionPrincipal principal = principal();
         Employee employee = resolveCurrentEmployee(principal);
         return leaveRequestRepository
-                .findAllByCompanyIdAndEmployeeIdOrderByCreatedAtDesc(principal.companyId(), employee.getId())
-                .stream()
-                .map(this::toDto)
-                .toList();
+                .findAllByCompanyIdAndEmployeeIdOrderByCreatedAtDesc(principal.companyId(), employee.getId(), pageable)
+                .map(this::toDto);
     }
 
     @Override
@@ -224,6 +222,8 @@ public class LeaveServiceImpl implements LeaveService {
             case VACATION -> employee.getLeaveDaysPerYear() != null ? employee.getLeaveDaysPerYear() : 20;
             case SICK -> 10;
             case PERSONAL -> 5;
+            case UNPAID -> 0;
+            case MATERNITY, PATERNITY, OTHER -> employee.getLeaveDaysPerYear() != null ? employee.getLeaveDaysPerYear() : 20;
         };
     }
 

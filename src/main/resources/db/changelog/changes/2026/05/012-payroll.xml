@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <changeSet id="012-payroll-adjustments" author="codex">
+        <createTable tableName="payroll_adjustments">
+            <column name="id" type="uuid">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_payroll_adjustments"/>
+            </column>
+            <column name="company_id" type="uuid">
+                <constraints nullable="false" foreignKeyName="fk_payroll_adjustments_company" references="companies(id)"/>
+            </column>
+            <column name="employee_id" type="uuid">
+                <constraints nullable="false" foreignKeyName="fk_payroll_adjustments_employee" references="employees(id)"/>
+            </column>
+            <column name="payroll_year" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payroll_month" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="adjustment_type" type="varchar(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="amount" type="numeric(14,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reason" type="varchar(300)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="notes" type="text"/>
+            <column name="created_by_user_id" type="uuid">
+                <constraints nullable="false" foreignKeyName="fk_payroll_adjustments_created_by" references="users(id)"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <sql>
+            ALTER TABLE payroll_adjustments
+            ADD CONSTRAINT chk_payroll_adjustments_month
+            CHECK (payroll_month between 1 and 12)
+        </sql>
+        <sql>
+            ALTER TABLE payroll_adjustments
+            ADD CONSTRAINT chk_payroll_adjustments_amount_positive
+            CHECK (amount &gt; 0)
+        </sql>
+        <createIndex tableName="payroll_adjustments" indexName="idx_payroll_adjustments_company_employee_period">
+            <column name="company_id"/>
+            <column name="employee_id"/>
+            <column name="payroll_year"/>
+            <column name="payroll_month"/>
+        </createIndex>
+        <createIndex tableName="payroll_adjustments" indexName="idx_payroll_adjustments_type">
+            <column name="adjustment_type"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="012-payroll-results" author="codex">
+        <createTable tableName="payroll_results">
+            <column name="id" type="uuid">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_payroll_results"/>
+            </column>
+            <column name="company_id" type="uuid">
+                <constraints nullable="false" foreignKeyName="fk_payroll_results_company" references="companies(id)"/>
+            </column>
+            <column name="employee_id" type="uuid">
+                <constraints nullable="false" foreignKeyName="fk_payroll_results_employee" references="employees(id)"/>
+            </column>
+            <column name="payroll_year" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payroll_month" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="base_pay" type="numeric(14,2)" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="gross_earnings" type="numeric(14,2)" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_deductions" type="numeric(14,2)" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="net_pay" type="numeric(14,2)" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="calculation_snapshot_json" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="calculated_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="calculated_by_user_id" type="uuid">
+                <constraints foreignKeyName="fk_payroll_results_calculated_by" references="users(id)"/>
+            </column>
+            <column name="version" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint tableName="payroll_results"
+                             constraintName="uk_payroll_results_employee_period"
+                             columnNames="company_id,employee_id,payroll_year,payroll_month"/>
+        <sql>
+            ALTER TABLE payroll_results
+            ADD CONSTRAINT chk_payroll_results_month
+            CHECK (payroll_month between 1 and 12)
+        </sql>
+        <createIndex tableName="payroll_results" indexName="idx_payroll_results_company_period">
+            <column name="company_id"/>
+            <column name="payroll_year"/>
+            <column name="payroll_month"/>
+        </createIndex>
+        <createIndex tableName="payroll_results" indexName="idx_payroll_results_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

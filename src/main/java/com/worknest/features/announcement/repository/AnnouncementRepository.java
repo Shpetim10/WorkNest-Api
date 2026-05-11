@@ -4,6 +4,8 @@ import com.worknest.domain.entities.Announcement;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,7 +14,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface AnnouncementRepository extends JpaRepository<Announcement, UUID> {
 
-    List<Announcement> findAllByCompanyIdOrderByCreatedAtDesc(UUID companyId);
+    Page<Announcement> findAllByCompanyIdOrderByCreatedAtDesc(UUID companyId, Pageable pageable);
 
     Optional<Announcement> findByIdAndCompanyId(UUID id, UUID companyId);
 
@@ -29,9 +31,10 @@ public interface AnnouncementRepository extends JpaRepository<Announcement, UUID
             )
             ORDER BY a.createdAt DESC
             """)
-    List<Announcement> findVisibleToEmployee(
+    Page<Announcement> findVisibleToEmployee(
             @Param("companyId") UUID companyId,
             @Param("employeeId") UUID employeeId,
-            @Param("departmentId") UUID departmentId
+            @Param("departmentId") UUID departmentId,
+            Pageable pageable
     );
 }

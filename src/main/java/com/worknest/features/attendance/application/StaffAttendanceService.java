@@ -10,10 +10,11 @@ import com.worknest.features.attendance.dto.ManualCheckOutRequest;
 import com.worknest.features.attendance.dto.ReviewAttendanceEventRequest;
 import java.time.LocalDate;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 
 public interface StaffAttendanceService {
 
-    AttendanceDashboardResponse dashboard(LocalDate date, UUID departmentId, UUID siteId);
+    AttendanceDashboardResponse dashboard(LocalDate date, UUID departmentId, UUID siteId, Pageable pageable);
 
     EmployeeAttendanceDayDetailDto getEmployeeDetail(UUID employeeId, LocalDate date);
 

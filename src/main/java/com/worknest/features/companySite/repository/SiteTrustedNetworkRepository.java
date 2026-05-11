@@ -4,6 +4,8 @@ import com.worknest.domain.entities.SiteTrustedNetwork;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -19,7 +21,7 @@ public interface SiteTrustedNetworkRepository extends JpaRepository<SiteTrustedN
     /**
      * Returns all rules for a given site ordered by priority (lowest number first).
      */
-    List<SiteTrustedNetwork> findAllBySiteIdOrderByPriorityOrderAsc(UUID siteId);
+    Page<SiteTrustedNetwork> findAllBySiteIdOrderByPriorityOrderAsc(UUID siteId, Pageable pageable);
 
     /**
      * Returns all active rules for a given site ordered by priority.

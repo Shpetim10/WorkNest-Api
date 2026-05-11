@@ -1,5 +1,7 @@
 package com.worknest.features.employee.application;
 
+import com.worknest.common.api.PaginatedResponse;
+import com.worknest.common.api.PaginationSupport;
 import com.worknest.domain.entities.Employee;
 import com.worknest.domain.entities.EmployeeSupervisorHistory;
 import com.worknest.domain.entities.RoleAssignment;
@@ -24,6 +26,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -41,9 +45,9 @@ public class EmployeeAssignmentServiceImpl implements EmployeeAssignmentService 
 
     @Override
     @Transactional(readOnly = true)
-    public List<ManagerSummaryDto> listAssignableManagers(UUID companyId) {
+    public Page<ManagerSummaryDto> listAssignableManagers(UUID companyId, Pageable pageable) {
         List<RoleAssignment> staffAssignments = roleAssignmentRepository.findAllActiveStaffByCompanyId(companyId);
-        return staffAssignments.stream()
+        List<ManagerSummaryDto> managers = staffAssignments.stream()
                 .map(ra -> new ManagerSummaryDto(
                         ra.getId(),
                         ra.getUser().getId(),
@@ -53,11 +57,17 @@ public class EmployeeAssignmentServiceImpl implements EmployeeAssignmentService 
                         ra.getJobTitle()
                 ))
                 .collect(Collectors.toList());
+        return PaginationSupport.page(managers, pageable);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public EmployeeAssignmentBoardResponse getManagerAssignmentBoard(UUID companyId, UUID managerRoleAssignmentId) {
+    public EmployeeAssignmentBoardResponse getManagerAssignmentBoard(
+            UUID companyId,
+            UUID managerRoleAssignmentId,
+            Pageable assignedPageable,
+            Pageable unassignedPageable
+    ) {
         RoleAssignment manager = validateManager(companyId, managerRoleAssignmentId);
 
         List<Employee> assigned = employeeRepository.findAllAssignedToManager(companyId, PlatformRole.EMPLOYEE, manager.getId());
@@ -77,8 +87,8 @@ public class EmployeeAssignmentServiceImpl implements EmployeeAssignmentService 
 
         return new EmployeeAssignmentBoardResponse(
                 managerSummary,
-                assignedDtos,
-                unassignedDtos,
+                PaginatedResponse.from(PaginationSupport.page(assignedDtos, assignedPageable)),
+                PaginatedResponse.from(PaginationSupport.page(unassignedDtos, unassignedPageable)),
                 assignedDtos.size(),
                 unassignedDtos.size()
         );

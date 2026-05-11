@@ -1,6 +1,8 @@
 package com.worknest.features.employee.web;
 
 import com.worknest.common.api.ApiResponse;
+import com.worknest.common.api.PaginatedResponse;
+import com.worknest.common.api.PaginationSupport;
 import com.worknest.features.employee.application.EmployeeQueryService;
 import com.worknest.features.employee.dto.EmployeeDetailsResponse;
 import com.worknest.features.employee.dto.EmployeeListResponse;
@@ -31,8 +33,15 @@ public class EmployeeQueryController {
     @GetMapping("/staff")
     @Operation(summary = "List Company Staff", description = "Retrieves a comprehensive list of all staff and admin members for the company table view.")
     //@PreAuthorize("@teamSecurity.hasPermission(#companyId, 'MANAGE_STAFF')")
-    public ApiResponse<List<StaffListResponse>> listStaff(@PathVariable UUID companyId) {
-        return ApiResponse.success("Staff members retrieved successfully", employeeQueryService.listStaff(companyId));
+    public ApiResponse<PaginatedResponse<StaffListResponse>> listStaff(
+            @PathVariable UUID companyId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        return ApiResponse.success(
+                "Staff members retrieved successfully",
+                PaginatedResponse.from(employeeQueryService.listStaff(companyId, PaginationSupport.pageable(page, size)))
+        );
     }
 
     @GetMapping("/staff/{staffId}")
@@ -48,8 +57,15 @@ public class EmployeeQueryController {
     @GetMapping("/employees")
     @Operation(summary = "List Company Employees", description = "Retrieves a comprehensive list of all mobile/field employees for the company table view.")
     //@PreAuthorize("@teamSecurity.hasPermission(#companyId, 'MANAGE_EMPLOYEES')")
-    public ApiResponse<List<EmployeeListResponse>> listEmployees(@PathVariable UUID companyId) {
-        return ApiResponse.success("Employees retrieved successfully", employeeQueryService.listEmployees(companyId));
+    public ApiResponse<PaginatedResponse<EmployeeListResponse>> listEmployees(
+            @PathVariable UUID companyId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        return ApiResponse.success(
+                "Employees retrieved successfully",
+                PaginatedResponse.from(employeeQueryService.listEmployees(companyId, PaginationSupport.pageable(page, size)))
+        );
     }
 
     @GetMapping("/employees/{employeeId}")
@@ -65,22 +81,36 @@ public class EmployeeQueryController {
     @GetMapping("/employees/unassigned")
     @Operation(summary = "List Unassigned Employees", description = "Retrieves a list of employees not assigned to any manager within a specific department.")
     //@PreAuthorize("@teamSecurity.hasPermission(#companyId, 'MANAGE_EMPLOYEES')")
-    public ApiResponse<List<EmployeeListResponse>> listUnassignedEmployees(
+    public ApiResponse<PaginatedResponse<EmployeeListResponse>> listUnassignedEmployees(
             @PathVariable UUID companyId,
-            @RequestParam UUID departmentId) {
-        return ApiResponse.success("Unassigned employees retrieved successfully", employeeQueryService.listUnassignedEmployees(companyId, departmentId));
+            @RequestParam UUID departmentId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        return ApiResponse.success(
+                "Unassigned employees retrieved successfully",
+                PaginatedResponse.from(employeeQueryService.listUnassignedEmployees(
+                        companyId,
+                        departmentId,
+                        PaginationSupport.pageable(page, size)))
+        );
     }
 
     @GetMapping("/employees/assigned")
     @Operation(summary = "List Assigned Employees", description = "Retrieves employees assigned to a specific supervisor within a specific department.")
     //@PreAuthorize("@teamSecurity.hasPermission(#companyId, 'MANAGE_EMPLOYEES')")
-    public ApiResponse<List<EmployeeListResponse>> listAssignedEmployees(
+    public ApiResponse<PaginatedResponse<EmployeeListResponse>> listAssignedEmployees(
             @PathVariable UUID companyId,
             @RequestParam UUID departmentId,
-            @RequestParam UUID supervisorRoleAssignmentId) {
+            @RequestParam UUID supervisorRoleAssignmentId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
         return ApiResponse.success(
                 "Assigned employees retrieved successfully",
-                employeeQueryService.listAssignedEmployees(companyId, departmentId, supervisorRoleAssignmentId)
+                PaginatedResponse.from(employeeQueryService.listAssignedEmployees(
+                        companyId,
+                        departmentId,
+                        supervisorRoleAssignmentId,
+                        PaginationSupport.pageable(page, size)))
         );
     }
 

@@ -37,7 +37,7 @@ server:
   # servlet container (Tomcat) which handles the full RFC 7239 Forwarded header
   # in addition to X-Forwarded-{For,Proto,Host,Port}.
   forward-headers-strategy: NATIVE
-  server: 127.0.0.1
+  address: 127.0.0.1
 
 management:
   endpoints:
