@@ -1,5 +1,6 @@
 package com.worknest.features.employee.application;
 
+import com.worknest.common.exception.BusinessException;
 import com.worknest.common.exception.ResourceNotFoundException;
 import com.worknest.domain.entities.Employee;
 import com.worknest.domain.entities.RoleAssignmentPermission;
@@ -7,8 +8,11 @@ import com.worknest.domain.enums.PlatformRole;
 import com.worknest.features.auth.repository.RoleAssignmentPermissionRepository;
 import com.worknest.features.auth.repository.RoleAssignmentRepository;
 import com.worknest.features.employee.dto.*;
+import com.worknest.security.AuthSessionPrincipal;
 import com.worknest.features.employee.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,11 +41,26 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
     @Override
     @Transactional(readOnly = true)
     public List<EmployeeListResponse> listEmployees(UUID companyId) {
-        List<PlatformRole> roles = List.of(PlatformRole.EMPLOYEE);
-        return employeeRepository.findAllByCompanyIdAndEmploymentTypeRoleIn(companyId, roles)
-                .stream()
-                .map(this::mapToEmployeeResponse)
-                .collect(Collectors.toList());
+        AuthSessionPrincipal principal = principal();
+        assertCompanyScope(companyId, principal);
+
+        if (isAdmin(principal.role())) {
+            List<PlatformRole> roles = List.of(PlatformRole.EMPLOYEE, PlatformRole.STAFF);
+            return employeeRepository.findAllByCompanyIdAndEmploymentTypeRoleIn(companyId, roles)
+                    .stream()
+                    .map(this::mapToEmployeeResponse)
+                    .collect(Collectors.toList());
+        }
+
+        if (principal.role() == PlatformRole.STAFF) {
+            return employeeRepository.findAllAssignedToManager(companyId, PlatformRole.EMPLOYEE, principal.roleAssignmentId())
+                    .stream()
+                    .map(this::mapToEmployeeResponse)
+                    .collect(Collectors.toList());
+        }
+
+        throw new BusinessException(HttpStatus.FORBIDDEN, "ACCESS_DENIED",
+                "You do not have permission to view employees for this company.");
     }
 
     @Override
@@ -87,12 +106,26 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
     @Override
     @Transactional(readOnly = true)
     public EmployeeDetailsResponse getEmployee(UUID companyId, UUID employeeId) {
+        AuthSessionPrincipal principal = principal();
+        assertCompanyScope(companyId, principal);
+
         Employee e = employeeRepository.findById(employeeId)
                 .filter(emp -> emp.getCompany().getId().equals(companyId))
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
 
         if (e.getEmploymentTypeRole() != PlatformRole.EMPLOYEE) {
             throw new ResourceNotFoundException("Target record is not an EMPLOYEE");
+        }
+
+        if (principal.role() == PlatformRole.STAFF) {
+            if (e.getSupervisorRoleAssignment() == null
+                    || !e.getSupervisorRoleAssignment().getId().equals(principal.roleAssignmentId())) {
+                throw new BusinessException(HttpStatus.FORBIDDEN, "ACCESS_DENIED",
+                        "You do not have permission to view this employee.");
+            }
+        } else if (!isAdmin(principal.role())) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "ACCESS_DENIED",
+                    "You do not have permission to view this employee.");
         }
 
         String jobTitle = (e.getUser() != null)
@@ -256,8 +289,29 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
                 jobTitle,
                 e.getCompanySite() != null ? e.getCompanySite().getName() : null,
                 e.getCompanySite() != null ? e.getCompanySite().getId() : null,
+                e.getEmploymentTypeRole(),
+                e.getEmploymentType(),
                 e.getStartDate(),
                 e.getEmploymentStatus()
         );
+    }
+
+    private boolean isAdmin(PlatformRole role) {
+        return role == PlatformRole.ADMIN || role == PlatformRole.SUPERADMIN;
+    }
+
+    private void assertCompanyScope(UUID companyId, AuthSessionPrincipal principal) {
+        if (!companyId.equals(principal.companyId())) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "ACCESS_DENIED",
+                    "You do not have permission to access this company.");
+        }
+    }
+
+    private AuthSessionPrincipal principal() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof AuthSessionPrincipal p)) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "No authentication session found.");
+        }
+        return p;
     }
 }

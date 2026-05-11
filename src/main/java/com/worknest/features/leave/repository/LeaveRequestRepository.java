@@ -34,6 +34,38 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, UUID
             @Param("statuses") List<LeaveStatus> statuses
     );
 
+    @Query("""
+            SELECT lr FROM LeaveRequest lr
+            WHERE lr.company.id = :companyId
+              AND lr.employee.id = :employeeId
+              AND lr.status = com.worknest.domain.enums.LeaveStatus.APPROVED
+              AND lr.startDate <= :endDate
+              AND lr.endDate >= :startDate
+            ORDER BY lr.startDate ASC, lr.createdAt ASC
+            """)
+    List<LeaveRequest> findApprovedOverlappingPayrollPeriod(
+            @Param("companyId") UUID companyId,
+            @Param("employeeId") UUID employeeId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
+
+    @Query("""
+            SELECT lr FROM LeaveRequest lr
+            WHERE lr.company.id = :companyId
+              AND lr.employee.id = :employeeId
+              AND lr.status = com.worknest.domain.enums.LeaveStatus.APPROVED
+              AND lr.startDate <= :endDate
+              AND lr.endDate >= :startDate
+            ORDER BY lr.startDate ASC, lr.createdAt ASC
+            """)
+    List<LeaveRequest> findApprovedOverlappingRange(
+            @Param("companyId") UUID companyId,
+            @Param("employeeId") UUID employeeId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
+
     @Query(value = """
             SELECT lr FROM LeaveRequest lr
             JOIN lr.employee e
