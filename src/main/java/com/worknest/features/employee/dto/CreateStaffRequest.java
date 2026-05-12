@@ -79,6 +79,10 @@ public record CreateStaffRequest(
 
         /** Required when paymentMethod is HOURLY. */
         @Nullable
-        BigDecimal hourlyRate
+        BigDecimal hourlyRate,
+
+        /** Hours worked per day; used to derive daily leave pay for HOURLY staff: hourlyRate × dailyWorkingHours. */
+        @Nullable
+        BigDecimal dailyWorkingHours
 
 ) {}

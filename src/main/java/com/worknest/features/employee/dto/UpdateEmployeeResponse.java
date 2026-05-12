@@ -45,6 +45,7 @@ public record UpdateEmployeeResponse(
         PaymentMethod paymentMethod,
         BigDecimal monthlySalary,
         BigDecimal hourlyRate,
+        BigDecimal dailyWorkingHours,
 
         String message
 

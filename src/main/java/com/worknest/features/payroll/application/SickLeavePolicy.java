@@ -7,5 +7,14 @@ import java.util.List;
 
 public interface SickLeavePolicy {
 
-    SickLeaveCalculationDetails calculate(Employee employee, List<LeaveRequest> sickLeaves, PayrollContext context);
+    /**
+     * @param sickLeavesInMonth  approved sick leaves overlapping the payroll period
+     * @param sickLeavesInYear   all approved sick leaves in the calendar year (used for YTD employer-liability tracking)
+     */
+    SickLeaveCalculationDetails calculate(
+            Employee employee,
+            List<LeaveRequest> sickLeavesInMonth,
+            List<LeaveRequest> sickLeavesInYear,
+            PayrollContext context
+    );
 }

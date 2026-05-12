@@ -40,6 +40,9 @@ public record UpdateStaffJobDetailsRequest(
         BigDecimal monthlySalary,
 
         @Nullable
-        BigDecimal hourlyRate
+        BigDecimal hourlyRate,
+
+        @Nullable
+        BigDecimal dailyWorkingHours
 
 ) {}

@@ -16,6 +16,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
@@ -60,11 +61,11 @@ public class LeaveBalance {
     @Column(name = "leave_type", nullable = false, length = 30)
     private LeaveType leaveType;
 
-    @Column(name = "total_days", nullable = false)
-    private int totalDays;
+    @Column(name = "total_days", nullable = false, precision = 6, scale = 1)
+    private BigDecimal totalDays;
 
-    @Column(name = "used_days", nullable = false)
-    private int usedDays = 0;
+    @Column(name = "used_days", nullable = false, precision = 6, scale = 1)
+    private BigDecimal usedDays = BigDecimal.ZERO;
 
     @Version
     @Column(name = "version", nullable = false)

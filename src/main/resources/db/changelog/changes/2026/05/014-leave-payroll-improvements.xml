@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd"
+        objectQuotingStrategy="QUOTE_ONLY_RESERVED_WORDS">
+
+    <!-- Hourly employee weekly hours for accurate daily leave pay (hourlyRate * weeklyHours / 5) -->
+    <changeSet id="014-1" author="codex">
+        <addColumn tableName="employees">
+            <column name="estimated_weekly_hours" type="NUMERIC(5,1)"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- Admin approval note stored on the leave request -->
+    <changeSet id="014-2" author="codex">
+        <addColumn tableName="leave_requests">
+            <column name="approval_note" type="TEXT"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- Change leave_requests.total_days (INT) to days_count (NUMERIC 6,1) for half-day support -->
+    <changeSet id="014-3" author="codex">
+        <sql>ALTER TABLE leave_requests RENAME COLUMN total_days TO days_count</sql>
+        <sql>ALTER TABLE leave_requests ALTER COLUMN days_count TYPE NUMERIC(6,1) USING days_count::NUMERIC(6,1)</sql>
+    </changeSet>
+
+    <!-- Change leave_balances total_days / used_days to NUMERIC for half-day precision -->
+    <changeSet id="014-4" author="codex">
+        <sql>ALTER TABLE leave_balances ALTER COLUMN total_days TYPE NUMERIC(6,1) USING total_days::NUMERIC(6,1)</sql>
+        <sql>ALTER TABLE leave_balances ALTER COLUMN used_days  TYPE NUMERIC(6,1) USING used_days::NUMERIC(6,1)</sql>
+    </changeSet>
+
+    <!-- Company-level sick leave policy settings (configurable employer-paid %, max employer days) -->
+    <changeSet id="014-5" author="codex">
+        <createTable tableName="company_sick_leave_policies">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false" primaryKeyName="pk_company_sick_leave_policies"/>
+            </column>
+            <column name="company_id" type="UUID">
+                <constraints nullable="false"
+                             foreignKeyName="fk_sick_leave_policy_company"
+                             references="companies(id)"/>
+            </column>
+            <column name="company_paid_percentage" type="NUMERIC(5,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="max_company_paid_days" type="INT" defaultValueNumeric="14">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint tableName="company_sick_leave_policies"
+                             constraintName="uk_sick_leave_policy_company"
+                             columnNames="company_id"/>
+        <sql>
+            ALTER TABLE company_sick_leave_policies
+            ADD CONSTRAINT chk_sick_leave_policy_percentage
+            CHECK (company_paid_percentage > 0 AND company_paid_percentage &lt;= 100)
+        </sql>
+        <sql>
+            ALTER TABLE company_sick_leave_policies
+            ADD CONSTRAINT chk_sick_leave_policy_max_days
+            CHECK (max_company_paid_days > 0)
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

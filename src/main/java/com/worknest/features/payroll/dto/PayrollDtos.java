@@ -4,6 +4,7 @@ import com.worknest.domain.enums.PaymentMethod;
 import com.worknest.domain.enums.PayrollAdjustmentType;
 import com.worknest.domain.enums.PayrollCalculationStatus;
 import com.worknest.domain.enums.PayrollStatus;
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -180,7 +181,9 @@ public final class PayrollDtos {
     public record PayrollTotals(
             BigDecimal basePay,
             BigDecimal grossEarnings,
-            BigDecimal totalDeductions
+            BigDecimal totalDeductions,
+            BigDecimal netPay,
+            boolean netPayNegative
     ) {
     }
 
@@ -201,6 +204,26 @@ public final class PayrollDtos {
             BigDecimal grossEarnings,
             String errorCode,
             String message
+    ) {
+    }
+
+    public record UpsertSickLeavePolicyRequest(
+            @NotNull(message = "companyPaidPercentage is required")
+            @DecimalMin(value = "0.00", message = "companyPaidPercentage must be >= 0")
+            @DecimalMax(value = "100.00", message = "companyPaidPercentage must be <= 100")
+            BigDecimal companyPaidPercentage,
+
+            @NotNull(message = "maxCompanyPaidDays is required")
+            @Min(value = 0, message = "maxCompanyPaidDays must be >= 0")
+            @Max(value = 365, message = "maxCompanyPaidDays must be <= 365")
+            Integer maxCompanyPaidDays
+    ) {
+    }
+
+    public record SickLeavePolicyResponse(
+            BigDecimal companyPaidPercentage,
+            int maxCompanyPaidDays,
+            boolean isDefault
     ) {
     }
 }

@@ -117,6 +117,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         employee.setPaymentMethod(request.paymentMethod());
         employee.setMonthlySalary(request.monthlySalary());
         employee.setHourlyRate(request.hourlyRate());
+        employee.setDailyWorkingHours(request.dailyWorkingHours());
         Employee savedEmployee = employeeRepository.save(employee);
 
         ProvisioningResponse response = processInvitation(normalizedEmail, user, company, roleAssignment, savedEmployee, authenticatedUser, inviterRole, PlatformRole.EMPLOYEE, request.jobTitle(), null);
@@ -160,6 +161,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         employee.setPaymentMethod(request.paymentMethod());
         employee.setMonthlySalary(request.monthlySalary());
         employee.setHourlyRate(request.hourlyRate());
+        employee.setDailyWorkingHours(request.dailyWorkingHours());
         Employee savedEmployee = employeeRepository.save(employee);
 
         assignEmployeesToStaff(request.assignedEmployeeIds(), roleAssignment, company);
@@ -347,7 +349,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         applyJobDetails(employee, request.employmentType(), request.contractDocumentKey(),
                 request.contractDocumentPath(), request.contractExpiryDate(),
                 request.leaveDaysPerYear(), request.paymentMethod(),
-                request.monthlySalary(), request.hourlyRate());
+                request.monthlySalary(), request.hourlyRate(), request.dailyWorkingHours());
         employeeRepository.save(employee);
 
         User user = employee.getUser();
@@ -379,7 +381,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         applyJobDetails(employee, request.employmentType(), request.contractDocumentKey(),
                 request.contractDocumentPath(), request.contractExpiryDate(),
                 request.leaveDaysPerYear(), request.paymentMethod(),
-                request.monthlySalary(), request.hourlyRate());
+                request.monthlySalary(), request.hourlyRate(), request.dailyWorkingHours());
         employeeRepository.save(employee);
 
         User user = employee.getUser();
@@ -518,7 +520,8 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
             String contractDocumentKey, String contractDocumentPath,
             java.time.LocalDate contractExpiryDate, Integer leaveDaysPerYear,
             com.worknest.domain.enums.PaymentMethod paymentMethod,
-            java.math.BigDecimal monthlySalary, java.math.BigDecimal hourlyRate) {
+            java.math.BigDecimal monthlySalary, java.math.BigDecimal hourlyRate,
+            java.math.BigDecimal dailyWorkingHours) {
         employee.setEmploymentType(employmentType);
         employee.setContractDocumentKey(contractDocumentKey);
         employee.setContractDocumentPath(contractDocumentPath);
@@ -527,6 +530,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         employee.setPaymentMethod(paymentMethod);
         employee.setMonthlySalary(monthlySalary);
         employee.setHourlyRate(hourlyRate);
+        employee.setDailyWorkingHours(dailyWorkingHours);
     }
 
     private UpdateEmployeeResponse buildUpdateResponse(Employee employee, User user, RoleAssignment roleAssignment, String message) {
@@ -553,6 +557,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
                 employee.getPaymentMethod(),
                 employee.getMonthlySalary(),
                 employee.getHourlyRate(),
+                employee.getDailyWorkingHours(),
                 message
         );
     }

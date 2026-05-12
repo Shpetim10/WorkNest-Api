@@ -8,6 +8,8 @@ import com.worknest.features.payroll.dto.PayrollDtos.PayrollAdjustmentRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollAdjustmentResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollCalculationResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollPeriodRequest;
+import com.worknest.features.payroll.dto.PayrollDtos.SickLeavePolicyResponse;
+import com.worknest.features.payroll.dto.PayrollDtos.UpsertSickLeavePolicyRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -17,6 +19,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -92,5 +95,21 @@ public class AdminPayrollController {
             @Valid @RequestBody BatchPayrollCalculationRequest request
     ) {
         return ApiResponse.success("Payroll batch calculated", payrollService.calculateBatch(request));
+    }
+
+    @GetMapping("/sick-leave-policy")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Get the company's sick leave policy configuration")
+    public ApiResponse<SickLeavePolicyResponse> getSickLeavePolicy() {
+        return ApiResponse.success("Sick leave policy retrieved", payrollService.getSickLeavePolicy());
+    }
+
+    @PutMapping("/sick-leave-policy")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Create or update the company's sick leave policy configuration")
+    public ApiResponse<SickLeavePolicyResponse> upsertSickLeavePolicy(
+            @Valid @RequestBody UpsertSickLeavePolicyRequest request
+    ) {
+        return ApiResponse.success("Sick leave policy updated", payrollService.upsertSickLeavePolicy(request));
     }
 }

@@ -79,7 +79,8 @@ public class PayrollCalculationEngine {
         BasePayDetails basePayDetails = toBasePayDetails(employee, context, payableWorkingDays, workHours.hours(), basePay);
 
         LeaveCalculationDetails leaveDetails = calculateLeave(employee, context, approvedLeavesInYear, approvedLeavesInMonth);
-        var sickLeaveDetails = sickLeavePolicy.calculate(employee, sickLeaves(approvedLeavesInMonth), context);
+        var sickLeaveDetails = sickLeavePolicy.calculate(
+                employee, sickLeaves(approvedLeavesInMonth), sickLeaves(approvedLeavesInYear), context);
         if (PlaceholderSickLeavePolicy.STATUS.equals(sickLeaveDetails.status())) {
             warnings.add("Sick leave policy is not configured. Sick leave calculation is currently a placeholder.");
         }
@@ -89,6 +90,11 @@ public class PayrollCalculationEngine {
         // fixed pay -> prorated/base monthly salary, hourly pay -> rate * payable hours.
         BigDecimal grossEarnings = basePay;
         BigDecimal totalDeductions = money(adjustmentDetails.totalManualDeduction().add(leaveDetails.unpaidLeaveDeduction()));
+        BigDecimal netPay = money(grossEarnings.subtract(totalDeductions));
+        boolean netPayNegative = netPay.signum() < 0;
+        if (netPayNegative) {
+            warnings.add("Net pay is negative (" + netPay + " " + CURRENCY + "). Unpaid deductions exceed gross earnings.");
+        }
 
         return new PayrollCalculationResponse(
                 employee.getId(),
@@ -112,7 +118,7 @@ public class PayrollCalculationEngine {
                 leaveDetails,
                 sickLeaveDetails,
                 adjustmentDetails,
-                new PayrollTotals(basePay, grossEarnings, totalDeductions),
+                new PayrollTotals(basePay, grossEarnings, totalDeductions, netPay, netPayNegative),
                 warnings
         );
     }
@@ -237,8 +243,10 @@ public class PayrollCalculationEngine {
         if (employee.getPaymentMethod() == PaymentMethod.FIXED_MONTHLY) {
             return employee.getMonthlySalary().divide(BigDecimal.valueOf(context.workingDaysInMonth()), 8, RoundingMode.HALF_UP);
         }
-        // TODO: Replace this black-box default with employee estimated weekly hours when contract configuration is available.
-        return employee.getHourlyRate().multiply(context.defaultDailyWorkingHours());
+        BigDecimal dailyHours = employee.getDailyWorkingHours() != null
+                ? employee.getDailyWorkingHours()
+                : context.defaultDailyWorkingHours();
+        return employee.getHourlyRate().multiply(dailyHours);
     }
 
     private BigDecimal countAllowanceLeaves(List<LeaveRequest> leaves, LocalDate start, LocalDate end) {
