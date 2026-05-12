@@ -6,12 +6,19 @@ import com.worknest.features.employee.dto.UpdateEmployeeAssignmentsRequest;
 
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface EmployeeAssignmentService {
 
-    List<ManagerSummaryDto> listAssignableManagers(UUID companyId);
+    Page<ManagerSummaryDto> listAssignableManagers(UUID companyId, Pageable pageable);
 
-    EmployeeAssignmentBoardResponse getManagerAssignmentBoard(UUID companyId, UUID managerRoleAssignmentId);
+    EmployeeAssignmentBoardResponse getManagerAssignmentBoard(
+            UUID companyId,
+            UUID managerRoleAssignmentId,
+            Pageable assignedPageable,
+            Pageable unassignedPageable
+    );
 
     void updateManagerAssignments(UUID companyId, UUID managerRoleAssignmentId, UpdateEmployeeAssignmentsRequest request);
 }

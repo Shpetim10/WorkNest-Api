@@ -1,6 +1,8 @@
 package com.worknest.features.department.web;
 
 import com.worknest.common.api.ApiResponse;
+import com.worknest.common.api.PaginatedResponse;
+import com.worknest.common.api.PaginationSupport;
 import com.worknest.features.department.application.DepartmentService;
 import com.worknest.features.department.dto.CreateDepartmentRequest;
 import com.worknest.features.department.dto.DepartmentListResponse;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -55,8 +58,15 @@ public class DepartmentController {
     @GetMapping
     @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     @Operation(summary = "List departments", description = "Retrieves all departments for the current company")
-    public ApiResponse<List<DepartmentListResponse>> listDepartments(@PathVariable UUID companyId) {
-        return ApiResponse.success("Departments retrieved successfully", departmentService.listDepartments(companyId));
+    public ApiResponse<PaginatedResponse<DepartmentListResponse>> listDepartments(
+            @PathVariable UUID companyId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        return ApiResponse.success(
+                "Departments retrieved successfully",
+                PaginatedResponse.from(departmentService.listDepartments(companyId, PaginationSupport.pageable(page, size)))
+        );
     }
 
     @GetMapping("/lookup")

@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +38,7 @@ public class CompanySiteQueryServiceImpl implements CompanySiteQueryService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<CompanySiteResponse> listSites(UUID companyId) {
+    public Page<CompanySiteResponse> listSites(UUID companyId, Pageable pageable) {
         UUID tenantCompanyId = TenantContextHolder.get()
                 .orElseThrow(() -> new IllegalStateException("No tenant context found"))
                 .companyId();
@@ -45,10 +47,8 @@ public class CompanySiteQueryServiceImpl implements CompanySiteQueryService {
             throw new CompanyNotFoundException();
         }
 
-        return siteRepository.findAllByCompanyIdOrderByCreatedAtDesc(companyId)
-                .stream()
-                .map(CompanySiteResponse::fromEntity)
-                .toList();
+        return siteRepository.findAllByCompanyIdOrderByCreatedAtDesc(companyId, pageable)
+                .map(CompanySiteResponse::fromEntity);
     }
 
     @Override
@@ -65,7 +65,9 @@ public class CompanySiteQueryServiceImpl implements CompanySiteQueryService {
         CompanySite site = siteRepository.findByIdAndCompanyId(siteId, companyId)
                 .orElseThrow(SiteNotFoundException::new);
 
-        List<TrustedNetworkResponse> networks = networkRepository.findAllBySiteIdOrderByPriorityOrderAsc(siteId)
+        List<TrustedNetworkResponse> networks = networkRepository.findAllBySiteIdOrderByPriorityOrderAsc(
+                        siteId,
+                        Pageable.unpaged())
                 .stream()
                 .map(TrustedNetworkResponse::fromEntity)
                 .toList();

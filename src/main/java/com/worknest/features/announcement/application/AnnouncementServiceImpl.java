@@ -30,6 +30,8 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -81,11 +83,9 @@ public class AnnouncementServiceImpl implements AnnouncementService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<AnnouncementListResponse> listForAdmin(UUID companyId) {
-        return announcementRepository.findAllForAdminByCompanyId(companyId)
-                .stream()
-                .map(this::toListResponse)
-                .toList();
+    public Page<AnnouncementListResponse> listForAdmin(UUID companyId, Pageable pageable) {
+        return announcementRepository.findAllByCompanyIdOrderByCreatedAtDesc(companyId, pageable)
+                .map(this::toListResponse);
     }
 
     @Override
@@ -99,24 +99,22 @@ public class AnnouncementServiceImpl implements AnnouncementService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<MobileAnnouncementListItem> listForEmployee() {
+    public Page<MobileAnnouncementListItem> listForEmployee(Pageable pageable) {
         AuthSessionPrincipal principal = principal();
         Employee employee = resolveCurrentEmployee(principal);
         UUID departmentId = employee.getDepartment() != null ? employee.getDepartment().getId() : null;
 
-        List<Announcement> visible = announcementRepository.findVisibleToEmployee(
-                principal.companyId(), employee.getId(), departmentId);
+        Page<Announcement> visible = announcementRepository.findVisibleToEmployee(
+                principal.companyId(), employee.getId(), departmentId, pageable);
 
         if (visible.isEmpty()) {
-            return Collections.emptyList();
+            return Page.empty(pageable);
         }
 
-        List<UUID> visibleIds = visible.stream().map(Announcement::getId).toList();
+        List<UUID> visibleIds = visible.getContent().stream().map(Announcement::getId).toList();
         Set<UUID> readIds = announcementReadRepository.findReadAnnouncementIds(employee.getId(), visibleIds);
 
-        return visible.stream()
-                .map(a -> toMobileListItem(a, readIds.contains(a.getId())))
-                .toList();
+        return visible.map(a -> toMobileListItem(a, readIds.contains(a.getId())));
     }
 
     @Override
@@ -171,7 +169,11 @@ public class AnnouncementServiceImpl implements AnnouncementService {
         UUID departmentId = employee.getDepartment() != null ? employee.getDepartment().getId() : null;
 
         List<Announcement> visible = announcementRepository.findVisibleToEmployee(
-                principal.companyId(), employee.getId(), departmentId);
+                        principal.companyId(),
+                        employee.getId(),
+                        departmentId,
+                        Pageable.unpaged())
+                .getContent();
 
         if (visible.isEmpty()) {
             return new UnreadCountResponse(0);

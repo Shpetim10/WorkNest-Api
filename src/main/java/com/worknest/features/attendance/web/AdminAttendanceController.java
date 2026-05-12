@@ -1,6 +1,7 @@
 package com.worknest.features.attendance.web;
 
 import com.worknest.common.api.ApiResponse;
+import com.worknest.common.api.PaginationSupport;
 import com.worknest.features.attendance.application.AdminAttendanceReportService;
 import com.worknest.features.attendance.application.StaffAttendanceService;
 import com.worknest.features.attendance.dto.AdminAttendanceMonthlyReportResponse;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -34,10 +36,12 @@ public class AdminAttendanceController {
     public ApiResponse<AttendanceDashboardResponse> dashboard(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) UUID siteId,
-            @RequestParam(required = false) UUID departmentId
+            @RequestParam(required = false) UUID departmentId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
     ) {
         return ApiResponse.success("Admin attendance dashboard loaded",
-                staffAttendanceService.dashboard(date, departmentId, siteId));
+                staffAttendanceService.dashboard(date, departmentId, siteId, PaginationSupport.pageable(page, size)));
     }
 
     @GetMapping("/reports/monthly")
@@ -46,12 +50,14 @@ public class AdminAttendanceController {
     public ApiResponse<AdminAttendanceMonthlyReportResponse> monthly(
             @RequestParam int year,
             @RequestParam int month,
-            @RequestParam(required = false) UUID siteId
+            @RequestParam(required = false) UUID siteId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
     ) {
         UUID companyId = principal().companyId();
         return ApiResponse.success(
                 "Monthly attendance report generated",
-                adminAttendanceReportService.monthly(companyId, year, month, siteId)
+                adminAttendanceReportService.monthly(companyId, year, month, siteId, PaginationSupport.pageable(page, size))
         );
     }
 
@@ -66,7 +72,7 @@ public class AdminAttendanceController {
         UUID companyId = principal().companyId();
         return ApiResponse.success(
                 "Attendance export dataset generated",
-                adminAttendanceReportService.monthly(companyId, year, month, siteId)
+                adminAttendanceReportService.monthly(companyId, year, month, siteId, Pageable.unpaged())
         );
     }
 

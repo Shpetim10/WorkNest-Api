@@ -5,10 +5,12 @@ import com.worknest.features.companySite.dto.CompanySiteLookup;
 import com.worknest.features.companySite.dto.CompanySiteResponse;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface CompanySiteQueryService {
 
-    List<CompanySiteResponse> listSites(UUID companyId);
+    Page<CompanySiteResponse> listSites(UUID companyId, Pageable pageable);
 
     /**
      * Fetches comprehensive details of a specific site including its networks.

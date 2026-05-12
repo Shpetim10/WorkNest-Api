@@ -1,6 +1,8 @@
 package com.worknest.features.leave.web;
 
 import com.worknest.common.api.ApiResponse;
+import com.worknest.common.api.PaginatedResponse;
+import com.worknest.common.api.PaginationSupport;
 import com.worknest.features.leave.application.LeaveService;
 import com.worknest.features.leave.dto.CreateLeaveRequestDto;
 import com.worknest.features.leave.dto.LeaveBalanceDto;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -37,8 +40,14 @@ public class MobileLeaveController {
     @GetMapping("/requests")
     @PreAuthorize("@companySecurity.hasCurrentCompanyRole('EMPLOYEE', 'STAFF', 'ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Get current employee's leave request history")
-    public ApiResponse<List<LeaveRequestDto>> myRequests() {
-        return ApiResponse.success("Leave requests loaded", leaveService.getMyRequests());
+    public ApiResponse<PaginatedResponse<LeaveRequestDto>> myRequests(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        return ApiResponse.success(
+                "Leave requests loaded",
+                PaginatedResponse.from(leaveService.getMyRequests(PaginationSupport.pageable(page, size)))
+        );
     }
 
     @PostMapping("/requests")
@@ -47,13 +56,5 @@ public class MobileLeaveController {
     public ApiResponse<Void> submit(@Valid @RequestBody CreateLeaveRequestDto request) {
         leaveService.submitRequest(request);
         return ApiResponse.success("Leave request submitted successfully", null);
-    }
-
-    @PostMapping("/requests/{requestId}/cancel")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('EMPLOYEE', 'STAFF', 'ADMIN', 'SUPERADMIN')")
-    @Operation(summary = "Cancel an employee's own pending or approved leave request")
-    public ApiResponse<Void> cancel(@PathVariable UUID requestId) {
-        leaveService.cancelRequest(requestId);
-        return ApiResponse.success("Leave request cancelled", null);
     }
 }

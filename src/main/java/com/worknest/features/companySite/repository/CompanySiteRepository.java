@@ -5,6 +5,8 @@ import com.worknest.domain.enums.SiteStatus;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -38,7 +40,7 @@ public interface CompanySiteRepository extends JpaRepository<CompanySite, UUID> 
     /**
      * Returns all sites for a company, ordered by creation time (newest first).
      */
-    List<CompanySite> findAllByCompanyIdOrderByCreatedAtDesc(UUID companyId);
+    Page<CompanySite> findAllByCompanyIdOrderByCreatedAtDesc(UUID companyId, Pageable pageable);
 
     /**
      * Returns all sites for a company filtered by status.

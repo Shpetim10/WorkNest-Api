@@ -1,6 +1,8 @@
 package com.worknest.features.leave.web;
 
 import com.worknest.common.api.ApiResponse;
+import com.worknest.common.api.PaginatedResponse;
+import com.worknest.common.api.PaginationSupport;
 import com.worknest.domain.enums.LeaveStatus;
 import com.worknest.features.leave.application.LeaveService;
 import com.worknest.features.leave.dto.ApproveLeaveRequestDto;
@@ -11,9 +13,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,14 +33,16 @@ public class AdminLeaveController {
     @GetMapping("/requests")
     @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
     @Operation(summary = "List all company leave requests — filterable by status and employee name")
-    public ApiResponse<Page<LeaveRequestDto>> list(
+    public ApiResponse<PaginatedResponse<LeaveRequestDto>> list(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) LeaveStatus status,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
     ) {
-        Pageable pageable = PageRequest.of(page, size);
-        return ApiResponse.success("Leave requests loaded", leaveService.adminListRequests(search, status, pageable));
+        return ApiResponse.success(
+                "Leave requests loaded",
+                PaginatedResponse.from(leaveService.adminListRequests(search, status, PaginationSupport.pageable(page, size)))
+        );
     }
 
     @GetMapping("/requests/{requestId}")

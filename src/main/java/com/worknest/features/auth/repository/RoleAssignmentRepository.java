@@ -41,4 +41,6 @@ public interface RoleAssignmentRepository extends JpaRepository<RoleAssignment, 
     Optional<RoleAssignment> findFirstByUserIdAndCompanyIdAndIsActiveTrue(UUID userId, UUID companyId);
 
     Optional<RoleAssignment> findFirstByUserIdAndCompanyIdOrderByCreatedAtAsc(UUID userId, UUID companyId);
+
+    boolean existsByRole(com.worknest.domain.enums.PlatformRole role);
 }

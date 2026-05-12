@@ -18,6 +18,8 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, UUID
 
     List<LeaveRequest> findAllByCompanyIdAndEmployeeIdOrderByCreatedAtDesc(UUID companyId, UUID employeeId);
 
+    Page<LeaveRequest> findAllByCompanyIdAndEmployeeIdOrderByCreatedAtDesc(UUID companyId, UUID employeeId, Pageable pageable);
+
     @Query("""
             SELECT lr FROM LeaveRequest lr
             WHERE lr.company.id = :companyId
