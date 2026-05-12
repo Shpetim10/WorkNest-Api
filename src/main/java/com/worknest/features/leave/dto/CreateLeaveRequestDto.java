@@ -16,6 +16,9 @@ public record CreateLeaveRequestDto(
         LocalDate endDate,
 
         @Size(max = 500, message = "Note cannot exceed 500 characters")
-        String note
+        String note,
+
+        @Size(max = 500, message = "Medical report document ID cannot exceed 500 characters")
+        String medicalReportDocumentId
 ) {
 }

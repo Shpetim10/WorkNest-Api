@@ -97,6 +97,10 @@ public class Employee {
     @Column(name = "leave_days_per_year")
     private Integer leaveDaysPerYear;
 
+    /** Hours worked per day; used to derive daily leave pay for HOURLY employees: dailyLeavePay = hourlyRate × dailyWorkingHours. */
+    @Column(name = "daily_working_hours", precision = 4, scale = 1)
+    private BigDecimal dailyWorkingHours;
+
     // --- Payment fields ---
 
     @Enumerated(EnumType.STRING)

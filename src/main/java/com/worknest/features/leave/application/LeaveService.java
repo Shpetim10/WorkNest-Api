@@ -1,6 +1,7 @@
 package com.worknest.features.leave.application;
 
 import com.worknest.domain.enums.LeaveStatus;
+import com.worknest.features.leave.dto.ApproveLeaveRequestDto;
 import com.worknest.features.leave.dto.CreateLeaveRequestDto;
 import com.worknest.features.leave.dto.LeaveBalanceDto;
 import com.worknest.features.leave.dto.LeaveRequestDto;
@@ -22,7 +23,9 @@ public interface LeaveService {
 
     LeaveRequestDto adminGetRequest(UUID requestId);
 
-    void approveRequest(UUID requestId);
+    void approveRequest(UUID requestId, ApproveLeaveRequestDto dto);
 
     void rejectRequest(UUID requestId, RejectLeaveRequestDto dto);
+
+    void cancelRequest(UUID requestId);
 }

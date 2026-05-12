@@ -3,6 +3,7 @@ package com.worknest.features.leave.web;
 import com.worknest.common.api.ApiResponse;
 import com.worknest.domain.enums.LeaveStatus;
 import com.worknest.features.leave.application.LeaveService;
+import com.worknest.features.leave.dto.ApproveLeaveRequestDto;
 import com.worknest.features.leave.dto.LeaveRequestDto;
 import com.worknest.features.leave.dto.RejectLeaveRequestDto;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,9 +53,12 @@ public class AdminLeaveController {
 
     @PostMapping("/requests/{requestId}/approve")
     @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
-    @Operation(summary = "Approve a pending leave request")
-    public ApiResponse<Void> approve(@PathVariable UUID requestId) {
-        leaveService.approveRequest(requestId);
+    @Operation(summary = "Approve a pending leave request with an optional note")
+    public ApiResponse<Void> approve(
+            @PathVariable UUID requestId,
+            @Valid @RequestBody(required = false) ApproveLeaveRequestDto dto
+    ) {
+        leaveService.approveRequest(requestId, dto);
         return ApiResponse.success("Leave request approved", null);
     }
 

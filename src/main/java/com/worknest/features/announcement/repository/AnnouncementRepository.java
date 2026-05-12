@@ -14,6 +14,15 @@ public interface AnnouncementRepository extends JpaRepository<Announcement, UUID
 
     List<Announcement> findAllByCompanyIdOrderByCreatedAtDesc(UUID companyId);
 
+    @Query("""
+            SELECT DISTINCT a FROM Announcement a
+            LEFT JOIN FETCH a.targetEmployees te
+            LEFT JOIN FETCH te.user
+            WHERE a.company.id = :companyId
+            ORDER BY a.createdAt DESC
+            """)
+    List<Announcement> findAllForAdminByCompanyId(@Param("companyId") UUID companyId);
+
     Optional<Announcement> findByIdAndCompanyId(UUID id, UUID companyId);
 
     @Query("""

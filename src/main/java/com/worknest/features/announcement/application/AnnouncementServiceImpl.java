@@ -10,6 +10,7 @@ import com.worknest.domain.entities.User;
 import com.worknest.domain.enums.AnnouncementAudience;
 import com.worknest.domain.enums.EmploymentStatus;
 import com.worknest.features.announcement.dto.AnnouncementListResponse;
+import com.worknest.features.announcement.dto.AnnouncementListResponse.TargetEmployeeSummary;
 import com.worknest.features.announcement.dto.CreateAnnouncementRequest;
 import com.worknest.features.announcement.dto.MobileAnnouncementDetail;
 import com.worknest.features.announcement.dto.MobileAnnouncementListItem;
@@ -81,7 +82,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     @Override
     @Transactional(readOnly = true)
     public List<AnnouncementListResponse> listForAdmin(UUID companyId) {
-        return announcementRepository.findAllByCompanyIdOrderByCreatedAtDesc(companyId)
+        return announcementRepository.findAllForAdminByCompanyId(companyId)
                 .stream()
                 .map(this::toListResponse)
                 .toList();
@@ -214,6 +215,12 @@ public class AnnouncementServiceImpl implements AnnouncementService {
                     ? author.getDisplayName()
                     : author.getFirstName() + " " + author.getLastName();
         }
+        List<TargetEmployeeSummary> targetEmployees = null;
+        if (a.getTargetAudience() == AnnouncementAudience.SPECIFIC_USERS && !a.getTargetEmployees().isEmpty()) {
+            targetEmployees = a.getTargetEmployees().stream()
+                    .map(e -> new TargetEmployeeSummary(e.getId(), e.getUser().getFirstName(), e.getUser().getLastName()))
+                    .toList();
+        }
         return new AnnouncementListResponse(
                 a.getId(),
                 a.getTitle(),
@@ -221,7 +228,8 @@ public class AnnouncementServiceImpl implements AnnouncementService {
                 a.getTargetAudience(),
                 a.getPriority(),
                 authorName,
-                a.getCreatedAt()
+                a.getCreatedAt(),
+                targetEmployees
         );
     }
 

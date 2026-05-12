@@ -5,6 +5,8 @@ import com.worknest.features.payroll.dto.PayrollDtos.BatchPayrollCalculationResp
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollAdjustmentRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollAdjustmentResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollCalculationResponse;
+import com.worknest.features.payroll.dto.PayrollDtos.SickLeavePolicyResponse;
+import com.worknest.features.payroll.dto.PayrollDtos.UpsertSickLeavePolicyRequest;
 import java.util.UUID;
 
 public interface PayrollService {
@@ -20,4 +22,8 @@ public interface PayrollService {
     PayrollCalculationResponse calculateEmployeePayroll(UUID employeeId, int year, int month);
 
     BatchPayrollCalculationResponse calculateBatch(BatchPayrollCalculationRequest request);
+
+    SickLeavePolicyResponse getSickLeavePolicy();
+
+    SickLeavePolicyResponse upsertSickLeavePolicy(UpsertSickLeavePolicyRequest request);
 }
