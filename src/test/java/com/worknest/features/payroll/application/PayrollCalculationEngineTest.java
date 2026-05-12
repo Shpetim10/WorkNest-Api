@@ -153,7 +153,7 @@ class PayrollCalculationEngineTest {
         leave.setLeaveType(type);
         leave.setStartDate(start);
         leave.setEndDate(end);
-        leave.setTotalDays((int) java.time.temporal.ChronoUnit.DAYS.between(start, end) + 1);
+        leave.setDaysCount(BigDecimal.valueOf(java.time.temporal.ChronoUnit.DAYS.between(start, end) + 1));
         return leave;
     }
 

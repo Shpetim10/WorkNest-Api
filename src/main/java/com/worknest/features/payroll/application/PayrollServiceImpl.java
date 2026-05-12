@@ -3,6 +3,8 @@ package com.worknest.features.payroll.application;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.worknest.common.exception.BusinessException;
+import com.worknest.domain.entities.Company;
+import com.worknest.domain.entities.CompanySickLeavePolicyConfig;
 import com.worknest.domain.entities.Employee;
 import com.worknest.domain.entities.LeaveRequest;
 import com.worknest.domain.entities.PayrollAdjustment;
@@ -12,6 +14,7 @@ import com.worknest.domain.enums.PayrollAdjustmentType;
 import com.worknest.domain.enums.PayrollCalculationStatus;
 import com.worknest.domain.enums.PayrollStatus;
 import com.worknest.features.auth.repository.UserRepository;
+import com.worknest.features.company.repository.CompanyRepository;
 import com.worknest.features.employee.repository.EmployeeRepository;
 import com.worknest.features.leave.repository.LeaveRequestRepository;
 import com.worknest.features.payroll.dto.PayrollDtos.BatchPayrollCalculationRequest;
@@ -20,6 +23,9 @@ import com.worknest.features.payroll.dto.PayrollDtos.BatchPayrollEmployeeResult;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollAdjustmentRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollAdjustmentResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollCalculationResponse;
+import com.worknest.features.payroll.dto.PayrollDtos.SickLeavePolicyResponse;
+import com.worknest.features.payroll.dto.PayrollDtos.UpsertSickLeavePolicyRequest;
+import com.worknest.features.payroll.repository.CompanySickLeavePolicyConfigRepository;
 import com.worknest.features.payroll.repository.PayrollAdjustmentRepository;
 import com.worknest.features.payroll.repository.PayrollResultRepository;
 import com.worknest.security.AuthSessionPrincipal;
@@ -54,6 +60,8 @@ public class PayrollServiceImpl implements PayrollService {
     private final PayrollResultRepository resultRepository;
     private final PayrollCalculationEngine calculationEngine;
     private final ObjectMapper objectMapper;
+    private final CompanySickLeavePolicyConfigRepository sickLeavePolicyRepository;
+    private final CompanyRepository companyRepository;
 
     @Override
     public PayrollAdjustmentResponse addBonus(UUID employeeId, PayrollAdjustmentRequest request) {
@@ -139,6 +147,32 @@ public class PayrollServiceImpl implements PayrollService {
                 request.year(), request.month(), employees.size(), success, failed, skipped, results);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public SickLeavePolicyResponse getSickLeavePolicy() {
+        UUID companyId = principal().companyId();
+        return sickLeavePolicyRepository.findByCompanyId(companyId)
+                .map(cfg -> new SickLeavePolicyResponse(cfg.getCompanyPaidPercentage(), cfg.getMaxCompanyPaidDays(), false))
+                .orElse(new SickLeavePolicyResponse(new java.math.BigDecimal("70.00"), 14, true));
+    }
+
+    @Override
+    public SickLeavePolicyResponse upsertSickLeavePolicy(UpsertSickLeavePolicyRequest request) {
+        UUID companyId = principal().companyId();
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "COMPANY_NOT_FOUND", "Company not found."));
+        CompanySickLeavePolicyConfig cfg = sickLeavePolicyRepository.findByCompanyId(companyId)
+                .orElseGet(() -> {
+                    CompanySickLeavePolicyConfig c = new CompanySickLeavePolicyConfig();
+                    c.setCompany(company);
+                    return c;
+                });
+        cfg.setCompanyPaidPercentage(request.companyPaidPercentage().setScale(2, java.math.RoundingMode.HALF_UP));
+        cfg.setMaxCompanyPaidDays(request.maxCompanyPaidDays());
+        sickLeavePolicyRepository.save(cfg);
+        return new SickLeavePolicyResponse(cfg.getCompanyPaidPercentage(), cfg.getMaxCompanyPaidDays(), false);
+    }
+
     private PayrollAdjustmentResponse addAdjustment(
             UUID employeeId,
             PayrollAdjustmentRequest request,
@@ -196,7 +230,7 @@ public class PayrollServiceImpl implements PayrollService {
         result.setBasePay(response.totals().basePay());
         result.setGrossEarnings(response.totals().grossEarnings());
         result.setTotalDeductions(response.totals().totalDeductions());
-        result.setNetPay(response.totals().grossEarnings().subtract(response.totals().totalDeductions()));
+        result.setNetPay(response.totals().netPay());
         result.setCalculationSnapshotJson(toJson(response));
         result.setCalculatedAt(Instant.now());
         result.setCalculatedByUser(actor);

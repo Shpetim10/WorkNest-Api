@@ -2,6 +2,7 @@ package com.worknest.realtime.event;
 
 import com.worknest.domain.enums.LeaveType;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -13,5 +14,5 @@ public record LeaveRequestSubmittedDomainEvent(
         LeaveType leaveType,
         LocalDate startDate,
         LocalDate endDate,
-        int totalDays
+        BigDecimal daysCount
 ) {}

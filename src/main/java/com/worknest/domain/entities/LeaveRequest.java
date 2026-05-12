@@ -16,6 +16,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -61,8 +62,9 @@ public class LeaveRequest {
     @Column(name = "end_date", nullable = false)
     private LocalDate endDate;
 
-    @Column(name = "total_days", nullable = false)
-    private int totalDays;
+    /** Supports half-days (e.g. 0.5). Computed from start/end dates at submission time. */
+    @Column(name = "days_count", nullable = false, precision = 6, scale = 1)
+    private BigDecimal daysCount;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
@@ -70,6 +72,12 @@ public class LeaveRequest {
 
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
+
+    @Column(name = "approval_note", columnDefinition = "TEXT")
+    private String approvalNote;
+
+    @Column(name = "medical_report_document_id", length = 500)
+    private String medicalReportDocumentId;
 
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;

@@ -5,16 +5,23 @@ import com.worknest.domain.entities.LeaveRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.SickLeaveCalculationDetails;
 import java.math.BigDecimal;
 import java.util.List;
-import org.springframework.stereotype.Component;
 
-@Component
+/**
+ * Used when no sick leave policy has been configured for the company.
+ * Never silently treats sick leave as paid — always returns a TODO status with null amounts.
+ */
 public class PlaceholderSickLeavePolicy implements SickLeavePolicy {
 
     public static final String STATUS = "TODO_SICK_LEAVE_POLICY_NOT_CONFIGURED";
 
     @Override
-    public SickLeaveCalculationDetails calculate(Employee employee, List<LeaveRequest> sickLeaves, PayrollContext context) {
-        BigDecimal daysTaken = sickLeaves.stream()
+    public SickLeaveCalculationDetails calculate(
+            Employee employee,
+            List<LeaveRequest> sickLeavesInMonth,
+            List<LeaveRequest> sickLeavesInYear,
+            PayrollContext context
+    ) {
+        BigDecimal daysTaken = sickLeavesInMonth.stream()
                 .map(leave -> PayrollDateUtils.countWorkingDays(
                         PayrollDateUtils.max(leave.getStartDate(), context.periodStart()),
                         PayrollDateUtils.min(leave.getEndDate(), context.periodEnd())))

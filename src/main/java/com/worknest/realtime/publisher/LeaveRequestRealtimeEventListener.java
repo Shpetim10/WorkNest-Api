@@ -32,7 +32,7 @@ public class LeaveRequestRealtimeEventListener {
                         "leaveType", event.leaveType(),
                         "startDate", event.startDate(),
                         "endDate", event.endDate(),
-                        "totalDays", event.totalDays()
+                        "daysCount", event.daysCount()
                 ))
                 .build();
         publisher.publishToCompanyLeaveRequests(event.companyId(), envelope);
