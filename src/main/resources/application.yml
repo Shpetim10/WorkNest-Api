@@ -91,6 +91,17 @@ app:
     allowed-origin-patterns: ${APP_REALTIME_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*,exp://127.0.0.1:*,exp://localhost:*}
     broker:
       simple-enabled: ${APP_REALTIME_BROKER_SIMPLE_ENABLED:true}
+  seed:
+    admin:
+      enabled: ${APP_SEED_ADMIN_ENABLED:false}
+      email: ${APP_SEED_ADMIN_EMAIL:}
+      password: ${APP_SEED_ADMIN_PASSWORD:}
+      first-name: ${APP_SEED_ADMIN_FIRST_NAME:Platform}
+      last-name: ${APP_SEED_ADMIN_LAST_NAME:Administrator}
+      company-name: ${APP_SEED_ADMIN_COMPANY_NAME:WorkNest Platform}
+      company-slug: ${APP_SEED_ADMIN_COMPANY_SLUG:worknest-platform}
+      company-email: ${APP_SEED_ADMIN_COMPANY_EMAIL:platform@worknest.local}
+      company-phone: ${APP_SEED_ADMIN_COMPANY_PHONE:+355000000000}
 
 logging:
   level:
