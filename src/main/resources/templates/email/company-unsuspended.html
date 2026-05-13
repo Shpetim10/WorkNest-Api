@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f7f6; }
+        .container { max-width: 600px; margin: 20px auto; background: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 { color: #1e7e34; font-size: 24px; }
+        .content { margin-bottom: 30px; }
+        .details { background-color: #f3faf3; padding: 20px; border-radius: 6px; border-left: 4px solid #27ae60; margin: 20px 0; }
+        .footer { font-size: 0.9em; color: #7f8c8d; text-align: center; margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1 th:text="${#messages.msg('email.company-unsuspended.subject', companyName)}">Account Reactivated</h1>
+    </div>
+    <div class="content">
+        <p th:text="${#messages.msg('email.company-unsuspended.greeting')}">Hello,</p>
+
+        <p th:text="${#messages.msg('email.company-unsuspended.intro', companyName)}">Your company account has been reactivated.</p>
+
+        <div class="details">
+            <p th:text="${#messages.msg('email.company-unsuspended.details')}">All user logins, API access, and company operations have been restored.</p>
+        </div>
+
+        <p th:text="${#messages.msg('email.company-unsuspended.contact')}">If you have any questions, please contact WorkNest support.</p>
+    </div>
+    <div class="footer">
+        <p th:text="${#messages.msg('email.company-unsuspended.footer')}">This is an automated notification from the WorkNest platform.</p>
+        <p>
+            <span th:text="${#messages.msg('email.company-unsuspended.signoff')}">Best regards,</span><br>
+            <strong th:text="${fromName}">WorkNest Team</strong>
+        </p>
+    </div>
+</div>
+</body>
+</html>

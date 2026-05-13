@@ -6,7 +6,6 @@ import com.worknest.domain.entities.PasswordResetToken;
 import com.worknest.domain.entities.User;
 import com.worknest.domain.enums.UserStatus;
 import com.worknest.features.auth.dto.ForgotPasswordRequest;
-import com.worknest.features.company.repository.CompanyRepository;
 import com.worknest.features.auth.repository.PasswordResetTokenRepository;
 import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.auth.application.PasswordResetRequestService;
@@ -53,7 +52,6 @@ public class PasswordResetRequestServiceImpl implements PasswordResetRequestServ
 
         log.info("Processing global forgot-password request for email {}", normalizedEmail);
 
-        // Find the most appropriate active user identity for this email
         userRepository.findAllByEmailIgnoreCase(normalizedEmail).stream()
                 .filter(user -> user.getStatus() == UserStatus.ACTIVE)
                 .findFirst()
@@ -72,9 +70,40 @@ public class PasswordResetRequestServiceImpl implements PasswordResetRequestServ
                 });
     }
 
+    @Override
+    @Transactional
+    public void requestSuperAdminPasswordReset(ForgotPasswordRequest request, String ipAddress) {
+        if (request == null || !StringUtils.hasText(request.email())) {
+            return;
+        }
+
+        String normalizedEmail = request.email().trim().toLowerCase();
+
+        userRepository.findAllByEmailIgnoreCase(normalizedEmail).stream()
+                .filter(user -> user.getStatus() == UserStatus.ACTIVE)
+                .findFirst()
+                .ifPresent(user -> {
+                    Company company = resolveCompanyForPasswordReset(user);
+                    if (isCompanyActive(company) && isPlatformCompany(company)) {
+                        createResetToken(company, user);
+                        authAuditService.appendPasswordResetRequested(
+                                company.getId(),
+                                company.getName(),
+                                user.getId(),
+                                user.getEmail(),
+                                ipAddress
+                        );
+                    }
+                });
+    }
+
     private boolean isCompanyActive(Company company) {
         if (company == null) return false;
         return company.getStatus() == CompanyStatus.ACTIVE && company.getDeletedAt() == null;
+    }
+
+    private boolean isPlatformCompany(Company company) {
+        return "worknest-platform".equals(company.getSlug());
     }
 
     private void createResetToken(Company company, User user) {
