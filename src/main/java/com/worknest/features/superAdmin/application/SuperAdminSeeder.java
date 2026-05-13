@@ -56,7 +56,7 @@ public class SuperAdminSeeder implements ApplicationRunner {
                 .setParameter("slug", "worknest-platform")
                 .getResultList();
 
-        if (!existing.isEmpty()) return existing.get(0);
+        if (!existing.isEmpty()) return existing.getFirst();
 
         Company company = new Company();
         company.setName("WorkNest Platform");
@@ -79,7 +79,7 @@ public class SuperAdminSeeder implements ApplicationRunner {
                 .getResultList();
 
         if (!existing.isEmpty()) {
-            User user = existing.get(0);
+            User user = existing.getFirst();
             if (user.getStatus() != UserStatus.ACTIVE) {
                 user.setStatus(UserStatus.ACTIVE);
             }

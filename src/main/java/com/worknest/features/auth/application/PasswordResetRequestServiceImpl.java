@@ -8,7 +8,6 @@ import com.worknest.domain.enums.UserStatus;
 import com.worknest.features.auth.dto.ForgotPasswordRequest;
 import com.worknest.features.auth.repository.PasswordResetTokenRepository;
 import com.worknest.features.auth.repository.UserRepository;
-import com.worknest.features.auth.application.PasswordResetRequestService;
 import com.worknest.features.auth.utility.SecureTokenGenerator;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import com.worknest.features.notification.email.service.PasswordResetEmailService;

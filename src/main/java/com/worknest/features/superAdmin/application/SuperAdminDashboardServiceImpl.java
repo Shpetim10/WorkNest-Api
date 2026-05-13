@@ -8,7 +8,6 @@ import com.worknest.domain.enums.SubscriptionPlan;
 import com.worknest.domain.enums.SubscriptionStatus;
 import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.superAdmin.dto.SuperAdminDashboardResponse;
-import com.worknest.security.AuthSessionPrincipal;
 import com.worknest.security.SuperAdminSecurity;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
@@ -19,6 +18,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -33,6 +33,8 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
 
     private static final DateTimeFormatter ACTIVITY_FMT = DateTimeFormatter.ofPattern("MMM d, yyyy HH:mm").withZone(ZoneOffset.UTC);
     private static final String REAL_COMPANIES = "c.deletedAt IS NULL AND c.slug != 'worknest-platform'";
+    private static final String COUNT_ALL_JPQL = "SELECT COUNT(c) FROM Company c WHERE " + REAL_COMPANIES;
+    private static final String COUNT_BY_STATUS_JPQL = "SELECT COUNT(c) FROM Company c WHERE c.status = :s AND " + REAL_COMPANIES;
 
     private final EntityManager entityManager;
     private final UserRepository userRepository;
@@ -42,11 +44,9 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     public SuperAdminDashboardResponse getDashboard(int year, String period) {
         Instant now = Instant.now();
 
-        long total = count("SELECT COUNT(c) FROM Company c WHERE " + REAL_COMPANIES);
-        long active = count("SELECT COUNT(c) FROM Company c WHERE c.status = :s AND " + REAL_COMPANIES,
-                Map.of("s", CompanyStatus.ACTIVE));
-        long suspended = count("SELECT COUNT(c) FROM Company c WHERE c.status = :s AND " + REAL_COMPANIES,
-                Map.of("s", CompanyStatus.SUSPENDED));
+        long total = count(COUNT_ALL_JPQL);
+        long active = count(COUNT_BY_STATUS_JPQL, Map.of("s", CompanyStatus.ACTIVE));
+        long suspended = count(COUNT_BY_STATUS_JPQL, Map.of("s", CompanyStatus.SUSPENDED));
         long expiringSoon = countExpiringSoon(now);
 
         List<Company> allLive = entityManager.createQuery(
@@ -81,9 +81,8 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
                 ? nowUTC.withDayOfMonth(1).toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant()
                 : now;
         if (from == null) return companies;
-        Instant effectiveTo = to;
         return companies.stream()
-                .filter(c -> !c.getCreatedAt().isBefore(from) && !c.getCreatedAt().isAfter(effectiveTo))
+                .filter(c -> !c.getCreatedAt().isBefore(from) && !c.getCreatedAt().isAfter(to))
                 .toList();
     }
 
@@ -156,8 +155,8 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
                 .getResultList();
 
         Set<UUID> actorIds = events.stream()
-                .filter(e -> e.getActorUserId() != null)
                 .map(PlatformEvent::getActorUserId)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
         Map<UUID, String> actorNames = userRepository.findAllById(actorIds).stream()
