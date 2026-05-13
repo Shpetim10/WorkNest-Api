@@ -44,9 +44,9 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     public SuperAdminDashboardResponse getDashboard(int year, String period) {
         Instant now = Instant.now();
 
-        long total = count(COUNT_ALL_JPQL);
-        long active = count(COUNT_BY_STATUS_JPQL, Map.of("s", CompanyStatus.ACTIVE));
-        long suspended = count(COUNT_BY_STATUS_JPQL, Map.of("s", CompanyStatus.SUSPENDED));
+        long total = countAllCompanies();
+        long active = countCompaniesByStatus(CompanyStatus.ACTIVE);
+        long suspended = countCompaniesByStatus(CompanyStatus.SUSPENDED);
         long expiringSoon = countExpiringSoon(now);
 
         List<Company> allLive = entityManager.createQuery(
@@ -189,14 +189,14 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         );
     }
 
-    private long count(String jpql) {
-        return entityManager.createQuery(jpql, Long.class).getSingleResult();
+    private long countAllCompanies() {
+        return entityManager.createQuery(COUNT_ALL_JPQL, Long.class).getSingleResult();
     }
 
-    private long count(String jpql, Map<String, Object> params) {
-        var query = entityManager.createQuery(jpql, Long.class);
-        params.forEach(query::setParameter);
-        return query.getSingleResult();
+    private long countCompaniesByStatus(CompanyStatus status) {
+        return entityManager.createQuery(COUNT_BY_STATUS_JPQL, Long.class)
+                .setParameter("s", status)
+                .getSingleResult();
     }
 
     private String resolveDisplayName(User user) {
