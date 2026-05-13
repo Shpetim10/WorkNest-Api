@@ -9,6 +9,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -34,8 +35,8 @@ public class SuperAdminAuditLogServiceImpl implements SuperAdminAuditLogService 
         Page<PlatformEvent> page = auditLogQueryRepository.findEvents(search, pageable);
 
         Set<UUID> actorIds = page.getContent().stream()
-                .filter(e -> e.getActorUserId() != null)
                 .map(PlatformEvent::getActorUserId)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
         Map<UUID, String> actorNames = userRepository.findAllById(actorIds).stream()
