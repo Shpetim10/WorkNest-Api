@@ -4,6 +4,7 @@ import com.worknest.common.api.ApiErrorResponse;
 import com.worknest.common.api.ApiResponse;
 import com.worknest.features.company.application.CompanySettingsService;
 import com.worknest.features.company.dto.CompanySettingsResponse;
+import com.worknest.features.company.dto.CurrencyExchangeRequest;
 import com.worknest.features.company.dto.UpdateCompanySettingsRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -17,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -60,5 +62,25 @@ public class CompanySettingsController {
             @Valid @RequestBody UpdateCompanySettingsRequest request
     ) {
         return ApiResponse.success("Company settings updated successfully", companySettingsService.updateSettings(companyId, request));
+    }
+
+    @PostMapping("/currency")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @Operation(
+            summary = "Change company currency",
+            description = "Converts all stored monetary values (employee salaries, payroll results, adjustments) by the given exchange rate and updates the company currency.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Currency updated and all monetary values converted"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error or same currency", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthenticated", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Company not found", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    })
+    public ApiResponse<CompanySettingsResponse> updateCurrency(
+            @PathVariable UUID companyId,
+            @Valid @RequestBody CurrencyExchangeRequest request
+    ) {
+        return ApiResponse.success("Currency updated and all monetary values converted successfully",
+                companySettingsService.updateCurrency(companyId, request));
     }
 }
