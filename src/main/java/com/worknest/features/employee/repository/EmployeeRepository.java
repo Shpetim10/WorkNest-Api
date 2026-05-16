@@ -1,6 +1,7 @@
 package com.worknest.features.employee.repository;
 
 import com.worknest.domain.entities.Employee;
+import com.worknest.domain.enums.EmploymentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.worknest.domain.enums.PlatformRole;
@@ -12,6 +13,8 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
+
+    long countByCompanyIdAndEmploymentStatus(UUID companyId, EmploymentStatus employmentStatus);
 
     @Query("SELECT e FROM Employee e WHERE e.company.id = :companyId AND e.employmentTypeRole = :role AND e.supervisorRoleAssignment.id = :managerId")
     List<Employee> findAllAssignedToManager(@Param("companyId") UUID companyId, @Param("role") PlatformRole role, @Param("managerId") UUID managerId);
