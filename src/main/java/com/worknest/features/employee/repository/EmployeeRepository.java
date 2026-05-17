@@ -3,6 +3,7 @@ package com.worknest.features.employee.repository;
 import com.worknest.domain.entities.Employee;
 import com.worknest.domain.enums.EmploymentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 
 import com.worknest.domain.enums.PlatformRole;
 import org.springframework.data.jpa.repository.Query;
@@ -65,6 +66,15 @@ public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
 
     @Query("SELECT COUNT(e) FROM Employee e WHERE e.department.id=:departmentId")
     int countByDepartmentId(@Param("departmentId") UUID departmentId);
+
+    @Modifying
+    @Query("""
+            UPDATE Employee e
+            SET e.monthlySalary = CASE WHEN e.monthlySalary IS NOT NULL THEN e.monthlySalary * :rate ELSE NULL END,
+                e.hourlyRate    = CASE WHEN e.hourlyRate    IS NOT NULL THEN e.hourlyRate    * :rate ELSE NULL END
+            WHERE e.company.id = :companyId
+            """)
+    void convertSalariesByCompanyId(@Param("companyId") UUID companyId, @Param("rate") BigDecimal rate);
 
     @Query("""
             SELECT e FROM Employee e
