@@ -17,4 +17,7 @@ public interface PayrollAdjustmentRepository extends JpaRepository<PayrollAdjust
     @Modifying
     @Query("UPDATE PayrollAdjustment pa SET pa.amount = pa.amount * :rate WHERE pa.company.id = :companyId")
     void convertAmountsByCompanyId(@Param("companyId") UUID companyId, @Param("rate") BigDecimal rate);
+  
+    void deleteAllByCompanyIdAndEmployeeIdAndYearAndMonth(
+            UUID companyId, UUID employeeId, int year, int month);
 }

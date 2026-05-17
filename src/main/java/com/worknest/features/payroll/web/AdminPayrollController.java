@@ -1,12 +1,14 @@
 package com.worknest.features.payroll.web;
 
 import com.worknest.common.api.ApiResponse;
+import com.worknest.common.api.PaginatedResponse;
 import com.worknest.features.payroll.application.PayrollService;
 import com.worknest.features.payroll.dto.PayrollDtos.BatchPayrollCalculationRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.BatchPayrollCalculationResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollAdjustmentRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollAdjustmentResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollCalculationResponse;
+import com.worknest.features.payroll.dto.PayrollDtos.PayrollEmployeeSummaryResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollPeriodRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.SickLeavePolicyResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.UpsertSickLeavePolicyRequest;
@@ -33,9 +35,25 @@ public class AdminPayrollController {
 
     private final PayrollService payrollService;
 
-    @PostMapping("/employees/{employeeId}/adjustments/bonus")
+    @GetMapping("/employees")
     @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
-    @Operation(summary = "Add a positive bonus adjustment for an employee payroll period")
+    @Operation(summary = "List employees with payroll month summary for the payroll table")
+    public ApiResponse<PaginatedResponse<PayrollEmployeeSummaryResponse>> listEmployees(
+            @RequestParam int year,
+            @RequestParam int month,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        return ApiResponse.success(
+                "Payroll employee list loaded",
+                payrollService.listAdminPayrollEmployees(year, month, search, page, size)
+        );
+    }
+
+    @PostMapping("/employees/{employeeId}/adjustments/bonus")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Add a bonus adjustment for an employee payroll period")
     public ApiResponse<PayrollAdjustmentResponse> addBonus(
             @PathVariable UUID employeeId,
             @Valid @RequestBody PayrollAdjustmentRequest request
@@ -44,8 +62,8 @@ public class AdminPayrollController {
     }
 
     @PostMapping("/employees/{employeeId}/adjustments/deduction")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
-    @Operation(summary = "Add a positive deduction adjustment for an employee payroll period")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Add a deduction adjustment for an employee payroll period")
     public ApiResponse<PayrollAdjustmentResponse> addDeduction(
             @PathVariable UUID employeeId,
             @Valid @RequestBody PayrollAdjustmentRequest request
@@ -95,6 +113,66 @@ public class AdminPayrollController {
             @Valid @RequestBody BatchPayrollCalculationRequest request
     ) {
         return ApiResponse.success("Payroll batch calculated", payrollService.calculateBatch(request));
+    }
+
+    @PostMapping("/employees/{employeeId}/approve")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Approve a calculated payroll (CALCULATED → APPROVED)")
+    public ApiResponse<PayrollCalculationResponse> approvePayroll(
+            @PathVariable UUID employeeId,
+            @Valid @RequestBody PayrollPeriodRequest request
+    ) {
+        return ApiResponse.success("Payroll approved", payrollService.approvePayroll(employeeId, request));
+    }
+
+    @PostMapping("/employees/{employeeId}/finalize")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Finalize an approved payroll (APPROVED → FINALIZED)")
+    public ApiResponse<PayrollCalculationResponse> finalizePayroll(
+            @PathVariable UUID employeeId,
+            @Valid @RequestBody PayrollPeriodRequest request
+    ) {
+        return ApiResponse.success("Payroll finalized", payrollService.finalizePayroll(employeeId, request));
+    }
+
+    @PostMapping("/employees/{employeeId}/complete-payment")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Complete payment for a finalized payroll (FINALIZED → PAID). Adds missing-hours compensation for hourly employees and clears applied adjustments.")
+    public ApiResponse<PayrollCalculationResponse> completePayment(
+            @PathVariable UUID employeeId,
+            @Valid @RequestBody PayrollPeriodRequest request
+    ) {
+        return ApiResponse.success("Payroll payment completed", payrollService.completePayment(employeeId, request));
+    }
+
+    @PostMapping("/employees/{employeeId}/revert-approval")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Revert an approved payroll back to calculated (APPROVED → CALCULATED). Also unlocks attendance records for the period.")
+    public ApiResponse<PayrollCalculationResponse> revertApproval(
+            @PathVariable UUID employeeId,
+            @Valid @RequestBody PayrollPeriodRequest request
+    ) {
+        return ApiResponse.success("Payroll approval reverted", payrollService.revertApproval(employeeId, request));
+    }
+
+    @PostMapping("/employees/{employeeId}/revert-finalization")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Revert a finalized payroll back to approved (FINALIZED → APPROVED)")
+    public ApiResponse<PayrollCalculationResponse> revertFinalization(
+            @PathVariable UUID employeeId,
+            @Valid @RequestBody PayrollPeriodRequest request
+    ) {
+        return ApiResponse.success("Payroll finalization reverted", payrollService.revertFinalization(employeeId, request));
+    }
+
+    @PostMapping("/employees/{employeeId}/revert-payment")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Revert a paid payroll back to finalized (PAID → FINALIZED)")
+    public ApiResponse<PayrollCalculationResponse> revertPayment(
+            @PathVariable UUID employeeId,
+            @Valid @RequestBody PayrollPeriodRequest request
+    ) {
+        return ApiResponse.success("Payroll payment reverted", payrollService.revertPayment(employeeId, request));
     }
 
     @GetMapping("/sick-leave-policy")

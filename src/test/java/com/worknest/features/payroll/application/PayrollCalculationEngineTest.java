@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 
 class PayrollCalculationEngineTest {
 
@@ -122,7 +123,105 @@ class PayrollCalculationEngineTest {
 
         assertThat(result.adjustments().totalBonus()).isEqualByComparingTo("300.00");
         assertThat(result.adjustments().totalManualDeduction()).isEqualByComparingTo("100.00");
+        // grossEarnings = basePay(1680) + bonus(300): bonus is now included
+        assertThat(result.totals().grossEarnings()).isEqualByComparingTo("1980.00");
+        assertThat(result.totals().totalDeductions()).isEqualByComparingTo("100.00");
+        assertThat(result.totals().netPay()).isEqualByComparingTo("1880.00");
+    }
+
+    @Test
+    void bonusIncludedInGrossEarningsForMonthlyEmployee() {
+        Employee employee = employee(PaymentMethod.FIXED_MONTHLY, "3000.00", null, LocalDate.of(2026, 1, 1));
+        PayrollAdjustment bonus = adjustment(employee, PayrollAdjustmentType.BONUS, "500.00");
+
+        PayrollCalculationResponse result = engine.calculate(
+                employee, YearMonth.of(2026, 5), List.of(), List.of(), List.of(bonus), PayrollStatus.DRAFT, true);
+
+        assertThat(result.totals().basePay()).isEqualByComparingTo("3000.00");
+        assertThat(result.totals().grossEarnings()).isEqualByComparingTo("3500.00");
+        assertThat(result.totals().netPay()).isEqualByComparingTo("3500.00");
+    }
+
+    @Test
+    void hourlyEmployeeUnpaidLeaveNotDeductedSeparately() {
+        // For hourly employees, attendance-based hours already exclude absent days.
+        // The leave deduction must NOT be applied on top.
+        Employee employee = employee(PaymentMethod.HOURLY, null, "10.00", LocalDate.of(2026, 1, 1));
+        LeaveRequest unpaid = leave(employee, LeaveType.UNPAID, LocalDate.of(2026, 5, 4), LocalDate.of(2026, 5, 8));
+
+        PayrollCalculationResponse result = engine.calculate(
+                employee, YearMonth.of(2026, 5), List.of(unpaid), List.of(unpaid), List.of(), PayrollStatus.DRAFT, true);
+
+        // Leave deduction for hourly must be zero; attendance absence handles the missing pay.
+        assertThat(result.totals().totalDeductions()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void hourlyEmployeeReceivesPaidAnnualLeaveOnTopOfAttendanceHours() {
+        PayrollCalculationEngine attendanceEngine = new PayrollCalculationEngine(
+                (employee, context, payableWorkingDays, payableFrom, payableTo) ->
+                        new WorkHoursProvider.WorkHoursResult(new BigDecimal("128"), AttendanceWorkHoursProvider.SOURCE),
+                new PlaceholderSickLeavePolicy()
+        );
+        Employee employee = employee(PaymentMethod.HOURLY, null, "10.00", LocalDate.of(2026, 1, 1));
+        employee.setDailyWorkingHours(new BigDecimal("8.0"));
+        LeaveRequest vacation = leave(employee, LeaveType.VACATION, LocalDate.of(2026, 5, 4), LocalDate.of(2026, 5, 8));
+
+        PayrollCalculationResponse result = attendanceEngine.calculate(
+                employee, YearMonth.of(2026, 5), List.of(vacation), List.of(vacation), List.of(), PayrollStatus.DRAFT, true);
+
+        assertThat(result.totals().basePay()).isEqualByComparingTo("1280.00");
+        assertThat(result.leaveCalculation().paidLeaveDaysThisMonth()).isEqualByComparingTo("5");
+        assertThat(result.leaveCalculation().paidLeaveAmount()).isEqualByComparingTo("400.00");
         assertThat(result.totals().grossEarnings()).isEqualByComparingTo("1680.00");
+    }
+
+    @Test
+    void hourlyEmployeeShowsFullPaymentAttendanceDeductionAndPaymentReceived() {
+        PayrollCalculationEngine attendanceEngine = new PayrollCalculationEngine(
+                (employee, context, payableWorkingDays, payableFrom, payableTo) ->
+                        new WorkHoursProvider.WorkHoursResult(new BigDecimal("120"), AttendanceWorkHoursProvider.SOURCE),
+                new PlaceholderSickLeavePolicy()
+        );
+        Employee employee = employee(PaymentMethod.HOURLY, null, "10.00", LocalDate.of(2026, 1, 1));
+        employee.setDailyWorkingHours(new BigDecimal("8.0"));
+
+        PayrollCalculationResponse result = attendanceEngine.calculate(
+                employee, YearMonth.of(2026, 5), List.of(), List.of(), List.of(), PayrollStatus.DRAFT, true);
+
+        assertThat(result.hourlyAttendancePayment().fullPayableHours()).isEqualByComparingTo("168.0");
+        assertThat(result.hourlyAttendancePayment().attendedHours()).isEqualByComparingTo("120");
+        assertThat(result.hourlyAttendancePayment().fullPayment()).isEqualByComparingTo("1680.00");
+        assertThat(result.hourlyAttendancePayment().attendanceDeduction()).isEqualByComparingTo("480.00");
+        assertThat(result.hourlyAttendancePayment().paymentReceived()).isEqualByComparingTo("1200.00");
+        assertThat(result.totals().basePay()).isEqualByComparingTo("1200.00");
+    }
+
+    @Test
+    void fixedMonthlyEmployeeUnpaidLeaveStillDeducted() {
+        Employee employee = employee(PaymentMethod.FIXED_MONTHLY, "2200.00", null, LocalDate.of(2026, 1, 1));
+        employee.setLeaveDaysPerYear(0); // zero allowance so all leave becomes unpaid
+        LeaveRequest vacation = leave(employee, LeaveType.VACATION, LocalDate.of(2026, 5, 4), LocalDate.of(2026, 5, 8));
+
+        PayrollCalculationResponse result = engine.calculate(
+                employee, YearMonth.of(2026, 5), List.of(vacation), List.of(vacation), List.of(), PayrollStatus.DRAFT, true);
+
+        // 5 unpaid days; dailyPay = 2200/21 ≈ 104.76; deduction ≈ 523.81
+        assertThat(result.leaveCalculation().unpaidLeaveDaysThisMonth()).isEqualByComparingTo("5");
+        assertThat(result.totals().totalDeductions()).isGreaterThan(BigDecimal.ZERO);
+    }
+
+    @Test
+    void netPayReflectsGrossMinusDeductions() {
+        Employee employee = employee(PaymentMethod.FIXED_MONTHLY, "2200.00", null, LocalDate.of(2026, 1, 1));
+        PayrollAdjustment bonus = adjustment(employee, PayrollAdjustmentType.BONUS, "200.00");
+        PayrollAdjustment deduction = adjustment(employee, PayrollAdjustmentType.DEDUCTION, "50.00");
+
+        PayrollCalculationResponse result = engine.calculate(
+                employee, YearMonth.of(2026, 5), List.of(), List.of(), List.of(bonus, deduction), PayrollStatus.DRAFT, true);
+
+        BigDecimal expectedNet = result.totals().grossEarnings().subtract(result.totals().totalDeductions());
+        assertThat(result.totals().netPay()).isEqualByComparingTo(expectedNet);
     }
 
     private Employee employee(PaymentMethod paymentMethod, String monthlySalary, String hourlyRate, LocalDate startDate) {

@@ -29,6 +29,6 @@ public class PlaceholderSickLeavePolicy implements SickLeavePolicy {
 
         // TODO: Company-paid sick leave days and percentage must come from company payroll settings.
         // TODO: Insurance-covered sick leave calculation must be integrated later.
-        return new SickLeaveCalculationDetails(daysTaken, null, null, null, null, null, STATUS);
+        return new SickLeaveCalculationDetails(daysTaken, null, null, null, null, null, null, null, null, null, null, null, STATUS);
     }
 }
