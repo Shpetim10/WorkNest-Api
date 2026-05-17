@@ -28,4 +28,5 @@ public interface LeaveService {
     void rejectRequest(UUID requestId, RejectLeaveRequestDto dto);
 
     void cancelRequest(UUID requestId);
+
 }
