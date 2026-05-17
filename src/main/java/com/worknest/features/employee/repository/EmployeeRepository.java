@@ -4,6 +4,8 @@ import com.worknest.domain.entities.Employee;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.worknest.domain.enums.PlatformRole;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -76,4 +78,41 @@ public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
             @Param("employeeIds") List<UUID> employeeIds,
             @Param("periodStart") LocalDate periodStart,
             @Param("periodEnd") LocalDate periodEnd);
+
+    @Query(
+            value = """
+                    SELECT e
+                    FROM Employee e
+                    JOIN e.user u
+                    WHERE e.company.id = :companyId
+                      AND e.startDate <= :periodEnd
+                      AND (e.contractExpiryDate IS NULL OR e.contractExpiryDate >= :periodStart)
+                      AND (
+                            :search IS NULL
+                            OR :search = ''
+                            OR LOWER(COALESCE(u.displayName, CONCAT(u.firstName, ' ', u.lastName))) LIKE LOWER(CONCAT('%', :search, '%'))
+                          )
+                    ORDER BY u.firstName ASC, u.lastName ASC, e.createdAt ASC
+                    """,
+            countQuery = """
+                    SELECT COUNT(e)
+                    FROM Employee e
+                    JOIN e.user u
+                    WHERE e.company.id = :companyId
+                      AND e.startDate <= :periodEnd
+                      AND (e.contractExpiryDate IS NULL OR e.contractExpiryDate >= :periodStart)
+                      AND (
+                            :search IS NULL
+                            OR :search = ''
+                            OR LOWER(COALESCE(u.displayName, CONCAT(u.firstName, ' ', u.lastName))) LIKE LOWER(CONCAT('%', :search, '%'))
+                          )
+                    """
+    )
+    Page<Employee> findPayrollCandidatesForAdmin(
+            @Param("companyId") UUID companyId,
+            @Param("search") String search,
+            @Param("periodStart") LocalDate periodStart,
+            @Param("periodEnd") LocalDate periodEnd,
+            Pageable pageable
+    );
 }

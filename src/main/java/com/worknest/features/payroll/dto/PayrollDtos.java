@@ -1,9 +1,11 @@
 package com.worknest.features.payroll.dto;
 
+import com.worknest.domain.enums.EmploymentType;
 import com.worknest.domain.enums.PaymentMethod;
 import com.worknest.domain.enums.PayrollAdjustmentType;
 import com.worknest.domain.enums.PayrollCalculationStatus;
 import com.worknest.domain.enums.PayrollStatus;
+import com.worknest.domain.enums.PlatformRole;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
@@ -92,10 +94,37 @@ public final class PayrollDtos {
             EmploymentPeriodDetails employmentPeriod,
             WorkPeriodDetails workPeriod,
             BasePayDetails basePayCalculation,
+            HourlyAttendancePaymentDetails hourlyAttendancePayment,
             LeaveCalculationDetails leaveCalculation,
             SickLeaveCalculationDetails sickLeaveCalculation,
             AdjustmentDetails adjustments,
             PayrollTotals totals,
+            List<String> warnings
+    ) {
+    }
+
+    public record PayrollEmployeeSummaryResponse(
+            UUID employeeId,
+            String employeeName,
+            PlatformRole employeeRole,
+            EmploymentType employmentType,
+            PaymentMethod paymentMethod,
+            BigDecimal monthlySalary,
+            BigDecimal hourlyRate,
+            String currency,
+            PayrollStatus payrollStatus,
+            PayrollCalculationStatus calculationStatus,
+            boolean preview,
+            BigDecimal basePay,
+            BigDecimal totalBonus,
+            BigDecimal totalManualDeduction,
+            BigDecimal hourlyFullPayment,
+            BigDecimal attendanceDeduction,
+            BigDecimal attendancePaymentReceived,
+            BigDecimal grossEarnings,
+            BigDecimal totalDeductions,
+            BigDecimal netPay,
+            boolean netPayNegative,
             List<String> warnings
     ) {
     }
@@ -130,11 +159,22 @@ public final class PayrollDtos {
     ) {
     }
 
+    public record HourlyAttendancePaymentDetails(
+            BigDecimal fullPayableHours,
+            BigDecimal attendedHours,
+            BigDecimal fullPayment,
+            BigDecimal attendanceDeduction,
+            BigDecimal paymentReceived,
+            String workHoursSource
+    ) {
+    }
+
     public record LeaveCalculationDetails(
             int annualPaidLeaveAllowanceDays,
             BigDecimal usedPaidLeaveBeforeThisMonth,
             BigDecimal leaveTakenThisMonth,
             BigDecimal paidLeaveDaysThisMonth,
+            BigDecimal paidLeaveAmount,
             BigDecimal unpaidLeaveDaysThisMonth,
             BigDecimal unpaidLeaveDeduction,
             List<PayrollLeaveRecordDetails> leaveRecordsIncluded
@@ -154,8 +194,14 @@ public final class PayrollDtos {
     public record SickLeaveCalculationDetails(
             BigDecimal daysTakenThisMonth,
             BigDecimal companyPaidDays,
+            BigDecimal unpaidSickLeaveDays,
             BigDecimal companyPaidPercentage,
             BigDecimal companyPaidAmount,
+            BigDecimal paidSickLeaveDeductionEquivalent,
+            BigDecimal totalSickLeaveDeduction,
+            BigDecimal paidSickLeaveHours,
+            BigDecimal unpaidSickLeaveHours,
+            BigDecimal unpaidSickLeaveUnpaidAmount,
             BigDecimal insuranceCoveredDays,
             BigDecimal insuranceCoveredAmount,
             String status
@@ -209,12 +255,12 @@ public final class PayrollDtos {
 
     public record UpsertSickLeavePolicyRequest(
             @NotNull(message = "companyPaidPercentage is required")
-            @DecimalMin(value = "0.00", message = "companyPaidPercentage must be >= 0")
+            @DecimalMin(value = "0.01", message = "companyPaidPercentage must be > 0")
             @DecimalMax(value = "100.00", message = "companyPaidPercentage must be <= 100")
             BigDecimal companyPaidPercentage,
 
             @NotNull(message = "maxCompanyPaidDays is required")
-            @Min(value = 0, message = "maxCompanyPaidDays must be >= 0")
+            @Min(value = 1, message = "maxCompanyPaidDays must be >= 1")
             @Max(value = 365, message = "maxCompanyPaidDays must be <= 365")
             Integer maxCompanyPaidDays
     ) {

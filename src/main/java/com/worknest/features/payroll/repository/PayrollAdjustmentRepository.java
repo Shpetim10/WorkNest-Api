@@ -9,4 +9,7 @@ public interface PayrollAdjustmentRepository extends JpaRepository<PayrollAdjust
 
     List<PayrollAdjustment> findAllByCompanyIdAndEmployeeIdAndYearAndMonthOrderByCreatedAtAsc(
             UUID companyId, UUID employeeId, int year, int month);
+
+    void deleteAllByCompanyIdAndEmployeeIdAndYearAndMonth(
+            UUID companyId, UUID employeeId, int year, int month);
 }
