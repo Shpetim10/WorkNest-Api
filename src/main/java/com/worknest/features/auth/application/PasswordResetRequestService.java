@@ -14,5 +14,7 @@ public interface PasswordResetRequestService {
      * @param ipAddress The IP address of the requester.
      */
     void requestPasswordReset(ForgotPasswordRequest request, String ipAddress);
+
+    void requestSuperAdminPasswordReset(ForgotPasswordRequest request, String ipAddress);
 }
 

@@ -289,11 +289,10 @@ public class LeaveServiceImpl implements LeaveService {
 
     private int defaultDays(Employee employee, LeaveType type) {
         return switch (type) {
-            case VACATION -> employee.getLeaveDaysPerYear() != null ? employee.getLeaveDaysPerYear() : 20;
+            case VACATION, MATERNITY, PATERNITY, OTHER -> employee.getLeaveDaysPerYear() != null ? employee.getLeaveDaysPerYear() : 20;
             case SICK -> 10;
             case PERSONAL -> 5;
             case UNPAID -> 0;
-            case MATERNITY, PATERNITY, OTHER -> employee.getLeaveDaysPerYear() != null ? employee.getLeaveDaysPerYear() : 20;
         };
     }
 

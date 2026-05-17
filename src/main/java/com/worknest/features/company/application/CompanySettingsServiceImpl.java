@@ -3,11 +3,16 @@ package com.worknest.features.company.application;
 import com.worknest.common.exception.BusinessException;
 import com.worknest.domain.entities.Company;
 import com.worknest.features.company.dto.CompanySettingsResponse;
+import com.worknest.features.company.dto.CurrencyExchangeRequest;
 import com.worknest.features.company.dto.UpdateCompanySettingsRequest;
 import com.worknest.features.company.repository.CompanyRepository;
+import com.worknest.features.employee.repository.EmployeeRepository;
+import com.worknest.features.payroll.repository.PayrollAdjustmentRepository;
+import com.worknest.features.payroll.repository.PayrollResultRepository;
 import com.worknest.realtime.event.CompanySettingsUpdatedDomainEvent;
 import com.worknest.security.AuthSessionPrincipal;
 import com.worknest.tenant.TenantContextHolder;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -22,6 +27,9 @@ import org.springframework.util.StringUtils;
 public class CompanySettingsServiceImpl implements CompanySettingsService {
 
     private final CompanyRepository companyRepository;
+    private final EmployeeRepository employeeRepository;
+    private final PayrollResultRepository payrollResultRepository;
+    private final PayrollAdjustmentRepository payrollAdjustmentRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
@@ -58,6 +66,28 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
             company.setLogoPath(request.logoPath());
         }
 
+        CompanySettingsResponse response = toResponse(companyRepository.save(company));
+        eventPublisher.publishEvent(new CompanySettingsUpdatedDomainEvent(companyId, resolveActorUserId(), response));
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public CompanySettingsResponse updateCurrency(UUID companyId, CurrencyExchangeRequest request) {
+        Company company = resolveCompany(companyId);
+
+        String newCurrency = request.newCurrency().trim().toUpperCase();
+        if (newCurrency.equalsIgnoreCase(company.getCurrency())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "SAME_CURRENCY",
+                    "The selected currency is already the company's active currency.");
+        }
+
+        BigDecimal rate = request.exchangeRate();
+        employeeRepository.convertSalariesByCompanyId(companyId, rate);
+        payrollResultRepository.convertAmountsByCompanyId(companyId, rate);
+        payrollAdjustmentRepository.convertAmountsByCompanyId(companyId, rate);
+
+        company.setCurrency(newCurrency);
         CompanySettingsResponse response = toResponse(companyRepository.save(company));
         eventPublisher.publishEvent(new CompanySettingsUpdatedDomainEvent(companyId, resolveActorUserId(), response));
         return response;
