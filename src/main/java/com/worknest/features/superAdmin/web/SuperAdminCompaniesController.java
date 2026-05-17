@@ -5,6 +5,8 @@ import com.worknest.common.api.PaginatedResponse;
 import com.worknest.common.api.PaginationSupport;
 import com.worknest.features.superAdmin.application.SuperAdminCompaniesService;
 import com.worknest.features.superAdmin.dto.CompanyRowDto;
+import com.worknest.features.superAdmin.dto.ExtendTrialRequest;
+import com.worknest.features.superAdmin.dto.ExtendTrialResponse;
 import com.worknest.features.superAdmin.dto.SuspendCompanyRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -52,5 +54,15 @@ public class SuperAdminCompaniesController {
             @Valid @RequestBody SuspendCompanyRequest request
     ) {
         return ApiResponse.success("Company status updated successfully", companiesService.toggleSuspend(companyId, request));
+    }
+
+    @PostMapping("/{companyId}/extend-trial")
+    @PreAuthorize("@superAdminSecurity.isSuperAdmin()")
+    @Operation(summary = "Extend company trial", description = "Updates the trial end date for a company")
+    public ApiResponse<ExtendTrialResponse> extendTrial(
+            @PathVariable UUID companyId,
+            @Valid @RequestBody ExtendTrialRequest request
+    ) {
+        return ApiResponse.success("Trial extended successfully", companiesService.extendTrial(companyId, request));
     }
 }

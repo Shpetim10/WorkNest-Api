@@ -9,6 +9,8 @@ public record CompanyRowDto(
         String registrationNumber,
         String email,
         String plan,
+        long employeeCount,
         String status,
-        String createdAt
+        String createdAt,
+        String subscriptionEndDate
 ) {}
