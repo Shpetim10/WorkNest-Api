@@ -78,6 +78,27 @@ public class PayrollResult {
     @Column(name = "net_pay", nullable = false, precision = 14, scale = 2)
     private BigDecimal netPay = BigDecimal.ZERO;
 
+    @Column(name = "income_tax", nullable = false, precision = 14, scale = 2)
+    private BigDecimal incomeTax = BigDecimal.ZERO;
+
+    @Column(name = "employee_social_security", nullable = false, precision = 14, scale = 2)
+    private BigDecimal employeeSocialSecurity = BigDecimal.ZERO;
+
+    @Column(name = "employee_pension", nullable = false, precision = 14, scale = 2)
+    private BigDecimal employeePension = BigDecimal.ZERO;
+
+    @Column(name = "employer_social_security", nullable = false, precision = 14, scale = 2)
+    private BigDecimal employerSocialSecurity = BigDecimal.ZERO;
+
+    @Column(name = "employer_pension", nullable = false, precision = 14, scale = 2)
+    private BigDecimal employerPension = BigDecimal.ZERO;
+
+    @Column(name = "taxable_income", nullable = false, precision = 14, scale = 2)
+    private BigDecimal taxableIncome = BigDecimal.ZERO;
+
+    @Column(name = "employer_cost_total", nullable = false, precision = 14, scale = 2)
+    private BigDecimal employerCostTotal = BigDecimal.ZERO;
+
     @Lob
     @Column(name = "calculation_snapshot_json", nullable = false, columnDefinition = "TEXT")
     private String calculationSnapshotJson;

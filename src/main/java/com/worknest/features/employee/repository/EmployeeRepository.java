@@ -11,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -127,5 +128,60 @@ public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
             @Param("periodStart") LocalDate periodStart,
             @Param("periodEnd") LocalDate periodEnd,
             Pageable pageable
+    );
+
+    @Query(
+            value = """
+                    SELECT e
+                    FROM Employee e
+                    JOIN e.user u
+                    WHERE e.company.id = :companyId
+                      AND e.supervisorRoleAssignment.id = :supervisorRoleAssignmentId
+                      AND e.employmentTypeRole = com.worknest.domain.enums.PlatformRole.EMPLOYEE
+                      AND e.startDate <= :periodEnd
+                      AND (e.contractExpiryDate IS NULL OR e.contractExpiryDate >= :periodStart)
+                      AND (
+                            :search IS NULL
+                            OR :search = ''
+                            OR LOWER(COALESCE(u.displayName, CONCAT(u.firstName, ' ', u.lastName))) LIKE LOWER(CONCAT('%', :search, '%'))
+                          )
+                    ORDER BY u.firstName ASC, u.lastName ASC, e.createdAt ASC
+                    """,
+            countQuery = """
+                    SELECT COUNT(e)
+                    FROM Employee e
+                    JOIN e.user u
+                    WHERE e.company.id = :companyId
+                      AND e.supervisorRoleAssignment.id = :supervisorRoleAssignmentId
+                      AND e.employmentTypeRole = com.worknest.domain.enums.PlatformRole.EMPLOYEE
+                      AND e.startDate <= :periodEnd
+                      AND (e.contractExpiryDate IS NULL OR e.contractExpiryDate >= :periodStart)
+                      AND (
+                            :search IS NULL
+                            OR :search = ''
+                            OR LOWER(COALESCE(u.displayName, CONCAT(u.firstName, ' ', u.lastName))) LIKE LOWER(CONCAT('%', :search, '%'))
+                          )
+                    """
+    )
+    Page<Employee> findPayrollCandidatesForStaff(
+            @Param("companyId") UUID companyId,
+            @Param("supervisorRoleAssignmentId") UUID supervisorRoleAssignmentId,
+            @Param("search") String search,
+            @Param("periodStart") LocalDate periodStart,
+            @Param("periodEnd") LocalDate periodEnd,
+            Pageable pageable
+    );
+
+    @Query("""
+            SELECT COUNT(e) > 0
+            FROM Employee e
+            WHERE e.company.id = :companyId
+              AND e.id = :employeeId
+              AND e.supervisorRoleAssignment.id = :supervisorRoleAssignmentId
+            """)
+    boolean isEmployeeAssignedToSupervisor(
+            @Param("companyId") UUID companyId,
+            @Param("employeeId") UUID employeeId,
+            @Param("supervisorRoleAssignmentId") UUID supervisorRoleAssignmentId
     );
 }

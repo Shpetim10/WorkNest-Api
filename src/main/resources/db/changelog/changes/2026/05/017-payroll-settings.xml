@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd"
+        objectQuotingStrategy="QUOTE_ONLY_RESERVED_WORDS">
+
+    <changeSet id="017-company-payroll-settings" author="codex">
+        <createTable tableName="company_payroll_settings">
+            <column name="id" type="uuid">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_company_payroll_settings"/>
+            </column>
+            <column name="company_id" type="uuid">
+                <constraints nullable="false" foreignKeyName="fk_payroll_settings_company" references="companies(id)"/>
+            </column>
+            <column name="default_daily_working_hours" type="numeric(4,1)" defaultValueNumeric="8.0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="weekend_days" type="jsonb" defaultValue="[&quot;SATURDAY&quot;,&quot;SUNDAY&quot;]">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tax_enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tax_base" type="varchar(30)" defaultValue="GROSS_MINUS_CONTRIBUTIONS">
+                <constraints nullable="false"/>
+            </column>
+            <column name="social_security_employee_rate" type="numeric(6,3)" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="social_security_employer_rate" type="numeric(6,3)" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="pension_employee_rate" type="numeric(6,3)" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="pension_employer_rate" type="numeric(6,3)" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="contribution_min_base" type="numeric(14,2)"/>
+            <column name="contribution_max_base" type="numeric(14,2)"/>
+            <column name="maternity_employer_topup_rate" type="numeric(6,3)" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="paternity_employer_topup_rate" type="numeric(6,3)" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="bigint" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint tableName="company_payroll_settings"
+                             constraintName="uk_payroll_settings_company"
+                             columnNames="company_id"/>
+        <sql>
+            ALTER TABLE company_payroll_settings
+            ADD CONSTRAINT chk_payroll_settings_ss_employee_rate CHECK (social_security_employee_rate BETWEEN 0 AND 100);
+            ALTER TABLE company_payroll_settings
+            ADD CONSTRAINT chk_payroll_settings_ss_employer_rate CHECK (social_security_employer_rate BETWEEN 0 AND 100);
+            ALTER TABLE company_payroll_settings
+            ADD CONSTRAINT chk_payroll_settings_pension_employee_rate CHECK (pension_employee_rate BETWEEN 0 AND 100);
+            ALTER TABLE company_payroll_settings
+            ADD CONSTRAINT chk_payroll_settings_pension_employer_rate CHECK (pension_employer_rate BETWEEN 0 AND 100);
+            ALTER TABLE company_payroll_settings
+            ADD CONSTRAINT chk_payroll_settings_maternity_rate CHECK (maternity_employer_topup_rate BETWEEN 0 AND 100);
+            ALTER TABLE company_payroll_settings
+            ADD CONSTRAINT chk_payroll_settings_paternity_rate CHECK (paternity_employer_topup_rate BETWEEN 0 AND 100);
+            ALTER TABLE company_payroll_settings
+            ADD CONSTRAINT chk_payroll_settings_daily_hours CHECK (default_daily_working_hours > 0);
+            ALTER TABLE company_payroll_settings
+            ADD CONSTRAINT chk_payroll_settings_contribution_bases
+                CHECK (contribution_max_base IS NULL OR contribution_min_base IS NULL OR contribution_max_base >= contribution_min_base);
+        </sql>
+    </changeSet>
+
+    <changeSet id="017-company-tax-brackets" author="codex">
+        <createTable tableName="company_tax_brackets">
+            <column name="id" type="uuid">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_company_tax_brackets"/>
+            </column>
+            <column name="company_id" type="uuid">
+                <constraints nullable="false" foreignKeyName="fk_tax_brackets_company" references="companies(id)"/>
+            </column>
+            <column name="ordinal" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="lower_bound" type="numeric(14,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="upper_bound" type="numeric(14,2)"/>
+            <column name="rate" type="numeric(6,3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="bigint" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint tableName="company_tax_brackets"
+                             constraintName="uk_tax_brackets_company_ordinal"
+                             columnNames="company_id,ordinal"/>
+        <createIndex tableName="company_tax_brackets" indexName="idx_tax_brackets_company_ordinal">
+            <column name="company_id"/>
+            <column name="ordinal"/>
+        </createIndex>
+        <sql>
+            ALTER TABLE company_tax_brackets
+            ADD CONSTRAINT chk_tax_brackets_rate CHECK (rate BETWEEN 0 AND 100);
+            ALTER TABLE company_tax_brackets
+            ADD CONSTRAINT chk_tax_brackets_lower_bound CHECK (lower_bound >= 0);
+            ALTER TABLE company_tax_brackets
+            ADD CONSTRAINT chk_tax_brackets_ordinal CHECK (ordinal >= 0);
+            ALTER TABLE company_tax_brackets
+            ADD CONSTRAINT chk_tax_brackets_upper_gt_lower CHECK (upper_bound IS NULL OR upper_bound > lower_bound);
+        </sql>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <style>
+        body { font-family: Arial, sans-serif; font-size: 10pt; margin: 0; padding: 20px; color: #333; }
+        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+        .company-block h1 { font-size: 16pt; margin: 0 0 4px 0; }
+        .company-block p { margin: 2px 0; font-size: 9pt; color: #555; }
+        .employee-block { margin-bottom: 20px; }
+        .employee-block p { margin: 2px 0; }
+        .period-block { background: #f5f5f5; padding: 8px 12px; border-radius: 4px; margin-bottom: 16px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        th { background: #333; color: #fff; text-align: left; padding: 6px 8px; font-size: 9pt; }
+        td { padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 9pt; }
+        .amount { text-align: right; }
+        .total-row td { font-weight: bold; background: #f0f0f0; }
+        .net-row td { font-weight: bold; font-size: 11pt; background: #e8f4e8; }
+        .footer { font-size: 8pt; color: #888; text-align: center; margin-top: 24px; border-top: 1px solid #eee; padding-top: 8px; }
+        .status-badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 8pt; font-weight: bold; }
+        .status-PAID { background: #d4edda; color: #155724; }
+        .status-APPROVED, .status-FINALIZED { background: #cce5ff; color: #004085; }
+        .status-CALCULATED { background: #fff3cd; color: #856404; }
+        .warnings { background: #fff3cd; border: 1px solid #ffc107; padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; }
+        .warnings li { font-size: 8pt; margin: 2px 0; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="company-block">
+        <h1 th:text="${company.name}">Company Name</h1>
+        <p th:if="${company.nipt}" th:text="'Tax ID (NIPT): ' + ${company.nipt}">Tax ID</p>
+        <p th:text="${company.email}">email</p>
+        <p th:text="${company.phoneNumber}">phone</p>
+    </div>
+    <div>
+        <p><strong>PAYSLIP</strong></p>
+        <span class="status-badge" th:classappend="'status-' + ${payroll.payrollStatus}"
+              th:text="${payroll.payrollStatus}">STATUS</span>
+    </div>
+</div>
+
+<div class="employee-block">
+    <p><strong>Employee:</strong> <span th:text="${payroll.employeeName}">Name</span></p>
+    <p><strong>Payment method:</strong> <span th:text="${payroll.paymentMethod}">Method</span></p>
+</div>
+
+<div class="period-block">
+    <strong>Period:</strong>
+    <span th:text="${year}">2026</span>-<span th:text="${#strings.padLeft('' + month, 2, '0')}">05</span>
+    &nbsp;|&nbsp;
+    <strong>Currency:</strong> <span th:text="${payroll.currency}">ALL</span>
+    &nbsp;|&nbsp;
+    <strong>Generated:</strong> <span th:text="${generatedAt}">now</span>
+</div>
+
+<div th:if="${payroll.warnings != null and not #lists.isEmpty(payroll.warnings)}" class="warnings">
+    <strong>Notices:</strong>
+    <ul>
+        <li th:each="w : ${payroll.warnings}" th:text="${w}">warning</li>
+    </ul>
+</div>
+
+<!-- Base Pay -->
+<table>
+    <tr><th colspan="2">Earnings</th></tr>
+    <tr>
+        <td>Base Pay</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(payroll.totals.basePay, 1, 2)}">0.00</td>
+    </tr>
+    <tr th:if="${payroll.adjustments != null and not #lists.isEmpty(payroll.adjustments.bonuses)}">
+        <td th:each="b : ${payroll.adjustments.bonuses}"
+            th:text="'Bonus: ' + ${b.reason}">Bonus</td>
+        <td class="amount" th:each="b : ${payroll.adjustments.bonuses}"
+            th:text="${#numbers.formatDecimal(b.amount, 1, 2)}">0.00</td>
+    </tr>
+    <tr th:if="${payroll.leaveCalculation != null and payroll.leaveCalculation.paidLeaveAmount.compareTo(T(java.math.BigDecimal).ZERO) > 0}">
+        <td>Paid Leave</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(payroll.leaveCalculation.paidLeaveAmount, 1, 2)}">0.00</td>
+    </tr>
+    <tr class="total-row">
+        <td>Gross Earnings</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(payroll.totals.grossEarnings, 1, 2)}">0.00</td>
+    </tr>
+</table>
+
+<!-- Statutory Deductions -->
+<table th:if="${payroll.statutoryDeductions != null}">
+    <tr><th colspan="2">Statutory Deductions</th></tr>
+    <tr>
+        <td>Employee Social Security</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(payroll.statutoryDeductions.employeeSocialSecurity, 1, 2)}">0.00</td>
+    </tr>
+    <tr>
+        <td>Employee Pension</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(payroll.statutoryDeductions.employeePensionContribution, 1, 2)}">0.00</td>
+    </tr>
+    <tr>
+        <td th:text="'Income Tax (taxable: ' + ${#numbers.formatDecimal(payroll.statutoryDeductions.taxableIncome, 1, 2)} + ')'">Income Tax</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(payroll.statutoryDeductions.incomeTax, 1, 2)}">0.00</td>
+    </tr>
+    <!-- Tax bracket breakdown -->
+    <tr th:each="bracket : ${payroll.statutoryDeductions.bracketBreakdown}"
+        th:if="${bracket.taxAmount.compareTo(T(java.math.BigDecimal).ZERO) > 0}">
+        <td style="padding-left:20px;color:#666;"
+            th:text="'  Bracket ' + ${#numbers.formatDecimal(bracket.lowerBound, 1, 2)}
+                     + ' – ' + (${bracket.upperBound != null} ? ${#numbers.formatDecimal(bracket.upperBound, 1, 2)} : '∞')
+                     + ' @ ' + ${bracket.rate} + '%'">bracket</td>
+        <td class="amount" style="color:#666;"
+            th:text="${#numbers.formatDecimal(bracket.taxAmount, 1, 2)}">0.00</td>
+    </tr>
+    <tr class="total-row">
+        <td>Total Statutory Deductions</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(payroll.statutoryDeductions.statutoryDeductionsTotal, 1, 2)}">0.00</td>
+    </tr>
+</table>
+
+<!-- Manual Deductions & Leave -->
+<table>
+    <tr><th colspan="2">Other Deductions</th></tr>
+    <tr th:if="${payroll.adjustments != null and not #lists.isEmpty(payroll.adjustments.deductions)}"
+        th:each="d : ${payroll.adjustments.deductions}">
+        <td th:text="'Deduction: ' + ${d.reason}">Deduction</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(d.amount, 1, 2)}">0.00</td>
+    </tr>
+    <tr th:if="${payroll.leaveCalculation != null and payroll.leaveCalculation.unpaidLeaveDeduction.compareTo(T(java.math.BigDecimal).ZERO) > 0}">
+        <td>Unpaid Leave Deduction</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(payroll.leaveCalculation.unpaidLeaveDeduction, 1, 2)}">0.00</td>
+    </tr>
+</table>
+
+<!-- Net Pay -->
+<table>
+    <tr class="net-row">
+        <td>NET PAY</td>
+        <td class="amount" th:text="${payroll.currency + ' ' + #numbers.formatDecimal(payroll.totals.netPay, 1, 2)}">ALL 0.00</td>
+    </tr>
+</table>
+
+<!-- Employer Cost (informational) -->
+<table th:if="${payroll.statutoryDeductions != null}">
+    <tr><th colspan="2">Employer Cost (informational)</th></tr>
+    <tr>
+        <td>Employer Social Security</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(payroll.statutoryDeductions.employerSocialSecurity, 1, 2)}">0.00</td>
+    </tr>
+    <tr>
+        <td>Employer Pension</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(payroll.statutoryDeductions.employerPensionContribution, 1, 2)}">0.00</td>
+    </tr>
+    <tr class="total-row">
+        <td>Total Employer Cost</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(payroll.statutoryDeductions.employerCostTotal, 1, 2)}">0.00</td>
+    </tr>
+</table>
+
+<div class="footer">
+    Generated by WorkNest &bull; <span th:text="${generatedAt}">timestamp</span>
+</div>
+</body>
+</html>

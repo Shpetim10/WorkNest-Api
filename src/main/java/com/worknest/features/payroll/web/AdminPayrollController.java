@@ -3,6 +3,7 @@ package com.worknest.features.payroll.web;
 import com.worknest.common.api.ApiResponse;
 import com.worknest.common.api.PaginatedResponse;
 import com.worknest.features.payroll.application.PayrollService;
+import com.worknest.features.payroll.application.PayslipPdfService;
 import com.worknest.features.payroll.dto.PayrollDtos.BatchPayrollCalculationRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.BatchPayrollCalculationResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollAdjustmentRequest;
@@ -17,6 +18,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,6 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminPayrollController {
 
     private final PayrollService payrollService;
+    private final PayslipPdfService payslipPdfService;
 
     @GetMapping("/employees")
     @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
@@ -85,7 +90,7 @@ public class AdminPayrollController {
 
     @GetMapping("/employees/{employeeId}/calculate")
     @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
-    @Operation(summary = "Preview payroll calculation for one employee without persisting")
+    @Operation(summary = "Preview payroll details for one employee (reads snapshot if locked, otherwise recomputes; does not persist)")
     public ApiResponse<PayrollCalculationResponse> previewCalculate(
             @PathVariable UUID employeeId,
             @RequestParam int year,
@@ -137,7 +142,7 @@ public class AdminPayrollController {
 
     @PostMapping("/employees/{employeeId}/complete-payment")
     @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
-    @Operation(summary = "Complete payment for a finalized payroll (FINALIZED → PAID). Adds missing-hours compensation for hourly employees and clears applied adjustments.")
+    @Operation(summary = "Transition payroll FINALIZED → PAID and freeze the payslip snapshot")
     public ApiResponse<PayrollCalculationResponse> completePayment(
             @PathVariable UUID employeeId,
             @Valid @RequestBody PayrollPeriodRequest request
@@ -173,6 +178,22 @@ public class AdminPayrollController {
             @Valid @RequestBody PayrollPeriodRequest request
     ) {
         return ApiResponse.success("Payroll payment reverted", payrollService.revertPayment(employeeId, request));
+    }
+
+    @GetMapping("/employees/{employeeId}/payslip")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Download payslip PDF for an employee's payroll period (requires CALCULATED or later status; STAFF scoped to assigned employees)")
+    public ResponseEntity<byte[]> payslip(
+            @PathVariable UUID employeeId,
+            @RequestParam int year,
+            @RequestParam int month
+    ) {
+        byte[] pdf = payslipPdfService.generateForEmployee(employeeId, year, month);
+        String filename = "payslip-" + year + "-" + String.format("%02d", month) + ".pdf";
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .body(pdf);
     }
 
     @GetMapping("/sick-leave-policy")

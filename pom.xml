@@ -82,6 +82,20 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-thymeleaf</artifactId>
         </dependency>
+        <!-- TODO: add openhtmltopdf for payslip PDF generation.
+             Pending decision recorded in PAYROLL_REVIEW.md.
+             Add when Maven Central access is available:
+             <dependency>
+               <groupId>io.github.openhtmltopdf</groupId>
+               <artifactId>openhtmltopdf-core</artifactId>
+               <version>1.0.10</version>
+             </dependency>
+             <dependency>
+               <groupId>io.github.openhtmltopdf</groupId>
+               <artifactId>openhtmltopdf-pdfbox</artifactId>
+               <version>1.0.10</version>
+             </dependency>
+        -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-websocket</artifactId>

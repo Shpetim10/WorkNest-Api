@@ -11,11 +11,14 @@ import com.worknest.domain.enums.EmploymentStatus;
 import com.worknest.domain.enums.PaymentMethod;
 import com.worknest.domain.enums.PayrollCalculationStatus;
 import com.worknest.domain.enums.PayrollStatus;
+import com.worknest.audit.service.AuditLogService;
 import com.worknest.features.attendance.repository.AttendanceDayRecordRepository;
 import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.company.repository.CompanyRepository;
 import com.worknest.features.employee.repository.EmployeeRepository;
+import com.worknest.features.leave.repository.LeaveBalanceRepository;
 import com.worknest.features.leave.repository.LeaveRequestRepository;
+import com.worknest.features.payroll.dto.PayrollDtos.AbsenceDetails;
 import com.worknest.features.payroll.dto.PayrollDtos.AdjustmentDetails;
 import com.worknest.features.payroll.dto.PayrollDtos.BasePayDetails;
 import com.worknest.features.payroll.dto.PayrollDtos.EmploymentPeriodDetails;
@@ -26,6 +29,7 @@ import com.worknest.features.payroll.dto.PayrollDtos.PayrollCalculationResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollPeriodRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollTotals;
 import com.worknest.features.payroll.dto.PayrollDtos.SickLeaveCalculationDetails;
+import com.worknest.features.payroll.dto.PayrollDtos.StatutoryDeductionDetails;
 import com.worknest.features.payroll.dto.PayrollDtos.WorkPeriodDetails;
 import com.worknest.features.payroll.repository.CompanySickLeavePolicyConfigRepository;
 import com.worknest.features.payroll.repository.PayrollAdjustmentRepository;
@@ -60,12 +64,14 @@ class PayrollServiceImplTest {
     @Mock private EmployeeRepository employeeRepository;
     @Mock private UserRepository userRepository;
     @Mock private LeaveRequestRepository leaveRequestRepository;
+    @Mock private LeaveBalanceRepository leaveBalanceRepository;
     @Mock private PayrollAdjustmentRepository adjustmentRepository;
     @Mock private PayrollResultRepository resultRepository;
     @Mock private PayrollCalculationEngine calculationEngine;
     @Mock private CompanySickLeavePolicyConfigRepository sickLeavePolicyRepository;
     @Mock private CompanyRepository companyRepository;
     @Mock private AttendanceDayRecordRepository attendanceDayRecordRepository;
+    @Mock private AuditLogService auditLogService;
 
     private PayrollServiceImpl service;
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
@@ -78,9 +84,9 @@ class PayrollServiceImplTest {
     void setUp() {
         service = new PayrollServiceImpl(
                 employeeRepository, userRepository, leaveRequestRepository,
-                adjustmentRepository, resultRepository, calculationEngine,
-                objectMapper, sickLeavePolicyRepository, companyRepository,
-                attendanceDayRecordRepository);
+                leaveBalanceRepository, adjustmentRepository, resultRepository,
+                calculationEngine, objectMapper, sickLeavePolicyRepository,
+                companyRepository, attendanceDayRecordRepository, auditLogService);
         AuthSessionPrincipal principal = new AuthSessionPrincipal(
                 userId, "testuser", companyId, "test-slug", UUID.randomUUID(),
                 PlatformRole.ADMIN, PlatformAccess.WEB);
@@ -102,7 +108,7 @@ class PayrollServiceImplTest {
 
         assertThat(response.payrollStatus()).isEqualTo(PayrollStatus.APPROVED);
         assertThat(response.preview()).isTrue();
-        verify(calculationEngine, never()).calculate(any(), any(), any(), any(), any(), any(), any(Boolean.class));
+        verify(calculationEngine, never()).calculate(any(), any(), any(), any(), any(), any(), any(), any(Boolean.class));
     }
 
     @Test
@@ -117,7 +123,7 @@ class PayrollServiceImplTest {
 
         assertThat(response.payrollStatus()).isEqualTo(PayrollStatus.PAID);
         assertThat(response.preview()).isTrue();
-        verify(calculationEngine, never()).calculate(any(), any(), any(), any(), any(), any(), any(Boolean.class));
+        verify(calculationEngine, never()).calculate(any(), any(), any(), any(), any(), any(), any(), any(Boolean.class));
     }
 
     @Test
@@ -134,13 +140,15 @@ class PayrollServiceImplTest {
                 .thenReturn(List.of());
         when(adjustmentRepository.findAllByCompanyIdAndEmployeeIdAndYearAndMonthOrderByCreatedAtAsc(any(), any(), eq(2026), eq(5)))
                 .thenReturn(List.of());
-        when(calculationEngine.calculate(any(), any(), any(), any(), any(), eq(PayrollStatus.CALCULATED), eq(true)))
+        when(calculationEngine.calculate(any(), any(), any(), any(), any(), any(), eq(PayrollStatus.CALCULATED), eq(true)))
                 .thenReturn(liveResponse);
+        when(leaveBalanceRepository.findAllByCompanyIdAndEmployeeIdAndYear(any(), any(), eq(2026)))
+                .thenReturn(List.of());
 
         PayrollCalculationResponse response = service.previewEmployeePayroll(employeeId, 2026, 5);
 
         assertThat(response.preview()).isTrue();
-        verify(calculationEngine).calculate(any(), any(), any(), any(), any(), eq(PayrollStatus.CALCULATED), eq(true));
+        verify(calculationEngine).calculate(any(), any(), any(), any(), any(), any(), eq(PayrollStatus.CALCULATED), eq(true));
     }
 
     // --- completePayment marks snapshot as PAID without recalculating ---
@@ -158,7 +166,7 @@ class PayrollServiceImplTest {
         assertThat(snapshotStatus(result)).isEqualTo(PayrollStatus.PAID);
         assertThat(response.preview()).isFalse();
         verify(resultRepository).saveAndFlush(result);
-        verify(calculationEngine, never()).calculate(any(), any(), any(), any(), any(), any(), any(Boolean.class));
+        verify(calculationEngine, never()).calculate(any(), any(), any(), any(), any(), any(), any(), any(Boolean.class));
     }
 
     @Test
@@ -192,7 +200,9 @@ class PayrollServiceImplTest {
                 .thenReturn(List.of());
         when(adjustmentRepository.findAllByCompanyIdAndEmployeeIdAndYearAndMonthOrderByCreatedAtAsc(any(), any(), eq(2026), eq(5)))
                 .thenReturn(List.of());
-        when(calculationEngine.calculate(any(), any(), any(), any(), any(), eq(PayrollStatus.CALCULATED), eq(false)))
+        when(leaveBalanceRepository.findAllByCompanyIdAndEmployeeIdAndYear(any(), any(), eq(2026)))
+                .thenReturn(List.of());
+        when(calculationEngine.calculate(any(), any(), any(), any(), any(), any(), eq(PayrollStatus.CALCULATED), eq(false)))
                 .thenReturn(calcResponse);
 
         service.calculateEmployeePayroll(employeeId, 2026, 5);
@@ -203,9 +213,22 @@ class PayrollServiceImplTest {
 
     @Test
     void approvePayrollLocksAttendance() {
+        Employee employee = employee();
+        PayrollCalculationResponse liveResponse = calculationResponse(PayrollStatus.CALCULATED, false);
         PayrollResult result = payrollResult(PayrollStatus.CALCULATED, snapshotJson(PayrollStatus.CALCULATED));
         when(resultRepository.findByCompanyIdAndEmployeeIdAndYearAndMonth(companyId, employeeId, 2026, 5))
                 .thenReturn(Optional.of(result));
+        when(employeeRepository.findByIdAndCompanyId(employeeId, companyId)).thenReturn(Optional.of(employee));
+        when(leaveRequestRepository.findApprovedOverlappingPayrollPeriod(any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(leaveRequestRepository.findApprovedOverlappingRange(any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(adjustmentRepository.findAllByCompanyIdAndEmployeeIdAndYearAndMonthOrderByCreatedAtAsc(any(), any(), eq(2026), eq(5)))
+                .thenReturn(List.of());
+        when(leaveBalanceRepository.findAllByCompanyIdAndEmployeeIdAndYear(any(), any(), eq(2026)))
+                .thenReturn(List.of());
+        when(calculationEngine.calculate(any(), any(), any(), any(), any(), any(), eq(PayrollStatus.CALCULATED), eq(false)))
+                .thenReturn(liveResponse);
 
         PayrollCalculationResponse response = service.approvePayroll(employeeId, new PayrollPeriodRequest(2026, 5));
 
@@ -319,7 +342,8 @@ class PayrollServiceImplTest {
     @Test
     void calculateBatchSkipsEmployeeWithLockedPayroll() {
         Employee employee = employee();
-        when(employeeRepository.findAllByCompanyId(companyId)).thenReturn(List.of(employee));
+        when(employeeRepository.findPayrollCandidates(eq(companyId), any(), any(), any()))
+                .thenReturn(List.of(employee));
         when(resultRepository.existsByCompanyIdAndEmployeeIdAndYearAndMonthAndStatusIn(
                 eq(companyId), eq(employeeId), eq(2026), eq(5), any())).thenReturn(true);
 
@@ -331,14 +355,15 @@ class PayrollServiceImplTest {
         assertThat(response.skippedCalculations()).isEqualTo(1);
         assertThat(response.failedCalculations()).isEqualTo(0);
         assertThat(response.results().get(0).errorCode()).isEqualTo("PAYROLL_PERIOD_LOCKED");
-        verify(calculationEngine, never()).calculate(any(), any(), any(), any(), any(), any(), any(Boolean.class));
+        verify(calculationEngine, never()).calculate(any(), any(), any(), any(), any(), any(), any(), any(Boolean.class));
     }
 
     @Test
     void calculateBatchSkipsEmployeeWithExpiredContract() {
         Employee employee = employee();
         employee.setContractExpiryDate(LocalDate.of(2026, 4, 30));
-        when(employeeRepository.findAllByCompanyId(companyId)).thenReturn(List.of(employee));
+        when(employeeRepository.findPayrollCandidates(eq(companyId), any(), any(), any()))
+                .thenReturn(List.of(employee));
 
         BatchPayrollCalculationResponse response =
                 service.calculateBatch(new BatchPayrollCalculationRequest(2026, 5, null));
@@ -352,7 +377,8 @@ class PayrollServiceImplTest {
     void calculateBatchSkipsEmployeeStartingAfterPeriod() {
         Employee employee = employee();
         employee.setStartDate(LocalDate.of(2026, 6, 1));
-        when(employeeRepository.findAllByCompanyId(companyId)).thenReturn(List.of(employee));
+        when(employeeRepository.findPayrollCandidates(eq(companyId), any(), any(), any()))
+                .thenReturn(List.of(employee));
 
         BatchPayrollCalculationResponse response =
                 service.calculateBatch(new BatchPayrollCalculationRequest(2026, 5, null));
@@ -433,8 +459,12 @@ class PayrollServiceImplTest {
                 new SickLeaveCalculationDetails(BigDecimal.ZERO, null, null, null,
                         null, null, null, null, null, null, null, null, "TODO_SICK_LEAVE_POLICY_NOT_CONFIGURED"),
                 new AdjustmentDetails(List.of(), List.of(), BigDecimal.ZERO, BigDecimal.ZERO),
+                new StatutoryDeductionDetails(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                        BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                        BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, List.of(), true),
+                new AbsenceDetails(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, false),
                 new PayrollTotals(new BigDecimal("2000.00"), new BigDecimal("2000.00"),
-                        BigDecimal.ZERO, new BigDecimal("2000.00"), false),
+                        BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("2000.00"), false, BigDecimal.ZERO),
                 List.of());
     }
 }

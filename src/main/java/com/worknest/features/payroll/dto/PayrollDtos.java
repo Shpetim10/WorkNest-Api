@@ -6,11 +6,14 @@ import com.worknest.domain.enums.PayrollAdjustmentType;
 import com.worknest.domain.enums.PayrollCalculationStatus;
 import com.worknest.domain.enums.PayrollStatus;
 import com.worknest.domain.enums.PlatformRole;
+import com.worknest.domain.enums.TaxBase;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
@@ -98,6 +101,8 @@ public final class PayrollDtos {
             LeaveCalculationDetails leaveCalculation,
             SickLeaveCalculationDetails sickLeaveCalculation,
             AdjustmentDetails adjustments,
+            StatutoryDeductionDetails statutoryDeductions,
+            AbsenceDetails absenceDetails,
             PayrollTotals totals,
             List<String> warnings
     ) {
@@ -125,6 +130,10 @@ public final class PayrollDtos {
             BigDecimal totalDeductions,
             BigDecimal netPay,
             boolean netPayNegative,
+            BigDecimal incomeTax,
+            BigDecimal employeeSocialSecurity,
+            BigDecimal employeePension,
+            BigDecimal employerCostTotal,
             List<String> warnings
     ) {
     }
@@ -227,9 +236,11 @@ public final class PayrollDtos {
     public record PayrollTotals(
             BigDecimal basePay,
             BigDecimal grossEarnings,
+            BigDecimal statutoryDeductions,
             BigDecimal totalDeductions,
             BigDecimal netPay,
-            boolean netPayNegative
+            boolean netPayNegative,
+            BigDecimal employerCostTotal
     ) {
     }
 
@@ -270,6 +281,153 @@ public final class PayrollDtos {
             BigDecimal companyPaidPercentage,
             int maxCompanyPaidDays,
             boolean isDefault
+    ) {
+    }
+
+    // ── Statutory deductions ─────────────────────────────────────────────────
+
+    public record StatutoryDeductionDetails(
+            BigDecimal socialSecurityBase,
+            BigDecimal pensionBase,
+            BigDecimal taxableIncome,
+            BigDecimal employeeSocialSecurity,
+            BigDecimal employeePensionContribution,
+            BigDecimal incomeTax,
+            BigDecimal statutoryDeductionsTotal,
+            BigDecimal employerSocialSecurity,
+            BigDecimal employerPensionContribution,
+            BigDecimal employerCostTotal,
+            List<TaxBracketCalculationLine> bracketBreakdown,
+            boolean usedSystemDefaults
+    ) {
+    }
+
+    public record TaxBracketCalculationLine(
+            BigDecimal lowerBound,
+            BigDecimal upperBound,
+            BigDecimal rate,
+            BigDecimal taxableSlice,
+            BigDecimal taxAmount
+    ) {
+    }
+
+    // ── Absence reporting (I1 – FIXED_MONTHLY only, informational) ───────────
+
+    public record AbsenceDetails(
+            BigDecimal expectedWorkingMinutes,
+            BigDecimal attendedMinutes,
+            BigDecimal absentMinutes,
+            BigDecimal monetaryEquivalent,
+            boolean applied
+    ) {
+    }
+
+    // ── Leave treatment classification (B5) ──────────────────────────────────
+
+    public enum PayrollLeaveTreatment {
+        PAID_FROM_BALANCE,
+        UNPAID_EXCESS,
+        UNPAID_EXPLICIT,
+        SICK_COMPANY_POLICY,
+        STATUTORY_MATERNITY,
+        STATUTORY_PATERNITY
+    }
+
+    // ── Settings DTOs (§3) ───────────────────────────────────────────────────
+
+    public record PayrollSettingsResponse(
+            BigDecimal defaultDailyWorkingHours,
+            List<String> weekendDays,
+            boolean taxEnabled,
+            TaxBase taxBase,
+            BigDecimal socialSecurityEmployeeRate,
+            BigDecimal socialSecurityEmployerRate,
+            BigDecimal pensionEmployeeRate,
+            BigDecimal pensionEmployerRate,
+            BigDecimal contributionMinBase,
+            BigDecimal contributionMaxBase,
+            BigDecimal maternityEmployerTopupRate,
+            BigDecimal paternityEmployerTopupRate,
+            SickLeavePolicyResponse sickLeavePolicy,
+            boolean isDefault
+    ) {
+    }
+
+    public record UpsertPayrollSettingsRequest(
+            @NotNull @DecimalMin("0.5") @DecimalMax("24.0")
+            BigDecimal defaultDailyWorkingHours,
+
+            @NotEmpty
+            List<String> weekendDays,
+
+            @NotNull
+            Boolean taxEnabled,
+
+            @NotNull
+            TaxBase taxBase,
+
+            @NotNull @DecimalMin("0") @DecimalMax("100")
+            BigDecimal socialSecurityEmployeeRate,
+
+            @NotNull @DecimalMin("0") @DecimalMax("100")
+            BigDecimal socialSecurityEmployerRate,
+
+            @NotNull @DecimalMin("0") @DecimalMax("100")
+            BigDecimal pensionEmployeeRate,
+
+            @NotNull @DecimalMin("0") @DecimalMax("100")
+            BigDecimal pensionEmployerRate,
+
+            BigDecimal contributionMinBase,
+
+            BigDecimal contributionMaxBase,
+
+            @NotNull @DecimalMin("0") @DecimalMax("100")
+            BigDecimal maternityEmployerTopupRate,
+
+            @NotNull @DecimalMin("0") @DecimalMax("100")
+            BigDecimal paternityEmployerTopupRate
+    ) {
+    }
+
+    public record TaxBracketRequest(
+            @NotNull @DecimalMin("0") BigDecimal lowerBound,
+            BigDecimal upperBound,
+            @NotNull @DecimalMin("0") @DecimalMax("100") BigDecimal rate
+    ) {
+    }
+
+    public record TaxBracketResponse(
+            UUID id,
+            int ordinal,
+            BigDecimal lowerBound,
+            BigDecimal upperBound,
+            BigDecimal rate
+    ) {
+    }
+
+    public record ReplaceTaxBracketsRequest(
+            @NotNull @Valid
+            List<TaxBracketRequest> brackets
+    ) {
+    }
+
+    // ── Public holiday DTOs (§2.1) ────────────────────────────────────────────
+
+    public record PublicHolidayRequest(
+            @NotNull LocalDate date,
+            @NotBlank @Size(max = 150) String name,
+            @NotNull Boolean recurring,
+            @NotNull Boolean paid
+    ) {
+    }
+
+    public record PublicHolidayResponse(
+            UUID id,
+            LocalDate date,
+            String name,
+            boolean recurring,
+            boolean paid
     ) {
     }
 }

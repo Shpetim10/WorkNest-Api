@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd"
+        objectQuotingStrategy="QUOTE_ONLY_RESERVED_WORDS">
+
+    <changeSet id="016-company-public-holidays" author="codex">
+        <createTable tableName="company_public_holidays">
+            <column name="id" type="uuid">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_company_public_holidays"/>
+            </column>
+            <column name="company_id" type="uuid">
+                <constraints nullable="false" foreignKeyName="fk_public_holidays_company" references="companies(id)"/>
+            </column>
+            <column name="holiday_date" type="date">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="varchar(150)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="recurring" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="paid" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by_user_id" type="uuid"/>
+            <column name="created_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="bigint" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint tableName="company_public_holidays"
+                             constraintName="uk_public_holidays_company_date"
+                             columnNames="company_id,holiday_date"/>
+        <createIndex tableName="company_public_holidays" indexName="idx_public_holidays_company_date">
+            <column name="company_id"/>
+            <column name="holiday_date"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

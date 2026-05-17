@@ -16,20 +16,35 @@ public class ThymeleafEmailConfig {
     @Bean
     public SpringTemplateEngine thymeleafTemplateEngine(ITemplateResolver templateResolver) {
         SpringTemplateEngine templateEngine = new SpringTemplateEngine();
-        templateEngine.setTemplateResolver(templateResolver);
+        templateEngine.addTemplateResolver(templateResolver);
+        templateEngine.addTemplateResolver(fallbackTemplateResolver());
         templateEngine.setTemplateEngineMessageSource(emailMessageSource());
         return templateEngine;
     }
 
     @Bean
     public ITemplateResolver templateResolver() {
-        ClassLoaderTemplateResolver templateResolver = new ClassLoaderTemplateResolver();
-        templateResolver.setPrefix("/templates/email/");
-        templateResolver.setSuffix(".html");
-        templateResolver.setTemplateMode(TemplateMode.HTML);
-        templateResolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        templateResolver.setCacheable(false); // Set to true in production
-        return templateResolver;
+        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setOrder(1);
+        resolver.setCheckExistence(true);
+        resolver.setPrefix("/templates/email/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        resolver.setCacheable(false);
+        return resolver;
+    }
+
+    private ITemplateResolver fallbackTemplateResolver() {
+        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setOrder(2);
+        resolver.setCheckExistence(true);
+        resolver.setPrefix("/templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        resolver.setCacheable(false);
+        return resolver;
     }
 
     @Bean
