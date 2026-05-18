@@ -10,7 +10,8 @@ import com.worknest.features.employee.repository.EmployeeRepository;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollCalculationResponse;
 import com.worknest.features.payroll.repository.PayrollResultRepository;
 import com.worknest.security.AuthSessionPrincipal;
-import java.nio.charset.StandardCharsets;
+import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
+import java.io.ByteArrayOutputStream;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -21,13 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
-/**
- * Generates payslip documents from the payroll snapshot.
- *
- * Current implementation renders the Thymeleaf template and returns UTF-8 HTML bytes.
- * To produce real PDF output, add openhtmltopdf-core + openhtmltopdf-pdfbox 1.0.10 to pom.xml
- * and replace renderToBytes() with PdfRendererBuilder. See PAYROLL_REVIEW.md for the decision.
- */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -71,7 +65,7 @@ public class PayslipPdfService {
 
         PayrollCalculationResponse payroll = LOCKED_STATUSES.contains(result.getStatus())
                 ? payrollService.responseFromSnapshot(result, false)
-                : payrollService.previewCurrentEmployeePayroll(year, month);
+                : payrollService.previewEmployeePayroll(employee.getId(), year, month);
 
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "COMPANY_NOT_FOUND",
@@ -89,13 +83,17 @@ public class PayslipPdfService {
         return renderToBytes(html);
     }
 
-    /**
-     * Converts the rendered HTML to a byte array.
-     * Replace this with openhtmltopdf PdfRendererBuilder once the library is added to pom.xml.
-     */
     private byte[] renderToBytes(String html) {
-        // Stub: returns HTML bytes. Replace with actual PDF rendering once openhtmltopdf is available.
-        return html.getBytes(StandardCharsets.UTF_8);
+        try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
+            PdfRendererBuilder builder = new PdfRendererBuilder();
+            builder.withHtmlContent(html, null);
+            builder.toStream(os);
+            builder.run();
+            return os.toByteArray();
+        } catch (Exception e) {
+            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "PDF_GENERATION_FAILED", "Failed to generate payslip PDF.");
+        }
     }
 
     private AuthSessionPrincipal principal() {

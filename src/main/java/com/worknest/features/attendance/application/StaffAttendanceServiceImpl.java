@@ -94,7 +94,7 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
 
         List<Employee> employees;
         if (isAdmin(principal.role())) {
-            employees = employeeRepository.findByCompanyAndRolesAndDepartmentAndEmploymentStatusNotPendingAndTimeWithinContract(
+            employees = employeeRepository.findByCompanyAndRolesAndDepartment(
                     companyId, List.of(PlatformRole.EMPLOYEE, PlatformRole.STAFF), departmentId
             );
             if (siteId != null) {
@@ -109,10 +109,6 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         }
 
         LocalDate resolvedDate = date != null ? date : LocalDate.now(companyZone);
-
-        employees = employees.stream()
-                .filter(emp -> emp.getStartDate() == null || !emp.getStartDate().isAfter(resolvedDate))
-                .toList();
 
         List<UUID> employeeIds = employees.stream().map(Employee::getId).toList();
         Map<UUID, AttendanceDayRecord> recordByEmployeeId = employeeIds.isEmpty()
