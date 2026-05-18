@@ -12,6 +12,9 @@ import com.worknest.domain.enums.PaymentMethod;
 import com.worknest.domain.enums.PayrollAdjustmentType;
 import com.worknest.domain.enums.PayrollStatus;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollCalculationResponse;
+import com.worknest.domain.entities.CompanyPayrollSettings;
+import com.worknest.domain.entities.CompanyTaxBracket;
+import com.worknest.domain.enums.TaxBase;
 import com.worknest.features.payroll.repository.CompanyPayrollSettingsRepository;
 import com.worknest.features.payroll.repository.CompanyTaxBracketRepository;
 import java.math.BigDecimal;
@@ -216,6 +219,8 @@ class PayrollCalculationEngineTest {
 
     @Test
     void hourlyEmployeeShowsFullPaymentAttendanceDeductionAndPaymentReceived() {
+        // Use a closed past month (April 2026 = 22 working days) so effectiveAttendanceTo = Apr 30
+        // and fullPayableHours is deterministic regardless of when this test runs.
         PayrollCalculationEngine attendanceEngine = new PayrollCalculationEngine(
                 (employee, context, payableWorkingDays, payableFrom, payableTo) ->
                         new WorkHoursProvider.WorkHoursResult(new BigDecimal("120"), AttendanceWorkHoursProvider.SOURCE),
@@ -227,15 +232,20 @@ class PayrollCalculationEngineTest {
         Employee employee = employee(PaymentMethod.HOURLY, null, "10.00", LocalDate.of(2026, 1, 1));
         employee.setDailyWorkingHours(new BigDecimal("8.0"));
 
-        PayrollCalculationResponse result = attendanceEngine.calculate(employee, YearMonth.of(2026, 5),
+        // April 2026: 22 working days → fullPayableHours = 22 * 8 = 176 → fullPayment = 1760
+        // worked 120h → paymentReceived = 1200, attendanceDeduction = 560
+        PayrollCalculationResponse result = attendanceEngine.calculate(employee, YearMonth.of(2026, 4),
                 List.of(), List.of(), List.of(), List.of(), PayrollStatus.DRAFT, true);
 
-        assertThat(result.hourlyAttendancePayment().fullPayableHours()).isEqualByComparingTo("168.0");
+        assertThat(result.hourlyAttendancePayment().fullPayableHours()).isEqualByComparingTo("176.0");
         assertThat(result.hourlyAttendancePayment().attendedHours()).isEqualByComparingTo("120");
-        assertThat(result.hourlyAttendancePayment().fullPayment()).isEqualByComparingTo("1680.00");
-        assertThat(result.hourlyAttendancePayment().attendanceDeduction()).isEqualByComparingTo("480.00");
+        assertThat(result.hourlyAttendancePayment().fullPayment()).isEqualByComparingTo("1760.00");
+        assertThat(result.hourlyAttendancePayment().attendanceDeduction()).isEqualByComparingTo("560.00");
         assertThat(result.hourlyAttendancePayment().paymentReceived()).isEqualByComparingTo("1200.00");
         assertThat(result.totals().basePay()).isEqualByComparingTo("1200.00");
+        // effectiveAttendanceTo == payableTo for a closed month
+        assertThat(result.workPeriod().effectiveAttendanceTo()).isEqualTo(LocalDate.of(2026, 4, 30));
+        assertThat(result.workPeriod().effectivePayableWorkingDays()).isEqualByComparingTo("22");
     }
 
     @Test
@@ -290,6 +300,67 @@ class PayrollCalculationEngineTest {
         assertThat(result.leaveCalculation().unpaidLeaveDeduction()).isEqualByComparingTo("0.00");
         assertThat(result.leaveCalculation().leaveRecordsIncluded())
                 .anyMatch(r -> "STATUTORY_MATERNITY".equals(r.payrollTreatment()));
+    }
+
+    /**
+     * B2: Full statutory deduction round-trip.
+     * SS employee 9%, pension employee 6%, one tax bracket: 15% on entire gross.
+     * Tax base = GROSS_MINUS_CONTRIBUTIONS → taxable = gross - SS - pension.
+     */
+    @Test
+    void statutoryDeductionsRoundTripWithSsAndPensionAndProgressiveTax() {
+        CompanyPayrollSettings settings = payrollSettings(
+                "9.000", "14.000",  // SS employee/employer
+                "6.000", "5.000",   // pension employee/employer
+                null, null,
+                TaxBase.GROSS_MINUS_CONTRIBUTIONS, true);
+        CompanyTaxBracket bracket = taxBracket(0, BigDecimal.ZERO, null, new BigDecimal("15.000"));
+
+        when(settingsRepository.findByCompanyId(any())).thenReturn(Optional.of(settings));
+        when(taxBracketRepository.findAllByCompanyIdOrderByOrdinalAsc(any())).thenReturn(List.of(bracket));
+
+        Employee employee = employee(PaymentMethod.FIXED_MONTHLY, "3000.00", null, LocalDate.of(2026, 1, 1));
+        PayrollCalculationResponse result = calculate(engine, employee, YearMonth.of(2026, 5), List.of(), List.of(), List.of());
+
+        BigDecimal gross = result.totals().grossEarnings();                        // 3000.00
+        BigDecimal ss = result.statutoryDeductions().employeeSocialSecurity();         // 3000 * 9% = 270.00
+        BigDecimal pension = result.statutoryDeductions().employeePensionContribution(); // 3000 * 6% = 180.00
+        BigDecimal taxableIncome = result.statutoryDeductions().taxableIncome();   // 3000 - 270 - 180 = 2550.00
+        BigDecimal tax = result.statutoryDeductions().incomeTax();                 // 2550 * 15% = 382.50
+
+        assertThat(gross).isEqualByComparingTo("3000.00");
+        assertThat(ss).isEqualByComparingTo("270.00");
+        assertThat(pension).isEqualByComparingTo("180.00");
+        assertThat(taxableIncome).isEqualByComparingTo("2550.00");
+        assertThat(tax).isEqualByComparingTo("382.50");
+        assertThat(result.statutoryDeductions().statutoryDeductionsTotal())
+                .isEqualByComparingTo("832.50"); // 270 + 180 + 382.50
+        assertThat(result.totals().netPay()).isEqualByComparingTo("2167.50"); // 3000 - 832.50
+        // Reconciliation: net = gross - totalDeductions
+        assertThat(result.totals().netPay())
+                .isEqualByComparingTo(result.totals().grossEarnings().subtract(result.totals().totalDeductions()));
+    }
+
+    /**
+     * B2: When gross earnings fall below the contribution minimum base,
+     * a warning must be emitted because contributions are inflated.
+     */
+    @Test
+    void contributionMinBaseAboveGrossEarningsEmitsWarning() {
+        CompanyPayrollSettings settings = payrollSettings(
+                "9.000", "14.000",
+                "6.000", "5.000",
+                new BigDecimal("5000.00"), null, // minBase = 5000, gross = 2200
+                TaxBase.GROSS_MINUS_CONTRIBUTIONS, true);
+        when(settingsRepository.findByCompanyId(any())).thenReturn(Optional.of(settings));
+        when(taxBracketRepository.findAllByCompanyIdOrderByOrdinalAsc(any())).thenReturn(List.of());
+
+        Employee employee = employee(PaymentMethod.FIXED_MONTHLY, "2200.00", null, LocalDate.of(2026, 1, 1));
+        PayrollCalculationResponse result = calculate(engine, employee, YearMonth.of(2026, 5), List.of(), List.of(), List.of());
+
+        assertThat(result.warnings()).anyMatch(w -> w.contains("below the contribution minimum base"));
+        // Contributions are calculated on 5000, not 2200
+        assertThat(result.statutoryDeductions().employeeSocialSecurity()).isEqualByComparingTo("450.00");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -358,5 +429,34 @@ class PayrollCalculationEngineTest {
         adjustment.setAmount(new BigDecimal(amount));
         adjustment.setReason(type.name());
         return adjustment;
+    }
+
+    private CompanyPayrollSettings payrollSettings(
+            String ssEmployee, String ssEmployer,
+            String pensionEmployee, String pensionEmployer,
+            BigDecimal minBase, BigDecimal maxBase,
+            TaxBase taxBase, boolean taxEnabled) {
+        CompanyPayrollSettings s = new CompanyPayrollSettings();
+        s.setSocialSecurityEmployeeRate(new BigDecimal(ssEmployee));
+        s.setSocialSecurityEmployerRate(new BigDecimal(ssEmployer));
+        s.setPensionEmployeeRate(new BigDecimal(pensionEmployee));
+        s.setPensionEmployerRate(new BigDecimal(pensionEmployer));
+        s.setContributionMinBase(minBase);
+        s.setContributionMaxBase(maxBase);
+        s.setTaxBase(taxBase);
+        s.setTaxEnabled(taxEnabled);
+        s.setDefaultDailyWorkingHours(BigDecimal.valueOf(8));
+        s.setWeekendDaysJson("[\"SATURDAY\",\"SUNDAY\"]");
+        return s;
+    }
+
+    private CompanyTaxBracket taxBracket(int ordinal, BigDecimal lo, BigDecimal hi, BigDecimal rate) {
+        CompanyTaxBracket b = new CompanyTaxBracket();
+        b.setId(UUID.randomUUID());
+        b.setOrdinal(ordinal);
+        b.setLowerBound(lo);
+        b.setUpperBound(hi);
+        b.setRate(rate);
+        return b;
     }
 }

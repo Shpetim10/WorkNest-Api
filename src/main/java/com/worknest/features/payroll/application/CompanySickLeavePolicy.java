@@ -69,9 +69,7 @@ public class CompanySickLeavePolicy implements SickLeavePolicy {
         BigDecimal unpaidRate = BigDecimal.ONE.subtract(rate);
 
         BigDecimal dailyPay = dailyPayValue(employee, context);
-        BigDecimal dailyHours = employee.getDailyWorkingHours() != null
-                ? employee.getDailyWorkingHours()
-                : context.defaultDailyWorkingHours();
+        BigDecimal dailyHours = context.defaultDailyWorkingHours();
 
         if (employee.getPaymentMethod() == PaymentMethod.FIXED_MONTHLY) {
             // Option A: basePay already covers all days; deduct the unpaid sick portion.
@@ -156,16 +154,10 @@ public class CompanySickLeavePolicy implements SickLeavePolicy {
     }
 
     private BigDecimal dailyPayValue(Employee employee, PayrollContext context) {
-        BigDecimal dailyHours = employee.getDailyWorkingHours() != null
-                ? employee.getDailyWorkingHours()
-                : context.defaultDailyWorkingHours();
-        BigDecimal hourlyRate;
         if (employee.getPaymentMethod() == PaymentMethod.FIXED_MONTHLY) {
-            BigDecimal monthlyHours = BigDecimal.valueOf(context.workingDaysInMonth()).multiply(dailyHours);
-            hourlyRate = employee.getMonthlySalary().divide(monthlyHours, 8, RoundingMode.HALF_UP);
-        } else {
-            hourlyRate = employee.getHourlyRate();
+            return employee.getMonthlySalary()
+                    .divide(BigDecimal.valueOf(context.workingDaysInMonth()), 8, RoundingMode.HALF_UP);
         }
-        return hourlyRate.multiply(dailyHours).setScale(2, RoundingMode.HALF_UP);
+        return employee.getHourlyRate().multiply(context.defaultDailyWorkingHours()).setScale(2, RoundingMode.HALF_UP);
     }
 }

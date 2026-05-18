@@ -10,6 +10,8 @@ import com.worknest.features.companySite.exception.InvalidCidrException;
 import com.worknest.features.companySite.exception.InvalidGeofenceException;
 import com.worknest.features.companySite.exception.SiteCreationValidationException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.MediaType;
 import jakarta.validation.ConstraintViolationException;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -83,8 +85,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiErrorResponse> handleBusinessException(
             BusinessException exception,
-            HttpServletRequest request
+            HttpServletRequest request,
+            HttpServletResponse response
     ) {
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         return ResponseEntity.status(exception.getStatus()).body(
                 ApiErrorResponse.of(exception.getCode(), exception.getMessage(), request.getRequestURI(), List.of())
         );

@@ -152,7 +152,13 @@ public final class PayrollDtos {
             BigDecimal payableWorkingDays,
             BigDecimal defaultDailyWorkingHours,
             BigDecimal payableHours,
-            String workHoursSource
+            String workHoursSource,
+            /** Last date through which attendance was (or will be) summed.
+             *  Equals payableTo for past months; equals today for the current month. */
+            LocalDate effectiveAttendanceTo,
+            /** Working days from payableFrom to effectiveAttendanceTo.
+             *  Used to compute the "full-attendance expected" hours for the elapsed period. */
+            BigDecimal effectivePayableWorkingDays
     ) {
     }
 

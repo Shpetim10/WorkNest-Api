@@ -92,6 +92,16 @@ public class PayrollCalculationEngine {
         }
 
         BigDecimal payableWorkingDays = workingDayCalculator.countWorkingDays(companyId, payableFrom, payableTo);
+
+        // Cap to today for current-month payrolls so expected-hours comparisons don't include future days.
+        LocalDate effectiveAttendanceTo = PayrollDateUtils.min(payableTo, LocalDate.now());
+        if (effectiveAttendanceTo.isBefore(payableFrom)) {
+            effectiveAttendanceTo = payableFrom;
+        }
+        BigDecimal effectivePayableDays = effectiveAttendanceTo.equals(payableTo)
+                ? payableWorkingDays
+                : workingDayCalculator.countWorkingDays(companyId, payableFrom, effectiveAttendanceTo);
+
         WorkHoursProvider.WorkHoursResult workHours = workHoursProvider.getWorkedHours(
                 employee, context, payableWorkingDays, payableFrom, payableTo);
         if (DefaultWorkHoursProvider.SOURCE.equals(workHours.source())
@@ -102,7 +112,7 @@ public class PayrollCalculationEngine {
         BigDecimal basePay = calculateBasePay(employee, context, payableWorkingDays, workHours.hours());
         BasePayDetails basePayDetails = toBasePayDetails(employee, context, payableWorkingDays, workHours.hours(), basePay);
         HourlyAttendancePaymentDetails hourlyAttendancePayment = calculateHourlyAttendancePayment(
-                employee, context, payableWorkingDays, workHours, basePay, warnings);
+                employee, context, effectivePayableDays, workHours, basePay, warnings);
 
         LeaveCalculationDetails leaveDetails = calculateLeave(
                 employee, context, approvedLeavesInYear, approvedLeavesInMonth,
@@ -135,7 +145,7 @@ public class PayrollCalculationEngine {
         }
 
         // ── Absence info (I1) — FIXED_MONTHLY only, informational ────────────
-        AbsenceDetails absenceDetails = calculateAbsenceDetails(employee, context, workHours);
+        AbsenceDetails absenceDetails = calculateAbsenceDetails(employee, context, workHours, effectivePayableDays);
 
         // ── Statutory deductions (B2) ─────────────────────────────────────────
         CompanyPayrollSettings settings = settingsRepository.findByCompanyId(companyId).orElse(null);
@@ -179,7 +189,9 @@ public class PayrollCalculationEngine {
                         payableWorkingDays,
                         context.defaultDailyWorkingHours(),
                         workHours.hours(),
-                        workHours.source()),
+                        workHours.source(),
+                        effectiveAttendanceTo,
+                        effectivePayableDays),
                 basePayDetails,
                 hourlyAttendancePayment,
                 leaveDetails,
@@ -271,14 +283,13 @@ public class PayrollCalculationEngine {
 
     private HourlyAttendancePaymentDetails calculateHourlyAttendancePayment(
             Employee employee, PayrollContext context,
-            BigDecimal payableWorkingDays, WorkHoursProvider.WorkHoursResult workHours,
+            BigDecimal effectivePayableDays, WorkHoursProvider.WorkHoursResult workHours,
             BigDecimal basePay, List<String> warnings
     ) {
         if (employee.getPaymentMethod() != PaymentMethod.HOURLY) {
             return null;
         }
-        BigDecimal dailyHours = resolvedDailyHours(employee, context, warnings);
-        BigDecimal fullPayableHours = payableWorkingDays.multiply(dailyHours);
+        BigDecimal fullPayableHours = effectivePayableDays.multiply(context.defaultDailyWorkingHours());
         BigDecimal fullPayment = money(employee.getHourlyRate().multiply(fullPayableHours));
         BigDecimal paymentReceived = basePay;
         BigDecimal attendanceDeduction = DefaultWorkHoursProvider.SOURCE.equals(workHours.source())
@@ -292,12 +303,13 @@ public class PayrollCalculationEngine {
     // ── Absence reporting (I1) ────────────────────────────────────────────────
 
     private AbsenceDetails calculateAbsenceDetails(Employee employee, PayrollContext context,
-                                                    WorkHoursProvider.WorkHoursResult workHours) {
+                                                    WorkHoursProvider.WorkHoursResult workHours,
+                                                    BigDecimal effectivePayableDays) {
         if (employee.getPaymentMethod() != PaymentMethod.FIXED_MONTHLY) {
             return null;
         }
         BigDecimal dailyHoursVal = context.defaultDailyWorkingHours();
-        BigDecimal expectedMinutes = BigDecimal.valueOf(context.workingDaysInMonth())
+        BigDecimal expectedMinutes = effectivePayableDays
                 .multiply(dailyHoursVal)
                 .multiply(BigDecimal.valueOf(60));
         BigDecimal attendedMinutes = workHours.hours().multiply(BigDecimal.valueOf(60));
@@ -441,6 +453,11 @@ public class PayrollCalculationEngine {
         BigDecimal ssBase = clamp(grossEarnings, minBase, maxBase);
         BigDecimal pensionBase = clamp(grossEarnings, minBase, maxBase);
 
+        if (minBase != null && grossEarnings.compareTo(minBase) < 0) {
+            warnings.add("Gross earnings (" + grossEarnings + ") are below the contribution minimum base ("
+                    + minBase + "). Contributions are calculated on the minimum base and may exceed gross pay.");
+        }
+
         BigDecimal employeeSS = money(ssBase.multiply(rate(ssEmployeeRate)));
         BigDecimal employeePension = money(pensionBase.multiply(rate(pensionEmployeeRate)));
         BigDecimal employerSS = money(ssBase.multiply(rate(ssEmployerRate)));
@@ -487,7 +504,6 @@ public class PayrollCalculationEngine {
         for (CompanyTaxBracket bracket : brackets) {
             BigDecimal lo = bracket.getLowerBound();
             BigDecimal hi = bracket.getUpperBound(); // null = open-ended
-            BigDecimal sliceStart = taxable.min(lo);
             BigDecimal sliceEnd = hi == null ? taxable : taxable.min(hi);
             BigDecimal slice = sliceEnd.subtract(lo).max(BigDecimal.ZERO);
             BigDecimal taxAmount = slice.multiply(rate(bracket.getRate()))
@@ -550,21 +566,7 @@ public class PayrollCalculationEngine {
             return employee.getMonthlySalary()
                     .divide(BigDecimal.valueOf(context.workingDaysInMonth()), 8, RoundingMode.HALF_UP);
         }
-        BigDecimal dailyHours = employee.getDailyWorkingHours() != null
-                ? employee.getDailyWorkingHours()
-                : context.defaultDailyWorkingHours();
-        return employee.getHourlyRate().multiply(dailyHours);
-    }
-
-    private BigDecimal resolvedDailyHours(Employee employee, PayrollContext context, List<String> warnings) {
-        if (employee.getDailyWorkingHours() != null) {
-            return employee.getDailyWorkingHours();
-        }
-        if (employee.getPaymentMethod() == PaymentMethod.HOURLY) {
-            warnings.add("Daily working hours not set for hourly employee; using company default "
-                    + context.defaultDailyWorkingHours() + "h.");
-        }
-        return context.defaultDailyWorkingHours();
+        return employee.getHourlyRate().multiply(context.defaultDailyWorkingHours());
     }
 
     // ── Sick leave helper ─────────────────────────────────────────────────────

@@ -43,8 +43,9 @@ public class AttendanceWorkHoursProvider implements WorkHoursProvider {
                     DefaultWorkHoursProvider.SOURCE);
         }
 
+        LocalDate effectiveTo = payableTo.isAfter(LocalDate.now()) ? LocalDate.now() : payableTo;
         BigDecimal hours = computeWorkedHours(
-                employee.getCompany().getId(), employee.getId(), payableFrom, payableTo);
+                employee.getCompany().getId(), employee.getId(), payableFrom, effectiveTo);
 
         if (hours.signum() == 0) {
             // No attendance records: fall back to default so the payroll does not produce zero silently.

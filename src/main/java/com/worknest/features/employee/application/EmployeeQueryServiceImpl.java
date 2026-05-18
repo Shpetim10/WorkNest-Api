@@ -49,7 +49,7 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
         assertCompanyScope(companyId, principal);
 
         if (isAdmin(principal.role())) {
-            List<PlatformRole> roles = List.of(PlatformRole.EMPLOYEE, PlatformRole.STAFF);
+            List<PlatformRole> roles = List.of(PlatformRole.EMPLOYEE);
             List<EmployeeListResponse> employees = employeeRepository.findAllByCompanyIdAndEmploymentTypeRoleIn(companyId, roles)
                     .stream()
                     .map(this::mapToEmployeeResponse)

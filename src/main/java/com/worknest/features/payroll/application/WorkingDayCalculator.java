@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.MonthDay;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -76,9 +77,9 @@ public class WorkingDayCalculator {
         if (weekendDays.contains(date.getDayOfWeek())) {
             return false;
         }
-        List<PublicHoliday> holidays = holidayRepository.findAllByCompanyIdAndHolidayDateBetween(companyId, date, date);
+        List<PublicHoliday> holidays = holidayRepository.findAllByCompanyId(companyId);
         for (PublicHoliday h : holidays) {
-            if (matches(h, date) && h.isPaid()) {
+            if (h.isPaid() && matches(h, date)) {
                 return true;
             }
         }
@@ -105,15 +106,14 @@ public class WorkingDayCalculator {
     }
 
     private Set<LocalDate> resolveUnpaidHolidays(UUID companyId, LocalDate from, LocalDate to) {
-        List<PublicHoliday> holidays = holidayRepository.findAllByCompanyIdAndHolidayDateBetween(companyId, from, to);
+        List<PublicHoliday> holidays = holidayRepository.findAllByCompanyId(companyId);
         if (holidays.isEmpty()) {
             return Collections.emptySet();
         }
         Set<LocalDate> unpaid = new HashSet<>();
         for (PublicHoliday h : holidays) {
             if (!h.isPaid()) {
-                LocalDate resolved = resolveDate(h, from.getYear());
-                if (resolved != null && !resolved.isBefore(from) && !resolved.isAfter(to)) {
+                for (LocalDate resolved : resolveOccurrences(h, from, to)) {
                     unpaid.add(resolved);
                 }
             }
@@ -128,14 +128,28 @@ public class WorkingDayCalculator {
         return MonthDay.from(h.getHolidayDate()).equals(MonthDay.from(date));
     }
 
-    private LocalDate resolveDate(PublicHoliday h, int year) {
+    /**
+     * Returns all concrete dates that this holiday falls on within [from, to].
+     * For non-recurring holidays this is at most one date. For recurring holidays
+     * every year in the range is checked so a range spanning year boundaries works correctly.
+     */
+    private List<LocalDate> resolveOccurrences(PublicHoliday h, LocalDate from, LocalDate to) {
         if (!h.isRecurring()) {
-            return h.getHolidayDate();
+            LocalDate d = h.getHolidayDate();
+            return (!d.isBefore(from) && !d.isAfter(to)) ? List.of(d) : List.of();
         }
-        try {
-            return MonthDay.from(h.getHolidayDate()).atYear(year);
-        } catch (Exception e) {
-            return null;
+        MonthDay md = MonthDay.from(h.getHolidayDate());
+        List<LocalDate> result = new ArrayList<>();
+        for (int year = from.getYear(); year <= to.getYear(); year++) {
+            try {
+                LocalDate candidate = md.atYear(year);
+                if (!candidate.isBefore(from) && !candidate.isAfter(to)) {
+                    result.add(candidate);
+                }
+            } catch (Exception ignored) {
+                // Feb 29 in non-leap years — skip
+            }
         }
+        return result;
     }
 }
