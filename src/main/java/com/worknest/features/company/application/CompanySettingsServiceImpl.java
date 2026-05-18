@@ -1,6 +1,7 @@
 package com.worknest.features.company.application;
 
 import com.worknest.common.exception.BusinessException;
+import com.worknest.common.security.encryption.EncryptionService;
 import com.worknest.domain.entities.Company;
 import com.worknest.features.company.dto.CompanySettingsResponse;
 import com.worknest.features.company.dto.CurrencyExchangeRequest;
@@ -31,6 +32,7 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
     private final PayrollResultRepository payrollResultRepository;
     private final PayrollAdjustmentRepository payrollAdjustmentRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final EncryptionService encryptionService;
 
     @Override
     @Transactional(readOnly = true)
@@ -44,14 +46,16 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
     public CompanySettingsResponse updateSettings(UUID companyId, UpdateCompanySettingsRequest request) {
         Company company = resolveCompany(companyId);
 
-        String newNipt = trimToNull(request.nipt());
+        String newNipt = encryptionService.normalizeNipt(request.nipt());
+        String newNiptHash = encryptionService.hmacSha256Hex(newNipt);
         if (newNipt != null && !newNipt.equals(company.getNipt())
-                && companyRepository.existsByNiptAndIdNot(newNipt, companyId)) {
+                && companyRepository.existsByNiptHashAndIdNot(newNiptHash, companyId)) {
             throw new BusinessException(HttpStatus.CONFLICT, "NIPT_ALREADY_IN_USE", "The provided NIPT is already registered to another company.");
         }
 
         company.setName(request.name().trim());
         company.setNipt(newNipt);
+        company.setNiptHash(newNiptHash);
         company.setPhoneNumber(trimToNull(request.phoneNumber()));
         company.setIndustry(trimToNull(request.industry()));
         company.setCurrency(StringUtils.hasText(request.currency()) ? request.currency().trim() : company.getCurrency());
@@ -83,9 +87,31 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
         }
 
         BigDecimal rate = request.exchangeRate();
-        employeeRepository.convertSalariesByCompanyId(companyId, rate);
-        payrollResultRepository.convertAmountsByCompanyId(companyId, rate);
-        payrollAdjustmentRepository.convertAmountsByCompanyId(companyId, rate);
+        employeeRepository.findAllByCompanyId(companyId).forEach(employee -> {
+            if (employee.getMonthlySalary() != null) {
+                employee.setMonthlySalary(employee.getMonthlySalary().multiply(rate));
+            }
+            if (employee.getHourlyRate() != null) {
+                employee.setHourlyRate(employee.getHourlyRate().multiply(rate));
+            }
+        });
+
+        payrollResultRepository.findAllByCompanyId(companyId).forEach(result -> {
+            result.setBasePay(result.getBasePay().multiply(rate));
+            result.setGrossEarnings(result.getGrossEarnings().multiply(rate));
+            result.setTotalDeductions(result.getTotalDeductions().multiply(rate));
+            result.setNetPay(result.getNetPay().multiply(rate));
+            result.setIncomeTax(result.getIncomeTax().multiply(rate));
+            result.setEmployeeSocialSecurity(result.getEmployeeSocialSecurity().multiply(rate));
+            result.setEmployeePension(result.getEmployeePension().multiply(rate));
+            result.setEmployerSocialSecurity(result.getEmployerSocialSecurity().multiply(rate));
+            result.setEmployerPension(result.getEmployerPension().multiply(rate));
+            result.setTaxableIncome(result.getTaxableIncome().multiply(rate));
+            result.setEmployerCostTotal(result.getEmployerCostTotal().multiply(rate));
+        });
+
+        payrollAdjustmentRepository.findAllByCompanyId(companyId).forEach(adjustment ->
+                adjustment.setAmount(adjustment.getAmount().multiply(rate)));
 
         company.setCurrency(newCurrency);
         CompanySettingsResponse response = toResponse(companyRepository.save(company));

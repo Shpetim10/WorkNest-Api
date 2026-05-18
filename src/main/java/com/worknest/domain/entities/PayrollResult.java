@@ -1,7 +1,10 @@
 package com.worknest.domain.entities;
 
+import com.worknest.common.security.encryption.EncryptedBigDecimalConverter;
+import com.worknest.common.security.encryption.EncryptedStringConverter;
 import com.worknest.domain.enums.PayrollStatus;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
@@ -66,41 +69,53 @@ public class PayrollResult {
     @Column(name = "status", nullable = false, length = 30)
     private PayrollStatus status = PayrollStatus.DRAFT;
 
-    @Column(name = "base_pay", nullable = false, precision = 14, scale = 2)
+    @Convert(converter = EncryptedBigDecimalConverter.class)
+    @Column(name = "base_pay", nullable = false, columnDefinition = "TEXT")
     private BigDecimal basePay = BigDecimal.ZERO;
 
-    @Column(name = "gross_earnings", nullable = false, precision = 14, scale = 2)
+    @Convert(converter = EncryptedBigDecimalConverter.class)
+    @Column(name = "gross_earnings", nullable = false, columnDefinition = "TEXT")
     private BigDecimal grossEarnings = BigDecimal.ZERO;
 
-    @Column(name = "total_deductions", nullable = false, precision = 14, scale = 2)
+    @Convert(converter = EncryptedBigDecimalConverter.class)
+    @Column(name = "total_deductions", nullable = false, columnDefinition = "TEXT")
     private BigDecimal totalDeductions = BigDecimal.ZERO;
 
-    @Column(name = "net_pay", nullable = false, precision = 14, scale = 2)
+    @Convert(converter = EncryptedBigDecimalConverter.class)
+    @Column(name = "net_pay", nullable = false, columnDefinition = "TEXT")
     private BigDecimal netPay = BigDecimal.ZERO;
 
-    @Column(name = "income_tax", nullable = false, precision = 14, scale = 2)
+    @Convert(converter = EncryptedBigDecimalConverter.class)
+    @Column(name = "income_tax", nullable = false, columnDefinition = "TEXT")
     private BigDecimal incomeTax = BigDecimal.ZERO;
 
-    @Column(name = "employee_social_security", nullable = false, precision = 14, scale = 2)
+    @Convert(converter = EncryptedBigDecimalConverter.class)
+    @Column(name = "employee_social_security", nullable = false, columnDefinition = "TEXT")
     private BigDecimal employeeSocialSecurity = BigDecimal.ZERO;
 
-    @Column(name = "employee_pension", nullable = false, precision = 14, scale = 2)
+    @Convert(converter = EncryptedBigDecimalConverter.class)
+    @Column(name = "employee_pension", nullable = false, columnDefinition = "TEXT")
     private BigDecimal employeePension = BigDecimal.ZERO;
 
-    @Column(name = "employer_social_security", nullable = false, precision = 14, scale = 2)
+    @Convert(converter = EncryptedBigDecimalConverter.class)
+    @Column(name = "employer_social_security", nullable = false, columnDefinition = "TEXT")
     private BigDecimal employerSocialSecurity = BigDecimal.ZERO;
 
-    @Column(name = "employer_pension", nullable = false, precision = 14, scale = 2)
+    @Convert(converter = EncryptedBigDecimalConverter.class)
+    @Column(name = "employer_pension", nullable = false, columnDefinition = "TEXT")
     private BigDecimal employerPension = BigDecimal.ZERO;
 
-    @Column(name = "taxable_income", nullable = false, precision = 14, scale = 2)
+    @Convert(converter = EncryptedBigDecimalConverter.class)
+    @Column(name = "taxable_income", nullable = false, columnDefinition = "TEXT")
     private BigDecimal taxableIncome = BigDecimal.ZERO;
 
-    @Column(name = "employer_cost_total", nullable = false, precision = 14, scale = 2)
+    @Convert(converter = EncryptedBigDecimalConverter.class)
+    @Column(name = "employer_cost_total", nullable = false, columnDefinition = "TEXT")
     private BigDecimal employerCostTotal = BigDecimal.ZERO;
 
     @Lob
     @Column(name = "calculation_snapshot_json", nullable = false, columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String calculationSnapshotJson;
 
     @Column(name = "calculated_at", nullable = false)

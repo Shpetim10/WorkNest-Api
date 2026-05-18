@@ -1,8 +1,10 @@
 package com.worknest.domain.entities;
 
+import com.worknest.common.security.encryption.EncryptedStringConverter;
 import com.worknest.domain.enums.*;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
@@ -86,19 +88,24 @@ public class CompanySite {
     private Long version = 0L;
 
     // Human-readable address
-    @Column(name = "address_line_1", length = 255)
+    @Column(name = "address_line_1", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String addressLine1;
 
-    @Column(name = "address_line_2", length = 255)
+    @Column(name = "address_line_2", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String addressLine2;
 
-    @Column(name = "city", length = 100)
+    @Column(name = "city", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String city;
 
-    @Column(name = "state_region", length = 100)
+    @Column(name = "state_region", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String stateRegion;
 
-    @Column(name = "postal_code", length = 30)
+    @Column(name = "postal_code", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String postalCode;
 
     @Column(name = "country_code", nullable = false, length = 2)
@@ -122,6 +129,7 @@ public class CompanySite {
     private Integer geofenceRadiusMeters; // for CIRCLE
 
     @Column(name = "geofence_polygon_geojson", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String geofencePolygonGeoJson; // for POLYGON
 
     @Column(name = "entry_buffer_meters")
@@ -146,6 +154,7 @@ public class CompanySite {
     private Boolean checkOutEnabled = true;
 
     @Column(name = "notes", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String notes;
 
     @CreatedDate

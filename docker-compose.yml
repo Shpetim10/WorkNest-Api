@@ -1,26 +1,26 @@
 version: "3.9"
 
 services:
-  app:
-    build: .
-    container_name: worknest-api
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: worknest_db
-      DB_USERNAME: root
-      DB_PASSWORD: root
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/worknest_db
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: root
-    ports:
-      - "8080:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
+#  app:
+#    build: .
+#    container_name: worknest-api
+#    restart: unless-stopped
+#    env_file:
+#      - .env
+#    environment:
+#      DB_HOST: postgres
+#      DB_PORT: 5432
+#      DB_NAME: worknest_db
+#      DB_USERNAME: root
+#      DB_PASSWORD: root
+#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/worknest_db
+#      SPRING_DATASOURCE_USERNAME: root
+#      SPRING_DATASOURCE_PASSWORD: root
+#    ports:
+#      - "8080:8080"
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
 
   postgres:
     image: postgres:15-alpine
@@ -41,6 +41,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+  db:
+    image: postgres:latest
+    environment:
+      - POSTGRES_DB=worknest_db
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - ./src/main/resources/db/seed/seed-dev.sql:/docker-entrypoint-initdb.d/seed-dev.sql
+
 
 volumes:
   postgres_data:

@@ -1,7 +1,10 @@
 package com.worknest.domain.entities;
 
+import com.worknest.common.security.encryption.EncryptedBigDecimalConverter;
+import com.worknest.common.security.encryption.EncryptedStringConverter;
 import com.worknest.domain.enums.PayrollAdjustmentType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
@@ -62,13 +65,16 @@ public class PayrollAdjustment {
     @Column(name = "adjustment_type", nullable = false, length = 30)
     private PayrollAdjustmentType type;
 
-    @Column(name = "amount", nullable = false, precision = 14, scale = 2)
+    @Convert(converter = EncryptedBigDecimalConverter.class)
+    @Column(name = "amount", nullable = false, columnDefinition = "TEXT")
     private BigDecimal amount;
 
-    @Column(name = "reason", nullable = false, length = 300)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "reason", nullable = false, columnDefinition = "TEXT")
     private String reason;
 
     @Column(name = "notes", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String notes;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

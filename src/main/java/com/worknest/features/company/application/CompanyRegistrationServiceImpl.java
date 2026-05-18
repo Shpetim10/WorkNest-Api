@@ -2,6 +2,7 @@ package com.worknest.features.company.application;
 
 import com.worknest.audit.service.AuthAuditService;
 import com.worknest.audit.service.model.AuthAuditActorContext;
+import com.worknest.common.security.encryption.EncryptionService;
 import com.worknest.domain.entities.Company;
 import com.worknest.domain.enums.CompanyStatus;
 import com.worknest.domain.enums.InvitationKind;
@@ -59,6 +60,7 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
     private final InvitationEmailService invitationEmailService;
     private final AuthAuditService authAuditService;
     private final MediaStorageService mediaStorageService;
+    private final EncryptionService encryptionService;
 
     @Override
     @Transactional
@@ -79,7 +81,9 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
         company.setName(request.companyName().trim());
         company.setSlug(normalizedSlug);
         company.setStatus(CompanyStatus.PENDING);
-        company.setNipt(trimToNull(request.nipt()));
+        String normalizedNipt = encryptionService.normalizeNipt(request.nipt());
+        company.setNipt(normalizedNipt);
+        company.setNiptHash(encryptionService.hmacSha256Hex(normalizedNipt));
         company.setEmail(normalizedPrimaryEmail);
         company.setPhoneNumber(trimToNull(request.primaryPhone()));
         company.setCountryCode(defaultIfBlank(request.countryCode(), DEFAULT_COUNTRY_CODE).toUpperCase());

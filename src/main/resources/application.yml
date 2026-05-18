@@ -64,6 +64,10 @@ app:
     from-address: ${MAIL_FROM_ADDRESS:info@worknest.com}
     from-name: ${MAIL_FROM_NAME:WorkNest}
     reply-to: ${MAIL_REPLY_TO:${MAIL_FROM_ADDRESS:info@worknest.com}}
+  encryption:
+    key-base64: ${APP_ENCRYPTION_KEY_BASE64:}
+    backfill:
+      enabled: ${APP_ENCRYPTION_BACKFILL_ENABLED:false}
   security:
     allowed-public-paths:
       - /api/v1/auth/**
@@ -94,14 +98,16 @@ app:
   seed:
     admin:
       enabled: ${APP_SEED_ADMIN_ENABLED:false}
-      email: ${APP_SEED_ADMIN_EMAIL:}
-      password: ${APP_SEED_ADMIN_PASSWORD:}
-      first-name: ${APP_SEED_ADMIN_FIRST_NAME:Platform}
-      last-name: ${APP_SEED_ADMIN_LAST_NAME:Administrator}
-      company-name: ${APP_SEED_ADMIN_COMPANY_NAME:WorkNest Platform}
-      company-slug: ${APP_SEED_ADMIN_COMPANY_SLUG:worknest-platform}
-      company-email: ${APP_SEED_ADMIN_COMPANY_EMAIL:platform@worknest.local}
-      company-phone: ${APP_SEED_ADMIN_COMPANY_PHONE:+355000000000}
+    dev-data:
+      enabled: ${APP_SEED_DEV_DATA_ENABLED:false}
+      erase-all-before-seed: ${APP_SEED_DEV_DATA_ERASE_ALL_BEFORE_SEED:false}
+      force-reseed: ${APP_SEED_DEV_DATA_FORCE_RESEED:false}
+      run-base-script: ${APP_SEED_DEV_DATA_RUN_BASE_SCRIPT:false}
+      generate-bulk-data: ${APP_SEED_DEV_DATA_GENERATE_BULK_DATA:false}
+      bulk-employees: ${APP_SEED_DEV_DATA_BULK_EMPLOYEES:60}
+      attendance-days: ${APP_SEED_DEV_DATA_ATTENDANCE_DAYS:180}
+      leave-requests-per-employee: ${APP_SEED_DEV_DATA_LEAVE_REQUESTS_PER_EMPLOYEE:8}
+      payroll-months: ${APP_SEED_DEV_DATA_PAYROLL_MONTHS:12}
 
 logging:
   level:

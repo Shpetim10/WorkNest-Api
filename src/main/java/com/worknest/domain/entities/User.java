@@ -1,9 +1,11 @@
 package com.worknest.domain.entities;
 
+import com.worknest.common.security.encryption.EncryptedStringConverter;
 import com.worknest.domain.enums.*;
 
 import com.worknest.common.i18n.Language;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
@@ -53,10 +55,12 @@ public class User {
     @Column(name = "username", length = 100)
     private String username;
 
-    @Column(name = "first_name", nullable = false, length = 100)
+    @Column(name = "first_name", nullable = false, columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String firstName = "";
 
-    @Column(name = "last_name", nullable = false, length = 100)
+    @Column(name = "last_name", nullable = false, columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String lastName = "";
 
     @Column(name = "display_name", length = 150)
@@ -68,7 +72,8 @@ public class User {
     @Column(name = "profile_image_path", length = 1000)
     private String profileImagePath;
 
-    @Column(name = "phone_number", length = 50)
+    @Column(name = "phone_number", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String phoneNumber;
 
     @Enumerated(EnumType.STRING)
@@ -87,19 +92,22 @@ public class User {
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 
-    @Column(name = "last_login_ip", length = 45)
+    @Column(name = "last_login_ip", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String lastLoginIp;
 
     @Column(name = "mfa_enabled", nullable = false)
     private Boolean mfaEnabled = false;
 
-    @Column(name = "mfa_secret_enc", length = 255)
+    @Column(name = "mfa_secret_enc", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String mfaSecretEnc;
 
     @Column(name = "gdpr_consent_at")
     private Instant gdprConsentAt;
 
-    @Column(name = "gdpr_consent_ip", length = 45)
+    @Column(name = "gdpr_consent_ip", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String gdprConsentIp;
 
     @CreatedDate

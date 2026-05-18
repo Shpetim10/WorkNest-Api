@@ -1,5 +1,6 @@
 package com.worknest.features.superAdmin.repository;
 
+import com.worknest.common.security.encryption.EncryptionService;
 import com.worknest.domain.entities.Company;
 import com.worknest.domain.enums.CompanyStatus;
 import com.worknest.domain.enums.SubscriptionPlan;
@@ -21,9 +22,12 @@ import org.springframework.stereotype.Repository;
 public class SuperAdminCompanyQueryRepository {
 
     private final EntityManager entityManager;
+    private final EncryptionService encryptionService;
 
     public Page<Company> findCompanies(String search, String status, String plan, Pageable pageable) {
-        String baseCondition = buildCondition(search, status, plan);
+        String normalizedSearch = search == null ? null : search.trim();
+        String niptHash = encryptionService.hmacSha256Hex(encryptionService.normalizeNipt(normalizedSearch));
+        String baseCondition = buildCondition(normalizedSearch, status, plan);
 
         String dataJpql = "SELECT c FROM Company c WHERE " + baseCondition + " ORDER BY c.createdAt DESC";
         String countJpql = "SELECT COUNT(c) FROM Company c WHERE " + baseCondition;
@@ -31,8 +35,8 @@ public class SuperAdminCompanyQueryRepository {
         TypedQuery<Company> dataQuery = entityManager.createQuery(dataJpql, Company.class);
         TypedQuery<Long> countQuery = entityManager.createQuery(countJpql, Long.class);
 
-        bindParameters(dataQuery, search, status, plan);
-        bindParameters(countQuery, search, status, plan);
+        bindParameters(dataQuery, normalizedSearch, niptHash, status, plan);
+        bindParameters(countQuery, normalizedSearch, niptHash, status, plan);
 
         dataQuery.setFirstResult((int) pageable.getOffset());
         dataQuery.setMaxResults(pageable.getPageSize());
@@ -70,8 +74,8 @@ public class SuperAdminCompanyQueryRepository {
         if (search != null && !search.isBlank()) {
             condition.append(" AND (LOWER(c.name) LIKE :search"
                     + " OR LOWER(c.email) LIKE :search"
-                    + " OR LOWER(c.nipt) LIKE :search"
-                    + " OR LOWER(c.slug) LIKE :search)");
+                    + " OR LOWER(c.slug) LIKE :search"
+                    + " OR (:niptHash IS NOT NULL AND c.niptHash = :niptHash))");
         }
         if (status != null && !status.isBlank()) {
             condition.append(" AND c.status = :status");
@@ -83,9 +87,10 @@ public class SuperAdminCompanyQueryRepository {
         return condition.toString();
     }
 
-    private <T> void bindParameters(TypedQuery<T> query, String search, String status, String plan) {
+    private <T> void bindParameters(TypedQuery<T> query, String search, String niptHash, String status, String plan) {
         if (search != null && !search.isBlank()) {
             query.setParameter("search", "%" + search.toLowerCase() + "%");
+            query.setParameter("niptHash", niptHash);
         }
         if (status != null && !status.isBlank()) {
             query.setParameter("status", CompanyStatus.valueOf(status.toUpperCase()));

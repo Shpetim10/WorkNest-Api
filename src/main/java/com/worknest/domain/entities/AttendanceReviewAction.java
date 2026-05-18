@@ -1,9 +1,9 @@
 package com.worknest.domain.entities;
 
+import com.worknest.common.security.encryption.EncryptedStringConverter;
 import com.worknest.domain.enums.AttendanceReviewActionType;
 import jakarta.persistence.Column;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -53,15 +53,16 @@ public class AttendanceReviewAction {
     @Column(name = "action_type", nullable = false, length = 40)
     private AttendanceReviewActionType actionType;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "before_snapshot_json", columnDefinition = "jsonb")
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "before_snapshot_json", columnDefinition = "TEXT")
     private String beforeSnapshotJson;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "after_snapshot_json", columnDefinition = "jsonb")
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "after_snapshot_json", columnDefinition = "TEXT")
     private String afterSnapshotJson;
 
     @Column(name = "reason", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String reason;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

@@ -27,5 +27,5 @@ public interface CompanyRepository extends JpaRepository<Company, UUID> {
 
     List<Company> findAllByStatusAndDeletedAtIsNull(CompanyStatus status);
 
-    boolean existsByNiptAndIdNot(String nipt, UUID id);
+    boolean existsByNiptHashAndIdNot(String niptHash, UUID id);
 }
