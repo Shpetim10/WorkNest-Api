@@ -26,9 +26,15 @@ public class SuperAdminDashboardController {
     @Operation(summary = "Get super admin dashboard", description = "Returns KPIs, registrations, activity and stats for the platform dashboard")
     public ApiResponse<SuperAdminDashboardResponse> getDashboard(
             @RequestParam(required = false) Integer year,
-            @RequestParam(required = false) String period
+            @RequestParam(required = false) String period,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) String section
     ) {
         int resolvedYear = year != null ? year : Year.now().getValue();
-        return ApiResponse.success("Dashboard retrieved successfully", dashboardService.getDashboard(resolvedYear, period));
+        return ApiResponse.success(
+                "Dashboard retrieved successfully",
+                dashboardService.getDashboard(resolvedYear, period, startDate, endDate, section)
+        );
     }
 }

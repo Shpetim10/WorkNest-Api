@@ -1,5 +1,6 @@
 package com.worknest.features.superAdmin.application;
 
+import com.worknest.common.exception.BusinessException;
 import com.worknest.audit.domain.PlatformEvent;
 import com.worknest.domain.entities.Company;
 import com.worknest.domain.entities.User;
@@ -7,22 +8,27 @@ import com.worknest.domain.enums.CompanyStatus;
 import com.worknest.domain.enums.SubscriptionPlan;
 import com.worknest.domain.enums.SubscriptionStatus;
 import com.worknest.features.auth.repository.UserRepository;
+import com.worknest.features.dashboard.application.DashboardDateRange;
 import com.worknest.features.superAdmin.dto.SuperAdminDashboardResponse;
 import com.worknest.security.SuperAdminSecurity;
 import jakarta.persistence.EntityManager;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,8 +47,10 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     private final SuperAdminSecurity superAdminSecurity;
 
     @Override
-    public SuperAdminDashboardResponse getDashboard(int year, String period) {
+    public SuperAdminDashboardResponse getDashboard(int year, String period, String startDate, String endDate, String section) {
         Instant now = Instant.now();
+        DashboardSection dashboardSection = DashboardSection.from(section);
+        Optional<DashboardDateRange> customRange = DashboardDateRange.parseOptional(startDate, endDate);
 
         long total = countAllCompanies();
         long active = countCompaniesByStatus(CompanyStatus.ACTIVE);
@@ -54,11 +62,16 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
                 .getResultList();
 
         List<Company> periodFiltered = filterByPeriod(allLive, period, now);
+        List<Company> customFiltered = customRange
+                .map(range -> filterByDateRange(allLive, range))
+                .orElse(periodFiltered);
+        List<Company> planCompanies = dashboardSection.filtersQuickStatsOnly() ? periodFiltered : customFiltered;
+        List<Company> quickStatCompanies = dashboardSection.filtersSubscriptionPlansOnly() ? periodFiltered : customFiltered;
 
         List<SuperAdminDashboardResponse.RegistrationPoint> registrations = buildRegistrations(allLive, year);
-        List<SuperAdminDashboardResponse.SubscriptionPlanBreakdown> plans = buildPlanBreakdown(periodFiltered);
+        List<SuperAdminDashboardResponse.SubscriptionPlanBreakdown> plans = buildPlanBreakdown(planCompanies);
         List<SuperAdminDashboardResponse.ActivityItem> recentActivity = buildRecentActivity();
-        List<SuperAdminDashboardResponse.QuickStat> quickStats = buildQuickStats(periodFiltered);
+        List<SuperAdminDashboardResponse.QuickStat> quickStats = buildQuickStats(quickStatCompanies);
 
         SuperAdminDashboardResponse.Header header = buildHeader();
         SuperAdminDashboardResponse.Kpis kpis = new SuperAdminDashboardResponse.Kpis(total, active, suspended, expiringSoon);
@@ -70,6 +83,8 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         if (period == null || period.isBlank()) return companies;
         ZonedDateTime nowUTC = ZonedDateTime.ofInstant(now, ZoneOffset.UTC);
         Instant from = switch (period) {
+            case "this-week" -> nowUTC.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+                    .toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant();
             case "this-month" -> nowUTC.withDayOfMonth(1).toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant();
             case "last-month" -> nowUTC.minusMonths(1).withDayOfMonth(1).toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant();
             case "last-3-months" -> nowUTC.minusMonths(3).toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant();
@@ -83,6 +98,16 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         if (from == null) return companies;
         return companies.stream()
                 .filter(c -> !c.getCreatedAt().isBefore(from) && !c.getCreatedAt().isAfter(to))
+                .toList();
+    }
+
+    private List<Company> filterByDateRange(List<Company> companies, DashboardDateRange range) {
+        Instant from = range.startDate().atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant toExclusive = range.endDate().plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+
+        return companies.stream()
+                .filter(c -> c.getCreatedAt() != null)
+                .filter(c -> !c.getCreatedAt().isBefore(from) && c.getCreatedAt().isBefore(toExclusive))
                 .toList();
     }
 
@@ -208,5 +233,34 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
 
     private String fmt(double pct) {
         return Math.round(pct) + "%";
+    }
+
+    private enum DashboardSection {
+        ALL,
+        SUBSCRIPTION_PLANS,
+        QUICK_STATS;
+
+        private static DashboardSection from(String section) {
+            if (section == null || section.isBlank()) {
+                return ALL;
+            }
+            return switch (section.trim()) {
+                case "subscriptionPlans" -> SUBSCRIPTION_PLANS;
+                case "quickStats" -> QUICK_STATS;
+                default -> throw new BusinessException(
+                        HttpStatus.BAD_REQUEST,
+                        "INVALID_DASHBOARD_SECTION",
+                        "section must be either subscriptionPlans or quickStats."
+                );
+            };
+        }
+
+        private boolean filtersSubscriptionPlansOnly() {
+            return this == SUBSCRIPTION_PLANS;
+        }
+
+        private boolean filtersQuickStatsOnly() {
+            return this == QUICK_STATS;
+        }
     }
 }

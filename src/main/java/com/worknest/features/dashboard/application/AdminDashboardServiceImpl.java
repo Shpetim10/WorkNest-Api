@@ -52,10 +52,12 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     // ─── public entry point ─────────────────────────────────────────────
 
     @Override
-    public AdminDashboardResponse getDashboard(String period, String trendPeriod) {
+    public AdminDashboardResponse getDashboard(String period, String trendPeriod, String startDate, String endDate) {
         AuthSessionPrincipal principal = principal();
         UUID companyId = principal.companyId();
         LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        DashboardDateRange quickStatsRange = DashboardDateRange.parseOptional(startDate, endDate)
+                .orElseGet(() -> filterByPeriod(period, today));
 
         // Header
         AdminDashboardResponse.Header header = buildHeader(principal);
@@ -77,7 +79,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         List<AdminDashboardResponse.ActivityItem> recentActivity = buildRecentActivity(companyId);
 
         // Quick stats
-        List<AdminDashboardResponse.QuickStat> quickStats = buildQuickStats(companyId, period, today, totalEmployees);
+        List<AdminDashboardResponse.QuickStat> quickStats = buildQuickStats(companyId, quickStatsRange, totalEmployees);
 
         return new AdminDashboardResponse(header, kpis, attendanceTrend, activeDays, recentActivity, quickStats);
     }
@@ -327,11 +329,10 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     // ─── quick stats ────────────────────────────────────────────────────
 
     private List<AdminDashboardResponse.QuickStat> buildQuickStats(
-            UUID companyId, String period, LocalDate today, long totalEmployees) {
+            UUID companyId, DashboardDateRange range, long totalEmployees) {
 
-        LocalDate[] range = filterByPeriod(period, today);
-        LocalDate from = range[0];
-        LocalDate to = range[1];
+        LocalDate from = range.startDate();
+        LocalDate to = range.endDate();
 
         // attendance-rate: employees who checked in at least once in the period / total active
         long employeesWhoCheckedIn = entityManager.createQuery(
@@ -372,20 +373,24 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
     // ─── utility methods ────────────────────────────────────────────────
 
-    private LocalDate[] filterByPeriod(String period, LocalDate today) {
+    private DashboardDateRange filterByPeriod(String period, LocalDate today) {
         if (period == null || period.isBlank()) {
-            return new LocalDate[]{today.withDayOfMonth(1), today};
+            return new DashboardDateRange(today.withDayOfMonth(1), today);
         }
         return switch (period) {
-            case "this-month" -> new LocalDate[]{today.withDayOfMonth(1), today};
+            case "this-week" -> new DashboardDateRange(
+                    today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)),
+                    today
+            );
+            case "this-month" -> new DashboardDateRange(today.withDayOfMonth(1), today);
             case "last-month" -> {
                 YearMonth lm = YearMonth.from(today).minusMonths(1);
-                yield new LocalDate[]{lm.atDay(1), lm.atEndOfMonth()};
+                yield new DashboardDateRange(lm.atDay(1), lm.atEndOfMonth());
             }
-            case "last-3-months" -> new LocalDate[]{today.minusMonths(3).withDayOfMonth(1), today};
-            case "last-6-months" -> new LocalDate[]{today.minusMonths(6).withDayOfMonth(1), today};
-            case "this-year" -> new LocalDate[]{today.withDayOfYear(1), today};
-            default -> new LocalDate[]{today.withDayOfMonth(1), today};
+            case "last-3-months" -> new DashboardDateRange(today.minusMonths(3).withDayOfMonth(1), today);
+            case "last-6-months" -> new DashboardDateRange(today.minusMonths(6).withDayOfMonth(1), today);
+            case "this-year" -> new DashboardDateRange(today.withDayOfYear(1), today);
+            default -> new DashboardDateRange(today.withDayOfMonth(1), today);
         };
     }
 
