@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd"
+        objectQuotingStrategy="QUOTE_ONLY_RESERVED_WORDS">
+
+    <changeSet id="019-field-encryption" author="codex">
+        <dropUniqueConstraint tableName="companies" constraintName="uc_companies_nipt"/>
+
+        <addColumn tableName="companies">
+            <column name="nipt_hash" type="VARCHAR(64)"/>
+        </addColumn>
+
+        <addUniqueConstraint tableName="companies"
+                             columnNames="nipt_hash"
+                             constraintName="uc_companies_nipt_hash"/>
+
+        <sql>
+            ALTER TABLE payroll_adjustments DROP CONSTRAINT IF EXISTS chk_payroll_adjustments_amount_positive
+        </sql>
+
+        <modifyDataType tableName="users" columnName="first_name" newDataType="TEXT"/>
+        <modifyDataType tableName="users" columnName="last_name" newDataType="TEXT"/>
+        <modifyDataType tableName="users" columnName="phone_number" newDataType="TEXT"/>
+        <modifyDataType tableName="users" columnName="last_login_ip" newDataType="TEXT"/>
+        <modifyDataType tableName="users" columnName="mfa_secret_enc" newDataType="TEXT"/>
+        <modifyDataType tableName="users" columnName="gdpr_consent_ip" newDataType="TEXT"/>
+
+        <modifyDataType tableName="employees" columnName="monthly_salary" newDataType="TEXT"/>
+        <modifyDataType tableName="employees" columnName="hourly_rate" newDataType="TEXT"/>
+
+        <modifyDataType tableName="companies" columnName="nipt" newDataType="TEXT"/>
+        <modifyDataType tableName="companies" columnName="phone_number" newDataType="TEXT"/>
+        <modifyDataType tableName="companies" columnName="suspended_reason" newDataType="TEXT"/>
+
+        <modifyDataType tableName="payroll_results" columnName="base_pay" newDataType="TEXT"/>
+        <modifyDataType tableName="payroll_results" columnName="gross_earnings" newDataType="TEXT"/>
+        <modifyDataType tableName="payroll_results" columnName="total_deductions" newDataType="TEXT"/>
+        <modifyDataType tableName="payroll_results" columnName="net_pay" newDataType="TEXT"/>
+        <modifyDataType tableName="payroll_results" columnName="income_tax" newDataType="TEXT"/>
+        <modifyDataType tableName="payroll_results" columnName="employee_social_security" newDataType="TEXT"/>
+        <modifyDataType tableName="payroll_results" columnName="employee_pension" newDataType="TEXT"/>
+        <modifyDataType tableName="payroll_results" columnName="employer_social_security" newDataType="TEXT"/>
+        <modifyDataType tableName="payroll_results" columnName="employer_pension" newDataType="TEXT"/>
+        <modifyDataType tableName="payroll_results" columnName="taxable_income" newDataType="TEXT"/>
+        <modifyDataType tableName="payroll_results" columnName="employer_cost_total" newDataType="TEXT"/>
+        <modifyDataType tableName="payroll_results" columnName="calculation_snapshot_json" newDataType="TEXT"/>
+
+        <modifyDataType tableName="payroll_adjustments" columnName="amount" newDataType="TEXT"/>
+        <modifyDataType tableName="payroll_adjustments" columnName="reason" newDataType="TEXT"/>
+        <modifyDataType tableName="payroll_adjustments" columnName="notes" newDataType="TEXT"/>
+
+        <modifyDataType tableName="leave_requests" columnName="note" newDataType="TEXT"/>
+        <modifyDataType tableName="leave_requests" columnName="approval_note" newDataType="TEXT"/>
+        <modifyDataType tableName="leave_requests" columnName="medical_report_document_id" newDataType="TEXT"/>
+        <modifyDataType tableName="leave_requests" columnName="rejection_reason" newDataType="TEXT"/>
+
+        <modifyDataType tableName="attendance_events" columnName="request_ip_address" newDataType="TEXT"/>
+        <modifyDataType tableName="attendance_events" columnName="forwarded_for_chain" newDataType="TEXT"/>
+        <modifyDataType tableName="attendance_events" columnName="rejection_reason_message" newDataType="TEXT"/>
+        <modifyDataType tableName="attendance_events" columnName="employee_note" newDataType="TEXT"/>
+        <modifyDataType tableName="attendance_events" columnName="review_note" newDataType="TEXT"/>
+
+        <modifyDataType tableName="attendance_review_actions" columnName="before_snapshot_json" newDataType="TEXT"/>
+        <modifyDataType tableName="attendance_review_actions" columnName="after_snapshot_json" newDataType="TEXT"/>
+        <modifyDataType tableName="attendance_review_actions" columnName="reason" newDataType="TEXT"/>
+
+        <modifyDataType tableName="refresh_tokens" columnName="revoked_reason" newDataType="TEXT"/>
+        <modifyDataType tableName="refresh_tokens" columnName="ip_address" newDataType="TEXT"/>
+        <modifyDataType tableName="refresh_tokens" columnName="user_agent" newDataType="TEXT"/>
+
+        <modifyDataType tableName="company_sites" columnName="address_line_1" newDataType="TEXT"/>
+        <modifyDataType tableName="company_sites" columnName="address_line_2" newDataType="TEXT"/>
+        <modifyDataType tableName="company_sites" columnName="city" newDataType="TEXT"/>
+        <modifyDataType tableName="company_sites" columnName="state_region" newDataType="TEXT"/>
+        <modifyDataType tableName="company_sites" columnName="postal_code" newDataType="TEXT"/>
+        <modifyDataType tableName="company_sites" columnName="geofence_polygon_geojson" newDataType="TEXT"/>
+        <modifyDataType tableName="company_sites" columnName="notes" newDataType="TEXT"/>
+
+        <modifyDataType tableName="site_trusted_networks" columnName="notes" newDataType="TEXT"/>
+
+        <modifyDataType tableName="employee_supervisor_history" columnName="reason" newDataType="TEXT"/>
+
+        <modifyDataType tableName="role_assignments" columnName="job_title" newDataType="TEXT"/>
+        <modifyDataType tableName="user_invitations" columnName="invited_job_title" newDataType="TEXT"/>
+
+        <modifyDataType tableName="audit_logs" columnName="actor_job_title" newDataType="TEXT"/>
+        <modifyDataType tableName="audit_logs" columnName="ip_address" newDataType="TEXT"/>
+    </changeSet>
+</databaseChangeLog>

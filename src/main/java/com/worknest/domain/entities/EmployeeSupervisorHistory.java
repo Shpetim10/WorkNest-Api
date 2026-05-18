@@ -1,6 +1,8 @@
 package com.worknest.domain.entities;
 
+import com.worknest.common.security.encryption.EncryptedStringConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
@@ -59,6 +61,7 @@ public class EmployeeSupervisorHistory {
     @Column(name = "changed_at", nullable = false, updatable = false)
     private Instant changedAt;
 
-    @Column(name = "reason", length = 255)
+    @Column(name = "reason", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String reason;
 }

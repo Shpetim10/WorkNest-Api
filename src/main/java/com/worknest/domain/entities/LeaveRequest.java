@@ -1,8 +1,10 @@
 package com.worknest.domain.entities;
 
+import com.worknest.common.security.encryption.EncryptedStringConverter;
 import com.worknest.domain.enums.LeaveStatus;
 import com.worknest.domain.enums.LeaveType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
@@ -71,15 +73,19 @@ public class LeaveRequest {
     private LeaveStatus status = LeaveStatus.PENDING;
 
     @Column(name = "note", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String note;
 
     @Column(name = "approval_note", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String approvalNote;
 
-    @Column(name = "medical_report_document_id", length = 500)
+    @Column(name = "medical_report_document_id", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String medicalReportDocumentId;
 
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String rejectionReason;
 
     @ManyToOne(fetch = FetchType.LAZY)

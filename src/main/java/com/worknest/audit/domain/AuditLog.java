@@ -1,7 +1,9 @@
 package com.worknest.audit.domain;
 
+import com.worknest.common.security.encryption.EncryptedStringConverter;
 import com.worknest.domain.enums.PlatformRole;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -53,7 +55,8 @@ public class AuditLog {
     @Enumerated(EnumType.STRING)
     private PlatformRole actorRole;
 
-    @Column(name = "actor_job_title", length = 255)
+    @Column(name = "actor_job_title", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String actorJobTitle;
 
     @Column(name = "action", nullable = false)
@@ -73,7 +76,8 @@ public class AuditLog {
     @Column(name = "metadata", columnDefinition = "jsonb")
     private Map<String, Object> metadata;
 
-    @Column(name = "ip_address", length = 100)
+    @Column(name = "ip_address", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String ipAddress;
 
     @Column(name = "created_at", nullable = false, updatable = false)

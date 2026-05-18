@@ -1,8 +1,10 @@
 package com.worknest.domain.entities;
 
+import com.worknest.common.security.encryption.EncryptedStringConverter;
 import com.worknest.domain.enums.*;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -66,12 +68,15 @@ public class RefreshToken {
     @Column(name = "revoked_at")
     private Instant revokedAt;
 
-    @Column(name = "revoked_reason", length = 100)
+    @Column(name = "revoked_reason", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String revokedReason;
 
-    @Column(name = "ip_address", length = 100)
+    @Column(name = "ip_address", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String ipAddress;
 
-    @Column(name = "user_agent", length = 500)
+    @Column(name = "user_agent", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String userAgent;
 }

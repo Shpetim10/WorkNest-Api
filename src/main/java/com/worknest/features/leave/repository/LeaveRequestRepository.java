@@ -75,7 +75,7 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, UUID
             WHERE lr.company.id = :companyId
               AND (:status IS NULL OR lr.status = :status)
               AND (:search IS NULL OR :search = ''
-                   OR LOWER(CONCAT(u.firstName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', :search, '%')))
+                   OR LOWER(COALESCE(u.displayName, '')) LIKE LOWER(CONCAT('%', :search, '%')))
             ORDER BY lr.createdAt DESC
             """,
             countQuery = """
@@ -85,7 +85,7 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, UUID
             WHERE lr.company.id = :companyId
               AND (:status IS NULL OR lr.status = :status)
               AND (:search IS NULL OR :search = ''
-                   OR LOWER(CONCAT(u.firstName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', :search, '%')))
+                   OR LOWER(COALESCE(u.displayName, '')) LIKE LOWER(CONCAT('%', :search, '%')))
             """)
     Page<LeaveRequest> findAllForAdmin(
             @Param("companyId") UUID companyId,

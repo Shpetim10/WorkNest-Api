@@ -1,8 +1,10 @@
 package com.worknest.domain.entities;
 
+import com.worknest.common.security.encryption.EncryptedStringConverter;
 import com.worknest.domain.enums.*;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
@@ -56,7 +58,8 @@ public class RoleAssignment {
     @Column(name = "role", nullable = false, length = 30)
     private PlatformRole role;
 
-    @Column(name = "job_title", length = 255)
+    @Column(name = "job_title", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String jobTitle;
 
     @Column(name = "is_active", nullable = false)

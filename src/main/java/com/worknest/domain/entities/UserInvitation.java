@@ -1,8 +1,10 @@
 package com.worknest.domain.entities;
 
+import com.worknest.common.security.encryption.EncryptedStringConverter;
 import com.worknest.domain.enums.*;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
@@ -81,7 +83,8 @@ public class UserInvitation {
     @Column(name = "invitation_kind", nullable = false, length = 50)
     private InvitationKind invitationKind = InvitationKind.EMPLOYEE_INVITATION;
 
-    @Column(name = "invited_job_title", length = 255)
+    @Column(name = "invited_job_title", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String invitedJobTitle;
 
     @Column(name = "expires_at", nullable = false)

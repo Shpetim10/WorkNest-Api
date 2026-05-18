@@ -1,5 +1,6 @@
 package com.worknest.domain.entities;
 
+import com.worknest.common.security.encryption.EncryptedStringConverter;
 import com.worknest.domain.enums.AttendanceCaptureMethod;
 import com.worknest.domain.enums.AttendanceDecision;
 import com.worknest.domain.enums.AttendanceEventStatus;
@@ -9,6 +10,7 @@ import com.worknest.domain.enums.AttendanceReviewStatus;
 import com.worknest.domain.enums.GeofenceDecision;
 import com.worknest.domain.enums.NetworkDecision;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import jakarta.persistence.Entity;
@@ -141,10 +143,12 @@ public class AttendanceEvent {
     @Column(name = "geofence_decision", nullable = false, length = 40)
     private GeofenceDecision geofenceDecision;
 
-    @Column(name = "request_ip_address", length = 120)
+    @Column(name = "request_ip_address", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String requestIpAddress;
 
     @Column(name = "forwarded_for_chain", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String forwardedForChain;
 
     @Column(name = "network_matched")
@@ -168,10 +172,12 @@ public class AttendanceEvent {
     @Column(name = "rejection_reason_code", length = 80)
     private String rejectionReasonCode;
 
-    @Column(name = "rejection_reason_message", length = 255)
+    @Column(name = "rejection_reason_message", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String rejectionReasonMessage;
 
     @Column(name = "employee_note", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String employeeNote;
 
     @Enumerated(EnumType.STRING)
@@ -186,6 +192,7 @@ public class AttendanceEvent {
     private Instant reviewedAt;
 
     @Column(name = "review_note", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String reviewNote;
 
     @CreatedDate

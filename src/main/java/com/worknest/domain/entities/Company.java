@@ -1,9 +1,11 @@
 package com.worknest.domain.entities;
 
+import com.worknest.common.security.encryption.EncryptedStringConverter;
 import com.worknest.domain.enums.*;
 
 import com.worknest.common.i18n.Language;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
@@ -50,9 +52,12 @@ public class Company {
     @Enumerated(EnumType.STRING)
     private CompanyStatus status = CompanyStatus.ACTIVE;
 
-    @Column(name = "nipt", unique = true, length = 30)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "nipt", columnDefinition = "TEXT")
     private String nipt;
 
+    @Column(name = "nipt_hash", length = 64)
+    private String niptHash;
 
     @Column(name = "industry", length = 100)
     private String industry;
@@ -60,7 +65,8 @@ public class Company {
     @Column(name = "email", nullable = false, unique = true, length = 255)
     private String email;
 
-    @Column(name = "phone_number", nullable = false, length = 50)
+    @Column(name = "phone_number", nullable = false, columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String phoneNumber;
 
     @Column(name = "country_code", nullable = false, length = 2)
@@ -115,6 +121,7 @@ public class Company {
     private Instant suspendedAt;
 
     @Column(name = "suspended_reason", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String suspendedReason;
 
     @Version

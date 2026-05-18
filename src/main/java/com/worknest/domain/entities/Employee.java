@@ -1,11 +1,13 @@
 package com.worknest.domain.entities;
 
+import com.worknest.common.security.encryption.EncryptedBigDecimalConverter;
 import com.worknest.domain.enums.EmploymentStatus;
 import com.worknest.domain.enums.EmploymentType;
 import com.worknest.domain.enums.PaymentMethod;
 import com.worknest.domain.enums.PlatformRole;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
@@ -107,10 +109,12 @@ public class Employee {
     @Column(name = "payment_method", length = 30)
     private PaymentMethod paymentMethod;
 
-    @Column(name = "monthly_salary", precision = 12, scale = 2)
+    @Convert(converter = EncryptedBigDecimalConverter.class)
+    @Column(name = "monthly_salary", columnDefinition = "TEXT")
     private BigDecimal monthlySalary;
 
-    @Column(name = "hourly_rate", precision = 10, scale = 2)
+    @Convert(converter = EncryptedBigDecimalConverter.class)
+    @Column(name = "hourly_rate", columnDefinition = "TEXT")
     private BigDecimal hourlyRate;
 
     @Enumerated(EnumType.STRING)
