@@ -10,21 +10,28 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/admin/company-data")
+@RequestMapping({
+        "/api/v1/admin/company-data",
+        "/api/v1/companies/{companyId}/company-data"
+})
 @Tag(name = "Admin Company Data Export", description = "Binary company data export for Admin users.")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminCompanyDataExportController {
@@ -45,10 +52,17 @@ public class AdminCompanyDataExportController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Export generation failed", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public ResponseEntity<byte[]> export(
+            @PathVariable(required = false) UUID companyId,
+            @RequestParam(name = "companyId", required = false) UUID queryCompanyId,
             @RequestParam(required = false) String locale,
+            @RequestHeader(value = "X-Company-ID", required = false) UUID headerCompanyId,
             @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false) String acceptLanguage
     ) {
-        CompanyDataExportFile file = companyDataExportService.exportCompanyData(locale, acceptLanguage);
+        CompanyDataExportFile file = companyDataExportService.exportCompanyData(
+                resolveCompanyId(companyId, queryCompanyId, headerCompanyId),
+                locale,
+                acceptLanguage
+        );
         ContentDisposition contentDisposition = ContentDisposition.attachment()
                 .filename(file.fileName(), StandardCharsets.UTF_8)
                 .build();
@@ -58,5 +72,19 @@ public class AdminCompanyDataExportController {
                 .contentLength(file.content().length)
                 .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
                 .body(file.content());
+    }
+
+    private UUID resolveCompanyId(UUID pathCompanyId, UUID queryCompanyId, UUID headerCompanyId) {
+        UUID resolved = pathCompanyId != null ? pathCompanyId : queryCompanyId;
+        if (resolved == null) {
+            return headerCompanyId;
+        }
+        if (queryCompanyId != null && !resolved.equals(queryCompanyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Conflicting company identifiers.");
+        }
+        if (headerCompanyId != null && !resolved.equals(headerCompanyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Conflicting company identifiers.");
+        }
+        return resolved;
     }
 }

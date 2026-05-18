@@ -4,5 +4,9 @@ import com.worknest.features.superAdmin.dto.SuperAdminDashboardResponse;
 
 public interface SuperAdminDashboardService {
 
-    SuperAdminDashboardResponse getDashboard(int year, String period);
+    default SuperAdminDashboardResponse getDashboard(int year, String period) {
+        return getDashboard(year, period, null, null, null);
+    }
+
+    SuperAdminDashboardResponse getDashboard(int year, String period, String startDate, String endDate, String section);
 }

@@ -1,39 +1,24 @@
 package com.worknest.features.company.application.export;
 
-import com.worknest.audit.domain.AuditLog;
-import com.worknest.domain.entities.Announcement;
-import com.worknest.domain.entities.AttendanceDayRecord;
-import com.worknest.domain.entities.CompanySite;
-import com.worknest.domain.entities.Department;
-import com.worknest.domain.entities.Employee;
-import com.worknest.domain.entities.LeaveRequest;
-import com.worknest.domain.entities.PayrollResult;
-import com.worknest.domain.entities.RoleAssignment;
-import com.worknest.domain.entities.User;
 import com.worknest.domain.enums.AttendanceDayStatus;
 import com.worknest.domain.enums.AttendanceReviewStatus;
 import com.worknest.domain.enums.AttendanceState;
-import com.worknest.domain.enums.PayrollAdjustmentType;
-import com.worknest.domain.enums.PlatformRole;
 import jakarta.persistence.EntityManager;
-import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -50,41 +35,60 @@ public class JpaCompanyDataExportDataProvider implements CompanyDataExportDataPr
 
     @Override
     public List<ExportWorkbookData> loadCompanyData(UUID companyId, String locale) {
-        List<Employee> employees = employees(companyId, PlatformRole.EMPLOYEE);
-        List<Employee> staff = employees(companyId, PlatformRole.STAFF);
-        Map<UUID, RoleAssignment> employeeAssignments = assignmentsByUser(companyId, PlatformRole.EMPLOYEE);
-        Map<UUID, RoleAssignment> staffAssignments = assignmentsByUser(companyId, PlatformRole.STAFF);
-        Map<UUID, Long> assignedCounts = assignedEmployeeCounts(companyId);
-
-        return List.of(
-                employeeList(locale, employees, employeeAssignments),
-                staffList(locale, staff, staffAssignments, assignedCounts),
-                assignEmployees(locale, staff, staffAssignments, assignedCounts),
-                attendance(locale, companyId),
-                leaveRequests(locale, companyId),
-                payroll(locale, companyId),
-                locations(locale, companyId),
-                departments(locale, companyId),
-                announcements(locale, companyId),
-                auditLog(locale, companyId)
-        );
+        List<ExportWorkbookData> workbooks = new ArrayList<>();
+        workbooks.add(employeeList(locale, companyId));
+        workbooks.add(staffList(locale, companyId));
+        workbooks.add(assignEmployees(locale, companyId));
+        workbooks.add(attendance(locale, companyId));
+        workbooks.add(leaveRequests(locale, companyId));
+        workbooks.add(payroll(locale, companyId));
+        workbooks.add(locations(locale, companyId));
+        workbooks.add(departments(locale, companyId));
+        workbooks.add(announcements(locale, companyId));
+        workbooks.add(auditLog(locale, companyId));
+        return List.copyOf(workbooks);
     }
 
-    private ExportWorkbookData employeeList(String locale, List<Employee> employees, Map<UUID, RoleAssignment> assignments) {
+    private ExportWorkbookData employeeList(String locale, UUID companyId) {
+        List<Object[]> employees = nativeRows("""
+                        /* export:employee-list */
+                        select
+                            coalesce(nullif(u.display_name, ''), nullif(trim(concat(coalesce(u.first_name, ''), ' ', coalesce(u.last_name, ''))), ''), u.email) as employee_name,
+                            e.employment_type_role,
+                            e.employment_type,
+                            u.email,
+                            d.name as department_name,
+                            s.name as site_name,
+                            ra.job_title,
+                            e.employment_status
+                        from employees e
+                        left join users u on u.id = e.user_id
+                        left join departments d on d.id = e.department_id
+                        left join company_sites s on s.id = e.company_site_id
+                        left join role_assignments ra on ra.id = (
+                            select ra2.id
+                            from role_assignments ra2
+                            where ra2.company_id = e.company_id
+                              and ra2.user_id = e.user_id
+                            order by case when ra2.is_active then 0 else 1 end, ra2.created_at asc
+                            limit 1
+                        )
+                        where e.company_id = :companyId
+                          and e.employment_type_role in ('EMPLOYEE', 'STAFF')
+                        order by e.created_at asc
+                        """, companyId);
+
         List<List<Object>> rows = employees.stream()
-                .map(employee -> {
-                    RoleAssignment assignment = assignments.get(employee.getUser().getId());
-                    return row(
-                            fullName(employee.getUser()),
-                            localization.roleLabel(locale, employee.getEmploymentTypeRole()),
-                            localization.employmentTypeLabel(locale, employee.getEmploymentType()),
-                            employee.getUser().getEmail(),
-                            name(employee.getDepartment()),
-                            name(employee.getCompanySite()),
-                            assignment == null ? "" : assignment.getJobTitle(),
-                            localization.statusLabel(locale, employee.getEmploymentStatus())
-                    );
-                })
+                .map(employee -> row(
+                        string(employee[0]),
+                        localization.roleLabel(locale, employee[1]),
+                        localization.employmentTypeLabel(locale, employee[2]),
+                        string(employee[3]),
+                        string(employee[4]),
+                        string(employee[5]),
+                        string(employee[6]),
+                        localization.statusLabel(locale, employee[7])
+                ))
                 .toList();
 
         return workbook(
@@ -96,25 +100,51 @@ public class JpaCompanyDataExportDataProvider implements CompanyDataExportDataPr
         );
     }
 
-    private ExportWorkbookData staffList(
-            String locale,
-            List<Employee> staff,
-            Map<UUID, RoleAssignment> assignments,
-            Map<UUID, Long> assignedCounts
-    ) {
+    private ExportWorkbookData staffList(String locale, UUID companyId) {
+        List<Object[]> staff = nativeRows("""
+                        /* export:staff-list */
+                        select
+                            coalesce(nullif(u.display_name, ''), nullif(trim(concat(coalesce(u.first_name, ''), ' ', coalesce(u.last_name, ''))), ''), u.email) as staff_name,
+                            u.email,
+                            d.name as department_name,
+                            s.name as site_name,
+                            ra.job_title,
+                            coalesce(assigned.assigned_count, 0) as assigned_count,
+                            e.employment_status
+                        from employees e
+                        left join users u on u.id = e.user_id
+                        left join departments d on d.id = e.department_id
+                        left join company_sites s on s.id = e.company_site_id
+                        left join role_assignments ra on ra.id = (
+                            select ra2.id
+                            from role_assignments ra2
+                            where ra2.company_id = e.company_id
+                              and ra2.user_id = e.user_id
+                            order by case when ra2.is_active then 0 else 1 end, ra2.created_at asc
+                            limit 1
+                        )
+                        left join (
+                            select supervisor_role_assignment_id, count(*) as assigned_count
+                            from employees
+                            where company_id = :companyId
+                              and supervisor_role_assignment_id is not null
+                            group by supervisor_role_assignment_id
+                        ) assigned on assigned.supervisor_role_assignment_id = ra.id
+                        where e.company_id = :companyId
+                          and e.employment_type_role in ('STAFF', 'ADMIN', 'SUPERADMIN')
+                        order by e.created_at asc
+                        """, companyId);
+
         List<List<Object>> rows = staff.stream()
-                .map(employee -> {
-                    RoleAssignment assignment = assignments.get(employee.getUser().getId());
-                    return row(
-                            fullName(employee.getUser()),
-                            employee.getUser().getEmail(),
-                            name(employee.getDepartment()),
-                            name(employee.getCompanySite()),
-                            assignment == null ? "" : assignment.getJobTitle(),
-                            assignment == null ? 0L : assignedCounts.getOrDefault(assignment.getId(), 0L),
-                            localization.statusLabel(locale, employee.getEmploymentStatus())
-                    );
-                })
+                .map(employee -> row(
+                        string(employee[0]),
+                        string(employee[1]),
+                        string(employee[2]),
+                        string(employee[3]),
+                        string(employee[4]),
+                        employee[5],
+                        localization.statusLabel(locale, employee[6])
+                ))
                 .toList();
 
         return workbook(
@@ -126,22 +156,44 @@ public class JpaCompanyDataExportDataProvider implements CompanyDataExportDataPr
         );
     }
 
-    private ExportWorkbookData assignEmployees(
-            String locale,
-            List<Employee> staff,
-            Map<UUID, RoleAssignment> assignments,
-            Map<UUID, Long> assignedCounts
-    ) {
-        List<List<Object>> rows = staff.stream()
-                .map(employee -> {
-                    RoleAssignment assignment = assignments.get(employee.getUser().getId());
-                    return row(
-                            fullName(employee.getUser()),
-                            assignment == null ? "" : assignment.getJobTitle(),
-                            name(employee.getDepartment()),
-                            assignment == null ? 0L : assignedCounts.getOrDefault(assignment.getId(), 0L)
-                    );
-                })
+    private ExportWorkbookData assignEmployees(String locale, UUID companyId) {
+        List<Object[]> managers = nativeRows("""
+                        /* export:assign-employees */
+                        select
+                            coalesce(nullif(u.display_name, ''), nullif(trim(concat(coalesce(u.first_name, ''), ' ', coalesce(u.last_name, ''))), ''), u.email) as staff_name,
+                            ra.job_title,
+                            d.name as department_name,
+                            coalesce(assigned.assigned_count, 0) as assigned_count
+                        from employees e
+                        left join users u on u.id = e.user_id
+                        left join departments d on d.id = e.department_id
+                        left join role_assignments ra on ra.id = (
+                            select ra2.id
+                            from role_assignments ra2
+                            where ra2.company_id = e.company_id
+                              and ra2.user_id = e.user_id
+                            order by case when ra2.is_active then 0 else 1 end, ra2.created_at asc
+                            limit 1
+                        )
+                        left join (
+                            select supervisor_role_assignment_id, count(*) as assigned_count
+                            from employees
+                            where company_id = :companyId
+                              and supervisor_role_assignment_id is not null
+                            group by supervisor_role_assignment_id
+                        ) assigned on assigned.supervisor_role_assignment_id = ra.id
+                        where e.company_id = :companyId
+                          and e.employment_type_role in ('STAFF', 'ADMIN', 'SUPERADMIN')
+                        order by e.created_at asc
+                        """, companyId);
+
+        List<List<Object>> rows = managers.stream()
+                .map(manager -> row(
+                        string(manager[0]),
+                        string(manager[1]),
+                        string(manager[2]),
+                        manager[3]
+                ))
                 .toList();
 
         return workbook(
@@ -154,30 +206,48 @@ public class JpaCompanyDataExportDataProvider implements CompanyDataExportDataPr
     }
 
     private ExportWorkbookData attendance(String locale, UUID companyId) {
-        List<AttendanceDayRecord> records = entityManager.createQuery("""
-                        select distinct r
-                        from AttendanceDayRecord r
-                        join fetch r.employee e
-                        join fetch e.user
-                        left join fetch e.department
-                        join fetch r.site
-                        where r.company.id = :companyId
-                        order by r.workDate desc, r.createdAt desc
-                        """, AttendanceDayRecord.class)
-                .setParameter("companyId", companyId)
-                .getResultList();
+        List<Object[]> records = nativeRows("""
+                        /* export:attendance */
+                        select
+                            coalesce(nullif(u.display_name, ''), nullif(trim(concat(coalesce(u.first_name, ''), ' ', coalesce(u.last_name, ''))), ''), u.email) as employee_name,
+                            coalesce(record_site.name, employee_site.name) as site_name,
+                            d.name as department_name,
+                            coalesce(r.review_status, 'NONE') as review_status,
+                            r.first_check_in_at,
+                            r.last_check_out_at,
+                            coalesce(r.day_status, 'ABSENT') as day_status,
+                            coalesce(r.worked_minutes, 0) as worked_minutes,
+                            coalesce(r.has_warnings, false) as has_warnings
+                        from employees e
+                        left join users u on u.id = e.user_id
+                        left join departments d on d.id = e.department_id
+                        left join company_sites employee_site on employee_site.id = e.company_site_id
+                        left join lateral (
+                            select r.*
+                            from attendance_day_records r
+                            where r.company_id = e.company_id
+                              and r.employee_id = e.id
+                            order by r.work_date desc, r.created_at desc
+                            limit 1
+                        ) r on true
+                        left join company_sites record_site on record_site.id = r.site_id
+                        where e.company_id = :companyId
+                          and e.employment_type_role in ('EMPLOYEE', 'STAFF')
+                          and e.employment_status <> 'PENDING'
+                        order by coalesce(r.work_date, current_date) desc, e.created_at asc
+                        """, companyId);
 
         List<List<Object>> rows = records.stream()
                 .map(record -> row(
-                        fullName(record.getUser()),
-                        name(record.getSite()),
-                        name(record.getEmployee().getDepartment()),
-                        localization.attendanceStateLabel(locale, attendanceState(record)),
-                        timestamp(record.getFirstCheckInAt()),
-                        timestamp(record.getLastCheckOutAt()),
-                        localization.statusLabel(locale, record.getDayStatus()),
-                        worked(record.getWorkedMinutes()),
-                        Boolean.TRUE.equals(record.getHasWarnings())
+                        string(record[0]),
+                        string(record[1]),
+                        string(record[2]),
+                        attendanceStateLabel(locale, record[3], record[4], record[5], record[6]),
+                        timestamp(record[4]),
+                        timestamp(record[5]),
+                        localization.statusLabel(locale, record[6]),
+                        worked(asInteger(record[7])),
+                        Boolean.TRUE.equals(asBoolean(record[8]))
                                 ? localization.statusLabel(locale, AttendanceDayStatus.FLAGGED)
                                 : ""
                 ))
@@ -193,33 +263,40 @@ public class JpaCompanyDataExportDataProvider implements CompanyDataExportDataPr
     }
 
     private ExportWorkbookData leaveRequests(String locale, UUID companyId) {
-        List<LeaveRequest> requests = entityManager.createQuery("""
-                        select distinct lr
-                        from LeaveRequest lr
-                        join fetch lr.employee e
-                        join fetch e.user
-                        left join fetch e.department
-                        left join fetch e.companySite
-                        where lr.company.id = :companyId
-                        order by lr.createdAt desc
-                        """, LeaveRequest.class)
-                .setParameter("companyId", companyId)
-                .getResultList();
+        List<Object[]> requests = nativeRows("""
+                        /* export:leave */
+                        select
+                            coalesce(nullif(u.display_name, ''), nullif(trim(concat(coalesce(u.first_name, ''), ' ', coalesce(u.last_name, ''))), ''), u.email) as employee_name,
+                            s.name as site_name,
+                            d.name as department_name,
+                            lr.leave_type,
+                            lr.start_date,
+                            lr.end_date,
+                            lr.days_count,
+                            lr.status
+                        from leave_requests lr
+                        left join employees e on e.id = lr.employee_id
+                        left join users u on u.id = e.user_id
+                        left join departments d on d.id = e.department_id
+                        left join company_sites s on s.id = e.company_site_id
+                        where lr.company_id = :companyId
+                        order by lr.created_at desc
+                        """, companyId);
 
         List<List<Object>> rows = requests.stream()
                 .map(request -> row(
-                        fullName(request.getEmployee().getUser()),
-                        name(request.getEmployee().getCompanySite()),
-                        name(request.getEmployee().getDepartment()),
-                        localization.leaveTypeLabel(locale, request.getLeaveType()),
-                        dateRange(request.getStartDate(), request.getEndDate()),
-                        request.getDaysCount(),
-                        localization.statusLabel(locale, request.getStatus())
+                        string(request[0]),
+                        string(request[1]),
+                        string(request[2]),
+                        localization.leaveTypeLabel(locale, request[3]),
+                        dateRange(request[4], request[5]),
+                        request[6],
+                        localization.statusLabel(locale, request[7])
                 ))
                 .toList();
 
         return workbook(
-                "leave/leave-requests.xlsx",
+                "leave/leave.xlsx",
                 "leaveRequests",
                 locale,
                 List.of("name", "site", "department", "type", "dateRange", "days", "status"),
@@ -228,41 +305,48 @@ public class JpaCompanyDataExportDataProvider implements CompanyDataExportDataPr
     }
 
     private ExportWorkbookData payroll(String locale, UUID companyId) {
-        List<PayrollResult> results = entityManager.createQuery("""
-                        select distinct pr
-                        from PayrollResult pr
-                        join fetch pr.employee e
-                        join fetch e.user
-                        where pr.company.id = :companyId
-                        order by pr.year desc, pr.month desc, pr.createdAt desc
-                        """, PayrollResult.class)
-                .setParameter("companyId", companyId)
-                .getResultList();
-        Map<PayrollAdjustmentKey, BigDecimal> adjustmentTotals = payrollAdjustmentTotals(companyId);
+        List<Object[]> results = nativeRows("""
+                        /* export:payroll */
+                        select
+                            coalesce(nullif(u.display_name, ''), nullif(trim(concat(coalesce(u.first_name, ''), ' ', coalesce(u.last_name, ''))), ''), u.email) as employee_name,
+                            e.employment_type_role,
+                            e.employment_type,
+                            e.payment_method,
+                            pr.base_pay,
+                            coalesce(b.bonuses, 0) as bonuses,
+                            pr.total_deductions,
+                            pr.gross_earnings,
+                            pr.status
+                        from payroll_results pr
+                        left join employees e on e.id = pr.employee_id
+                        left join users u on u.id = e.user_id
+                        left join (
+                            select employee_id, payroll_year, payroll_month, sum(amount) as bonuses
+                            from payroll_adjustments
+                            where company_id = :companyId
+                              and adjustment_type = 'BONUS'
+                            group by employee_id, payroll_year, payroll_month
+                        ) b on b.employee_id = pr.employee_id
+                            and b.payroll_year = pr.payroll_year
+                            and b.payroll_month = pr.payroll_month
+                        where pr.company_id = :companyId
+                        order by pr.payroll_year desc, pr.payroll_month desc, pr.created_at desc
+                        """, companyId);
 
         List<List<Object>> rows = results.stream()
-                .map(result -> {
-                    Employee employee = result.getEmployee();
-                    BigDecimal bonuses = adjustmentTotals.getOrDefault(
-                            new PayrollAdjustmentKey(employee.getId(), result.getYear(), result.getMonth(), PayrollAdjustmentType.BONUS),
-                            BigDecimal.ZERO
-                    );
-                    String employeeType = String.join(" / ", nonBlank(List.of(
-                            localization.roleLabel(locale, employee.getEmploymentTypeRole()),
-                            localization.employmentTypeLabel(locale, employee.getEmploymentType())
-                    )));
-
-                    return row(
-                            fullName(employee.getUser()),
-                            employeeType,
-                            localization.paymentMethodLabel(locale, employee.getPaymentMethod()),
-                            result.getBasePay(),
-                            bonuses,
-                            result.getTotalDeductions(),
-                            result.getGrossEarnings(),
-                            localization.payrollStatusLabel(locale, result.getStatus())
-                    );
-                })
+                .map(result -> row(
+                        string(result[0]),
+                        String.join(" / ", nonBlank(List.of(
+                                localization.roleLabel(locale, result[1]),
+                                localization.employmentTypeLabel(locale, result[2])
+                        ))),
+                        localization.paymentMethodLabel(locale, result[3]),
+                        result[4],
+                        result[5],
+                        result[6],
+                        result[7],
+                        localization.payrollStatusLabel(locale, result[8])
+                ))
                 .toList();
 
         return workbook(
@@ -275,23 +359,22 @@ public class JpaCompanyDataExportDataProvider implements CompanyDataExportDataPr
     }
 
     private ExportWorkbookData locations(String locale, UUID companyId) {
-        List<CompanySite> sites = entityManager.createQuery("""
-                        select s
-                        from CompanySite s
-                        where s.company.id = :companyId
-                        order by s.createdAt desc
-                        """, CompanySite.class)
-                .setParameter("companyId", companyId)
-                .getResultList();
+        List<Object[]> sites = nativeRows("""
+                        /* export:locations */
+                        select name, code, type, country_code, status, created_at
+                        from company_sites
+                        where company_id = :companyId
+                        order by created_at desc
+                        """, companyId);
 
         List<List<Object>> rows = sites.stream()
                 .map(site -> row(
-                        site.getName(),
-                        site.getCode(),
-                        localization.siteTypeLabel(locale, site.getType()),
-                        countryName(site.getCountryCode(), locale),
-                        localization.statusLabel(locale, site.getStatus()),
-                        date(site.getCreatedAt())
+                        string(site[0]),
+                        string(site[1]),
+                        localization.siteTypeLabel(locale, site[2]),
+                        countryName(string(site[3]), locale),
+                        localization.statusLabel(locale, site[4]),
+                        date(site[5])
                 ))
                 .toList();
 
@@ -305,23 +388,23 @@ public class JpaCompanyDataExportDataProvider implements CompanyDataExportDataPr
     }
 
     private ExportWorkbookData departments(String locale, UUID companyId) {
-        List<Department> departments = entityManager.createQuery("""
-                        select d
-                        from Department d
-                        where d.company.id = :companyId
-                        order by d.createdAt desc
-                        """, Department.class)
-                .setParameter("companyId", companyId)
-                .getResultList();
-        Map<UUID, Long> employeeCounts = departmentEmployeeCounts(companyId);
+        List<Object[]> departments = nativeRows("""
+                        /* export:departments */
+                        select d.name, d.status, d.description, count(e.id) as employee_count, d.created_at
+                        from departments d
+                        left join employees e on e.department_id = d.id and e.company_id = d.company_id
+                        where d.company_id = :companyId
+                        group by d.id, d.name, d.status, d.description, d.created_at
+                        order by d.created_at desc
+                        """, companyId);
 
         List<List<Object>> rows = departments.stream()
                 .map(department -> row(
-                        department.getName(),
-                        localization.statusLabel(locale, department.getStatus()),
-                        department.getDescription(),
-                        employeeCounts.getOrDefault(department.getId(), 0L),
-                        date(department.getCreatedAt())
+                        string(department[0]),
+                        localization.statusLabel(locale, department[1]),
+                        string(department[2]),
+                        department[3],
+                        date(department[4])
                 ))
                 .toList();
 
@@ -335,24 +418,29 @@ public class JpaCompanyDataExportDataProvider implements CompanyDataExportDataPr
     }
 
     private ExportWorkbookData announcements(String locale, UUID companyId) {
-        List<Announcement> announcements = entityManager.createQuery("""
-                        select distinct a
-                        from Announcement a
-                        left join fetch a.createdByUser
-                        where a.company.id = :companyId
-                        order by a.createdAt desc
-                        """, Announcement.class)
-                .setParameter("companyId", companyId)
-                .getResultList();
+        List<Object[]> announcements = nativeRows("""
+                        /* export:announcements */
+                        select
+                            a.title,
+                            a.target_audience,
+                            a.priority,
+                            coalesce(nullif(u.display_name, ''), nullif(trim(concat(coalesce(u.first_name, ''), ' ', coalesce(u.last_name, ''))), ''), u.email) as created_by_name,
+                            a.created_at,
+                            a.content
+                        from announcements a
+                        left join users u on u.id = a.created_by_user_id
+                        where a.company_id = :companyId
+                        order by a.created_at desc
+                        """, companyId);
 
         List<List<Object>> rows = announcements.stream()
                 .map(announcement -> row(
-                        announcement.getTitle(),
-                        localization.audienceLabel(locale, announcement.getTargetAudience()),
-                        localization.priorityLabel(locale, announcement.getPriority()),
-                        fullName(announcement.getCreatedByUser()),
-                        date(announcement.getCreatedAt()),
-                        announcement.getContent()
+                        string(announcement[0]),
+                        localization.audienceLabel(locale, announcement[1]),
+                        localization.priorityLabel(locale, announcement[2]),
+                        string(announcement[3]),
+                        date(announcement[4]),
+                        string(announcement[5])
                 ))
                 .toList();
 
@@ -366,30 +454,28 @@ public class JpaCompanyDataExportDataProvider implements CompanyDataExportDataPr
     }
 
     private ExportWorkbookData auditLog(String locale, UUID companyId) {
-        List<AuditLog> logs = entityManager.createQuery("""
-                        select a
-                        from AuditLog a
-                        where a.companyId = :companyId
-                        order by a.createdAt desc
-                        """, AuditLog.class)
-                .setParameter("companyId", companyId)
-                .getResultList();
-        Map<UUID, User> users = usersById(logs.stream()
-                .map(AuditLog::getActorUserId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet()));
+        List<Object[]> logs = nativeRows("""
+                        /* export:audit-log */
+                        select
+                            coalesce(nullif(u.display_name, ''), nullif(trim(concat(coalesce(u.first_name, ''), ' ', coalesce(u.last_name, ''))), ''), u.email, cast(a.actor_user_id as text)) as actor_name,
+                            a.actor_role,
+                            a.action,
+                            coalesce(nullif(cast(a.metadata as text), '{}'), nullif(cast(a.diff as text), '{}'), '') as details,
+                            a.created_at
+                        from audit_logs a
+                        left join users u on u.id = a.actor_user_id
+                        where a.company_id = :companyId
+                        order by a.created_at desc
+                        """, companyId);
 
         List<List<Object>> rows = logs.stream()
-                .map(log -> {
-                    User user = users.get(log.getActorUserId());
-                    return row(
-                            user == null ? string(log.getActorUserId()) : fullName(user),
-                            localization.roleLabel(locale, log.getActorRole()),
-                            log.getAction(),
-                            auditDetails(log),
-                            timestamp(log.getCreatedAt())
-                    );
-                })
+                .map(log -> row(
+                        string(log[0]),
+                        localization.roleLabel(locale, log[1]),
+                        string(log[2]),
+                        string(log[3]),
+                        timestamp(log[4])
+                ))
                 .toList();
 
         return workbook(
@@ -399,118 +485,6 @@ public class JpaCompanyDataExportDataProvider implements CompanyDataExportDataPr
                 List.of("user", "role", "action", "details", "timestamp"),
                 rows
         );
-    }
-
-    private List<Employee> employees(UUID companyId, PlatformRole role) {
-        return entityManager.createQuery("""
-                        select distinct e
-                        from Employee e
-                        join fetch e.user
-                        left join fetch e.department
-                        left join fetch e.companySite
-                        left join fetch e.supervisorRoleAssignment
-                        where e.company.id = :companyId
-                          and e.employmentTypeRole = :role
-                        order by e.createdAt asc
-                        """, Employee.class)
-                .setParameter("companyId", companyId)
-                .setParameter("role", role)
-                .getResultList();
-    }
-
-    private Map<UUID, RoleAssignment> assignmentsByUser(UUID companyId, PlatformRole role) {
-        List<RoleAssignment> assignments = entityManager.createQuery("""
-                        select distinct ra
-                        from RoleAssignment ra
-                        join fetch ra.user
-                        where ra.company.id = :companyId
-                          and ra.role = :role
-                          and ra.isActive = true
-                        order by ra.createdAt asc
-                        """, RoleAssignment.class)
-                .setParameter("companyId", companyId)
-                .setParameter("role", role)
-                .getResultList();
-
-        Map<UUID, RoleAssignment> byUserId = new LinkedHashMap<>();
-        for (RoleAssignment assignment : assignments) {
-            byUserId.putIfAbsent(assignment.getUser().getId(), assignment);
-        }
-        return byUserId;
-    }
-
-    private Map<UUID, Long> assignedEmployeeCounts(UUID companyId) {
-        List<Object[]> rows = entityManager.createQuery("""
-                        select e.supervisorRoleAssignment.id, count(e)
-                        from Employee e
-                        where e.company.id = :companyId
-                          and e.supervisorRoleAssignment is not null
-                        group by e.supervisorRoleAssignment.id
-                        """, Object[].class)
-                .setParameter("companyId", companyId)
-                .getResultList();
-
-        Map<UUID, Long> counts = new HashMap<>();
-        for (Object[] row : rows) {
-            counts.put((UUID) row[0], ((Number) row[1]).longValue());
-        }
-        return counts;
-    }
-
-    private Map<UUID, Long> departmentEmployeeCounts(UUID companyId) {
-        List<Object[]> rows = entityManager.createQuery("""
-                        select e.department.id, count(e)
-                        from Employee e
-                        where e.company.id = :companyId
-                          and e.department is not null
-                        group by e.department.id
-                        """, Object[].class)
-                .setParameter("companyId", companyId)
-                .getResultList();
-
-        Map<UUID, Long> counts = new HashMap<>();
-        for (Object[] row : rows) {
-            counts.put((UUID) row[0], ((Number) row[1]).longValue());
-        }
-        return counts;
-    }
-
-    private Map<PayrollAdjustmentKey, BigDecimal> payrollAdjustmentTotals(UUID companyId) {
-        List<Object[]> rows = entityManager.createQuery("""
-                        select a.employee.id, a.year, a.month, a.type, sum(a.amount)
-                        from PayrollAdjustment a
-                        where a.company.id = :companyId
-                        group by a.employee.id, a.year, a.month, a.type
-                        """, Object[].class)
-                .setParameter("companyId", companyId)
-                .getResultList();
-
-        Map<PayrollAdjustmentKey, BigDecimal> totals = new HashMap<>();
-        for (Object[] row : rows) {
-            PayrollAdjustmentKey key = new PayrollAdjustmentKey(
-                    (UUID) row[0],
-                    ((Number) row[1]).intValue(),
-                    ((Number) row[2]).intValue(),
-                    (PayrollAdjustmentType) row[3]
-            );
-            totals.put(key, (BigDecimal) row[4]);
-        }
-        return totals;
-    }
-
-    private Map<UUID, User> usersById(Set<UUID> ids) {
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-
-        return entityManager.createQuery("""
-                        select u
-                        from User u
-                        where u.id in :ids
-                        """, User.class)
-                .setParameter("ids", ids)
-                .getResultStream()
-                .collect(Collectors.toMap(User::getId, Function.identity()));
     }
 
     private ExportWorkbookData workbook(
@@ -530,26 +504,6 @@ public class JpaCompanyDataExportDataProvider implements CompanyDataExportDataPr
         return new ArrayList<>(Arrays.asList(values));
     }
 
-    private String fullName(User user) {
-        if (user == null) {
-            return "";
-        }
-        if (StringUtils.hasText(user.getDisplayName())) {
-            return user.getDisplayName().trim();
-        }
-
-        String fullName = String.join(" ", nonBlank(Arrays.asList(user.getFirstName(), user.getLastName()))).trim();
-        return StringUtils.hasText(fullName) ? fullName : string(user.getEmail());
-    }
-
-    private String name(Department department) {
-        return department == null ? "" : string(department.getName());
-    }
-
-    private String name(CompanySite site) {
-        return site == null ? "" : string(site.getName());
-    }
-
     private String string(Object value) {
         return value == null ? "" : value.toString();
     }
@@ -561,15 +515,39 @@ public class JpaCompanyDataExportDataProvider implements CompanyDataExportDataPr
                 .toList();
     }
 
-    private String date(Instant value) {
-        return value == null ? "" : DATE_FORMATTER.format(value);
+    @SuppressWarnings("unchecked")
+    private List<Object[]> nativeRows(String sql, UUID companyId) {
+        return entityManager.createNativeQuery(sql)
+                .setParameter("companyId", companyId)
+                .getResultList();
     }
 
-    private String timestamp(Instant value) {
-        return value == null ? "" : TIMESTAMP_FORMATTER.format(value);
+    private String date(Object value) {
+        if (value == null) {
+            return "";
+        }
+
+        LocalDate localDate = toLocalDate(value);
+        if (localDate != null) {
+            return localDate.toString();
+        }
+
+        Instant instant = toInstant(value);
+        return instant == null ? string(value) : DATE_FORMATTER.format(instant);
     }
 
-    private String dateRange(LocalDate start, LocalDate end) {
+    private String timestamp(Object value) {
+        if (value == null) {
+            return "";
+        }
+
+        Instant instant = toInstant(value);
+        return instant == null ? string(value) : TIMESTAMP_FORMATTER.format(instant);
+    }
+
+    private String dateRange(Object startValue, Object endValue) {
+        LocalDate start = toLocalDate(startValue);
+        LocalDate end = toLocalDate(endValue);
         if (start == null && end == null) {
             return "";
         }
@@ -577,6 +555,62 @@ public class JpaCompanyDataExportDataProvider implements CompanyDataExportDataPr
             return string(start);
         }
         return string(start) + " - " + string(end);
+    }
+
+    private LocalDate toLocalDate(Object value) {
+        return switch (value) {
+            case null -> null;
+            case LocalDate localDate -> localDate;
+            case java.sql.Date sqlDate -> sqlDate.toLocalDate();
+            case Instant instant -> instant.atZone(ZoneOffset.UTC).toLocalDate();
+            case Timestamp timestamp -> timestamp.toInstant().atZone(ZoneOffset.UTC).toLocalDate();
+            case LocalDateTime localDateTime -> localDateTime.toLocalDate();
+            case OffsetDateTime offsetDateTime -> offsetDateTime.toLocalDate();
+            case Date date -> date.toInstant().atZone(ZoneOffset.UTC).toLocalDate();
+            default -> {
+                try {
+                    yield LocalDate.parse(value.toString());
+                } catch (RuntimeException ignored) {
+                    yield null;
+                }
+            }
+        };
+    }
+
+    private Instant toInstant(Object value) {
+        return switch (value) {
+            case null -> null;
+            case Instant instant -> instant;
+            case Timestamp timestamp -> timestamp.toInstant();
+            case LocalDateTime localDateTime -> localDateTime.toInstant(ZoneOffset.UTC);
+            case OffsetDateTime offsetDateTime -> offsetDateTime.toInstant();
+            case Date date -> date.toInstant();
+            default -> null;
+        };
+    }
+
+    private Integer asInteger(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(value.toString());
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private Boolean asBoolean(Object value) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value == null) {
+            return false;
+        }
+        return Boolean.parseBoolean(value.toString());
     }
 
     private String worked(Integer minutes) {
@@ -601,36 +635,25 @@ public class JpaCompanyDataExportDataProvider implements CompanyDataExportDataPr
         return StringUtils.hasText(countryName) ? countryName : countryCode;
     }
 
-    private AttendanceState attendanceState(AttendanceDayRecord record) {
-        if (record.getReviewStatus() == AttendanceReviewStatus.PENDING_REVIEW) {
-            return AttendanceState.PENDING_REVIEW;
+    private String attendanceStateLabel(
+            String locale,
+            Object reviewStatus,
+            Object firstCheckInAt,
+            Object lastCheckOutAt,
+            Object dayStatus
+    ) {
+        if (Objects.equals(string(reviewStatus), AttendanceReviewStatus.PENDING_REVIEW.name())) {
+            return localization.attendanceStateLabel(locale, AttendanceState.PENDING_REVIEW);
         }
-        if (record.getFirstCheckInAt() == null) {
-            return AttendanceState.NOT_CHECKED_IN;
+        if (firstCheckInAt == null) {
+            return localization.attendanceStateLabel(locale, AttendanceState.NOT_CHECKED_IN);
         }
-        if (record.getLastCheckOutAt() == null) {
-            return record.getDayStatus() == AttendanceDayStatus.MISSING_CHECKOUT
+        if (lastCheckOutAt == null) {
+            AttendanceState state = Objects.equals(string(dayStatus), AttendanceDayStatus.MISSING_CHECKOUT.name())
                     ? AttendanceState.MISSING_CHECKOUT
                     : AttendanceState.CHECKED_IN;
+            return localization.attendanceStateLabel(locale, state);
         }
-        return AttendanceState.CHECKED_OUT;
-    }
-
-    private String auditDetails(AuditLog log) {
-        if (log.getMetadata() != null && !log.getMetadata().isEmpty()) {
-            return log.getMetadata().toString();
-        }
-        if (log.getDiff() != null && !log.getDiff().isEmpty()) {
-            return log.getDiff().toString();
-        }
-        return "";
-    }
-
-    private record PayrollAdjustmentKey(
-            UUID employeeId,
-            int year,
-            int month,
-            PayrollAdjustmentType type
-    ) {
+        return localization.attendanceStateLabel(locale, AttendanceState.CHECKED_OUT);
     }
 }

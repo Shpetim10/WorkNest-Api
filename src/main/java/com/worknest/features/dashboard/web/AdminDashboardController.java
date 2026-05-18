@@ -25,8 +25,13 @@ public class AdminDashboardController {
     @Operation(summary = "Get admin dashboard", description = "Returns KPIs, attendance trends, active days, recent activity, and quick stats for the company dashboard")
     public ApiResponse<AdminDashboardResponse> getDashboard(
             @RequestParam(required = false) String period,
-            @RequestParam(required = false) String trendPeriod
+            @RequestParam(required = false) String trendPeriod,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate
     ) {
-        return ApiResponse.success("Dashboard retrieved successfully", dashboardService.getDashboard(period, trendPeriod));
+        return ApiResponse.success(
+                "Dashboard retrieved successfully",
+                dashboardService.getDashboard(period, trendPeriod, startDate, endDate)
+        );
     }
 }

@@ -12,9 +12,12 @@ import com.worknest.audit.domain.AuditLog;
 import com.worknest.audit.service.AuditLogService;
 import com.worknest.common.exception.BusinessException;
 import com.worknest.domain.entities.Company;
+import com.worknest.domain.entities.RoleAssignment;
+import com.worknest.domain.entities.User;
 import com.worknest.domain.enums.CompanyStatus;
 import com.worknest.domain.enums.PlatformAccess;
 import com.worknest.domain.enums.PlatformRole;
+import com.worknest.features.auth.repository.RoleAssignmentRepository;
 import com.worknest.features.company.application.export.CompanyDataExportDataProvider;
 import com.worknest.features.company.application.export.CompanyDataExportFile;
 import com.worknest.features.company.application.export.ExcelExportWriter;
@@ -53,7 +56,7 @@ class CompanyDataExportServiceImplTest {
             "employees/staff-list.xlsx",
             "employees/assign-employees.xlsx",
             "attendance/attendance.xlsx",
-            "leave/leave-requests.xlsx",
+            "leave/leave.xlsx",
             "payroll/payroll.xlsx",
             "locations/locations.xlsx",
             "departments/departments.xlsx",
@@ -63,6 +66,9 @@ class CompanyDataExportServiceImplTest {
 
     @Mock
     private CompanyRepository companyRepository;
+
+    @Mock
+    private RoleAssignmentRepository roleAssignmentRepository;
 
     @Mock
     private CompanyDataExportDataProvider dataProvider;
@@ -81,6 +87,7 @@ class CompanyDataExportServiceImplTest {
         localization = new ExportLocalizationService();
         service = new CompanyDataExportServiceImpl(
                 companyRepository,
+                roleAssignmentRepository,
                 dataProvider,
                 new ZipExportWriter(new ExcelExportWriter()),
                 localization,
@@ -100,6 +107,7 @@ class CompanyDataExportServiceImplTest {
     @Test
     void adminReceivesZipWithAllExpectedXlsxPathsAndNoReports() throws IOException {
         authenticate(PlatformRole.ADMIN, companyId);
+        allowExportAs(PlatformRole.ADMIN, companyId);
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(company()));
         when(dataProvider.loadCompanyData(eq(companyId), eq("en"))).thenReturn(workbooks("en"));
 
@@ -115,6 +123,7 @@ class CompanyDataExportServiceImplTest {
     @Test
     void eachWorkbookHasExpectedHeadersFreezePaneAndAutofilter() throws IOException {
         authenticate(PlatformRole.ADMIN, companyId);
+        allowExportAs(PlatformRole.ADMIN, companyId);
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(company()));
         when(dataProvider.loadCompanyData(eq(companyId), eq("en"))).thenReturn(workbooks("en"));
 
@@ -133,8 +142,27 @@ class CompanyDataExportServiceImplTest {
     }
 
     @Test
+    void zipWritesRowsIntoEveryWorkbookEntry() throws IOException {
+        authenticate(PlatformRole.ADMIN, companyId);
+        allowExportAs(PlatformRole.ADMIN, companyId);
+        when(companyRepository.findById(companyId)).thenReturn(Optional.of(company()));
+        when(dataProvider.loadCompanyData(eq(companyId), eq("en"))).thenReturn(workbooks("en"));
+
+        CompanyDataExportFile file = service.exportCompanyData("en", null);
+        Map<String, byte[]> entries = unzip(file.content());
+
+        for (String path : EXPECTED_PATHS) {
+            try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(entries.get(path)))) {
+                var sheet = workbook.getSheetAt(0);
+                assertThat(sheet.getRow(1).getCell(0).getStringCellValue()).isEqualTo("Sample");
+            }
+        }
+    }
+
+    @Test
     void localeChangesSheetNamesAndHeaders() throws IOException {
         authenticate(PlatformRole.ADMIN, companyId);
+        allowExportAs(PlatformRole.ADMIN, companyId);
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(company()));
         when(dataProvider.loadCompanyData(eq(companyId), eq("sq"))).thenReturn(workbooks("sq"));
 
@@ -152,6 +180,7 @@ class CompanyDataExportServiceImplTest {
     @Test
     void acceptLanguageIsUsedWhenLocaleQueryParamIsMissing() {
         authenticate(PlatformRole.ADMIN, companyId);
+        allowExportAs(PlatformRole.ADMIN, companyId);
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(company()));
         when(dataProvider.loadCompanyData(eq(companyId), eq("de"))).thenReturn(workbooks("de"));
 
@@ -163,6 +192,7 @@ class CompanyDataExportServiceImplTest {
     @Test
     void nonAdminReceivesForbiddenBeforeExportGeneration() {
         authenticate(PlatformRole.STAFF, companyId);
+        allowExportAs(PlatformRole.STAFF, companyId);
 
         assertThrows(AccessDeniedException.class, () -> service.exportCompanyData("en", null));
 
@@ -177,12 +207,13 @@ class CompanyDataExportServiceImplTest {
         BusinessException exception = assertThrows(BusinessException.class, () -> service.exportCompanyData("en", null));
 
         assertThat(exception.getCode()).isEqualTo("COMPANY_CONTEXT_MISSING");
-        verifyNoInteractions(dataProvider, auditLogService);
+        verifyNoInteractions(roleAssignmentRepository, dataProvider, auditLogService);
     }
 
     @Test
     void exportWritesAuditLog() {
         authenticate(PlatformRole.ADMIN, companyId);
+        allowExportAs(PlatformRole.ADMIN, companyId);
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(company()));
         when(dataProvider.loadCompanyData(eq(companyId), eq("en"))).thenReturn(workbooks("en"));
 
@@ -195,6 +226,21 @@ class CompanyDataExportServiceImplTest {
         assertThat(captor.getValue().getActorRoleAssignmentId()).isEqualTo(roleAssignmentId);
         assertThat(captor.getValue().getAction()).isEqualTo("COMPANY_DATA_EXPORTED");
         assertThat(captor.getValue().getMetadata()).containsEntry("fileCount", EXPECTED_PATHS.size());
+        assertThat(captor.getValue().getMetadata()).containsKey("rowCounts");
+    }
+
+    @Test
+    void requestedCompanyIdIsUsedWhenFrontendPassesSelectedCompany() {
+        UUID selectedCompanyId = UUID.randomUUID();
+        authenticate(PlatformRole.ADMIN, companyId);
+        allowExportAs(PlatformRole.ADMIN, selectedCompanyId);
+        when(companyRepository.findById(selectedCompanyId)).thenReturn(Optional.of(company(selectedCompanyId)));
+        when(dataProvider.loadCompanyData(eq(selectedCompanyId), eq("en"))).thenReturn(workbooks("en"));
+
+        service.exportCompanyData(selectedCompanyId, "en", null);
+
+        verify(dataProvider).loadCompanyData(selectedCompanyId, "en");
+        verify(companyRepository, never()).findById(companyId);
     }
 
     private void authenticate(PlatformRole role, UUID principalCompanyId) {
@@ -212,9 +258,18 @@ class CompanyDataExportServiceImplTest {
         );
     }
 
+    private void allowExportAs(PlatformRole role, UUID exportCompanyId) {
+        when(roleAssignmentRepository.findFirstByUserIdAndCompanyIdAndIsActiveTrue(userId, exportCompanyId))
+                .thenReturn(Optional.of(roleAssignment(role, exportCompanyId)));
+    }
+
     private Company company() {
+        return company(companyId);
+    }
+
+    private Company company(UUID id) {
         Company company = new Company();
-        company.setId(companyId);
+        company.setId(id);
         company.setName("Acme Corporation");
         company.setSlug("acme");
         company.setStatus(CompanyStatus.ACTIVE);
@@ -226,13 +281,29 @@ class CompanyDataExportServiceImplTest {
         return company;
     }
 
+    private RoleAssignment roleAssignment(PlatformRole role, UUID assignmentCompanyId) {
+        User user = new User();
+        user.setId(userId);
+
+        RoleAssignment assignment = new RoleAssignment();
+        assignment.setId(roleAssignmentId);
+        assignment.setUser(user);
+        assignment.setCompany(company(assignmentCompanyId));
+        assignment.setRole(role);
+        assignment.setIsActive(true);
+        assignment.setJobTitle(role == PlatformRole.STAFF ? "Manager" : "Admin");
+        assignment.setPlatformAccess(PlatformAccess.WEB);
+        assignment.setActivatedAt(Instant.parse("2026-05-01T10:15:30Z"));
+        return assignment;
+    }
+
     private List<ExportWorkbookData> workbooks(String locale) {
         return List.of(
                 workbook("employees/employee-list.xlsx", "employeeList", locale, List.of("name", "role")),
                 workbook("employees/staff-list.xlsx", "staffList", locale, List.of("name", "email")),
                 workbook("employees/assign-employees.xlsx", "assignEmployees", locale, List.of("name", "assignedEmployees")),
                 workbook("attendance/attendance.xlsx", "attendance", locale, List.of("name", "status")),
-                workbook("leave/leave-requests.xlsx", "leaveRequests", locale, List.of("name", "status")),
+                workbook("leave/leave.xlsx", "leaveRequests", locale, List.of("name", "status")),
                 workbook("payroll/payroll.xlsx", "payroll", locale, List.of("employeeName", "payment")),
                 workbook("locations/locations.xlsx", "locations", locale, List.of("siteName", "status")),
                 workbook("departments/departments.xlsx", "departments", locale, List.of("name", "status")),
