@@ -7,9 +7,11 @@ import com.worknest.features.payroll.dto.PayrollDtos.PayrollAdjustmentRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollAdjustmentResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollCalculationResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollEmployeeSummaryResponse;
+import com.worknest.features.payroll.dto.PayrollDtos.PayrollMonthSummary;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollPeriodRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.SickLeavePolicyResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.UpsertSickLeavePolicyRequest;
+import java.util.List;
 import java.util.UUID;
 
 public interface PayrollService {
@@ -52,4 +54,7 @@ public interface PayrollService {
     SickLeavePolicyResponse getSickLeavePolicy();
 
     SickLeavePolicyResponse upsertSickLeavePolicy(UpsertSickLeavePolicyRequest request);
+
+    /** Returns all persisted payroll periods for the current authenticated employee, newest first. */
+    List<PayrollMonthSummary> listMyPayrollHistory();
 }

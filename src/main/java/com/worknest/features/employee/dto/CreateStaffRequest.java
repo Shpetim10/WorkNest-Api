@@ -83,6 +83,10 @@ public record CreateStaffRequest(
 
         /** Hours worked per day; used to derive daily leave pay for HOURLY staff: hourlyRate × dailyWorkingHours. */
         @Nullable
-        BigDecimal dailyWorkingHours
+        BigDecimal dailyWorkingHours,
+
+        /** Rate (in company currency) paid per overtime hour. Null means no overtime tracking for this staff member. */
+        @Nullable
+        BigDecimal overtimeHourlyRate
 
 ) {}

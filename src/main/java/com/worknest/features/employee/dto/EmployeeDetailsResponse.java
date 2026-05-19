@@ -33,5 +33,7 @@ public record EmployeeDetailsResponse(
         Integer leaveDaysPerYear,
         PaymentMethod paymentMethod,
         BigDecimal monthlySalary,
-        BigDecimal hourlyRate
+        BigDecimal hourlyRate,
+        BigDecimal overtimeHourlyRate,
+        BigDecimal dailyWorkingHours
 ) {}

@@ -176,7 +176,9 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
                 e.getLeaveDaysPerYear(),
                 e.getPaymentMethod(),
                 e.getMonthlySalary(),
-                e.getHourlyRate()
+                e.getHourlyRate(),
+                e.getOvertimeHourlyRate(),
+                e.getDailyWorkingHours()
         );
     }
 
@@ -238,11 +240,14 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
                 assignedEmployees,
                 e.getEmploymentType(),
                 e.getContractDocumentKey(),
+                e.getContractDocumentPath(),
                 e.getContractExpiryDate(),
                 e.getLeaveDaysPerYear(),
                 e.getPaymentMethod(),
                 e.getMonthlySalary(),
-                e.getHourlyRate()
+                e.getHourlyRate(),
+                e.getOvertimeHourlyRate(),
+                e.getDailyWorkingHours()
         );
     }
 

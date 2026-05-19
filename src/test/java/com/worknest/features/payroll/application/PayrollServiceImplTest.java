@@ -464,7 +464,8 @@ class PayrollServiceImplTest {
                         BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                         BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, List.of(), true),
                 new AbsenceDetails(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, false),
-                new PayrollTotals(new BigDecimal("2000.00"), new BigDecimal("2000.00"),
+                null,
+                new PayrollTotals(new BigDecimal("2000.00"), BigDecimal.ZERO, new BigDecimal("2000.00"),
                         BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("2000.00"), false, BigDecimal.ZERO),
                 List.of());
     }

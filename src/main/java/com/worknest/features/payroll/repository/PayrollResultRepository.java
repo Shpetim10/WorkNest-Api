@@ -17,4 +17,6 @@ public interface PayrollResultRepository extends JpaRepository<PayrollResult, UU
             UUID companyId, UUID employeeId, int year, int month, Collection<PayrollStatus> statuses);
 
     List<PayrollResult> findAllByCompanyId(UUID companyId);
+
+    List<PayrollResult> findAllByCompanyIdAndEmployeeIdOrderByYearDescMonthDesc(UUID companyId, UUID employeeId);
 }

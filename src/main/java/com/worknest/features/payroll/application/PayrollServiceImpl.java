@@ -33,6 +33,7 @@ import com.worknest.features.payroll.dto.PayrollDtos.PayrollAdjustmentRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollAdjustmentResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollCalculationResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollEmployeeSummaryResponse;
+import com.worknest.features.payroll.dto.PayrollDtos.PayrollMonthSummary;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollPeriodRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.SickLeavePolicyResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.UpsertSickLeavePolicyRequest;
@@ -251,6 +252,22 @@ public class PayrollServiceImpl implements PayrollService {
                 Map.of("percentage", cfg.getCompanyPaidPercentage(), "maxDays", cfg.getMaxCompanyPaidDays()),
                 Map.of("companyId", companyId));
         return new SickLeavePolicyResponse(cfg.getCompanyPaidPercentage(), cfg.getMaxCompanyPaidDays(), false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PayrollMonthSummary> listMyPayrollHistory() {
+        AuthSessionPrincipal principal = principal();
+        Employee employee = employeeRepository.findByUserIdAndCompanyId(principal.userId(), principal.companyId())
+                .orElseThrow(() -> new BusinessException(HttpStatus.FORBIDDEN, "EMPLOYEE_PROFILE_NOT_FOUND",
+                        "Employee profile is not configured."));
+        String currency = employee.getCompany().getCurrency();
+        return resultRepository.findAllByCompanyIdAndEmployeeIdOrderByYearDescMonthDesc(
+                        principal.companyId(), employee.getId())
+                .stream()
+                .map(r -> new PayrollMonthSummary(r.getYear(), r.getMonth(), r.getStatus(),
+                        r.getGrossEarnings(), r.getNetPay(), currency))
+                .toList();
     }
 
     @Override

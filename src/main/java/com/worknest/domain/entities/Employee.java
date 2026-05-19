@@ -117,6 +117,10 @@ public class Employee {
     @Column(name = "hourly_rate", columnDefinition = "TEXT")
     private BigDecimal hourlyRate;
 
+    @Convert(converter = EncryptedBigDecimalConverter.class)
+    @Column(name = "overtime_hourly_rate", columnDefinition = "TEXT")
+    private BigDecimal overtimeHourlyRate;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "employment_type", length = 30)
     private EmploymentType employmentType;

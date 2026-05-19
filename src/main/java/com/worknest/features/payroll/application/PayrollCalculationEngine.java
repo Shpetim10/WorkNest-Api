@@ -19,6 +19,7 @@ import com.worknest.features.payroll.dto.PayrollDtos.BasePayDetails;
 import com.worknest.features.payroll.dto.PayrollDtos.EmploymentPeriodDetails;
 import com.worknest.features.payroll.dto.PayrollDtos.HourlyAttendancePaymentDetails;
 import com.worknest.features.payroll.dto.PayrollDtos.LeaveCalculationDetails;
+import com.worknest.features.payroll.dto.PayrollDtos.OvertimeDetails;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollAdjustmentLine;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollCalculationResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollLeaveTreatment;
@@ -126,6 +127,12 @@ public class PayrollCalculationEngine {
 
         AdjustmentDetails adjustmentDetails = calculateAdjustments(adjustments);
 
+        // ── Overtime ──────────────────────────────────────────────────────────
+        OvertimeDetails overtimeDetails = calculateOvertimeDetails(
+                employee, context, workHours, effectivePayableDays);
+        BigDecimal overtimePay = overtimeDetails != null
+                ? overtimeDetails.overtimePay() : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+
         // ── Gross earnings ────────────────────────────────────────────────────
         BigDecimal grossEarnings;
         BigDecimal unpaidLeaveAndSickDeduction;
@@ -135,12 +142,13 @@ public class PayrollCalculationEngine {
             grossEarnings = money(basePay
                     .add(leaveDetails.paidLeaveAmount())
                     .add(sickPaidAmount)
-                    .add(adjustmentDetails.totalBonus()));
+                    .add(adjustmentDetails.totalBonus())
+                    .add(overtimePay));
             unpaidLeaveAndSickDeduction = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         } else {
             BigDecimal sickDeduction = sickLeaveDetails.totalSickLeaveDeduction() != null
                     ? sickLeaveDetails.totalSickLeaveDeduction() : BigDecimal.ZERO;
-            grossEarnings = money(basePay.add(adjustmentDetails.totalBonus()));
+            grossEarnings = money(basePay.add(adjustmentDetails.totalBonus()).add(overtimePay));
             unpaidLeaveAndSickDeduction = money(leaveDetails.unpaidLeaveDeduction().add(sickDeduction));
         }
 
@@ -199,7 +207,8 @@ public class PayrollCalculationEngine {
                 adjustmentDetails,
                 statutory,
                 absenceDetails,
-                new PayrollTotals(basePay, grossEarnings, statutory.statutoryDeductionsTotal(),
+                overtimeDetails,
+                new PayrollTotals(basePay, overtimePay, grossEarnings, statutory.statutoryDeductionsTotal(),
                         totalDeductions, netPay, netPayNegative, statutory.employerCostTotal()),
                 warnings
         );
@@ -557,6 +566,32 @@ public class PayrollCalculationEngine {
 
     private PayrollAdjustmentLine toAdjustmentLine(PayrollAdjustment a) {
         return new PayrollAdjustmentLine(a.getId(), a.getAmount(), a.getReason(), a.getNotes());
+    }
+
+    // ── Overtime ──────────────────────────────────────────────────────────────
+
+    private OvertimeDetails calculateOvertimeDetails(
+            Employee employee, PayrollContext context,
+            WorkHoursProvider.WorkHoursResult workHours, BigDecimal effectivePayableDays) {
+        BigDecimal overtimeRate = employee.getOvertimeHourlyRate();
+        if (overtimeRate == null || overtimeRate.signum() <= 0) {
+            return null;
+        }
+        // No overtime from default/estimated hours — only real attendance data
+        if (DefaultWorkHoursProvider.SOURCE.equals(workHours.source())) {
+            return null;
+        }
+        BigDecimal effectiveDailyHours = employee.getDailyWorkingHours() != null
+                ? employee.getDailyWorkingHours()
+                : context.defaultDailyWorkingHours();
+        BigDecimal expectedHours = money(effectivePayableDays.multiply(effectiveDailyHours));
+        BigDecimal workedHours = workHours.hours();
+        BigDecimal overtimeHours = workedHours.subtract(expectedHours).max(BigDecimal.ZERO);
+        if (overtimeHours.signum() == 0) {
+            return null;
+        }
+        BigDecimal overtimePay = money(overtimeHours.multiply(overtimeRate));
+        return new OvertimeDetails(expectedHours, workedHours, overtimeHours, overtimeRate, overtimePay);
     }
 
     // ── Daily pay value ───────────────────────────────────────────────────────

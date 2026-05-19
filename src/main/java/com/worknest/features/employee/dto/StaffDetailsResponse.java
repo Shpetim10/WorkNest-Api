@@ -31,9 +31,12 @@ public record StaffDetailsResponse(
         // Job & contract details
         EmploymentType employmentType,
         String contractDocumentKey,
+        String contractDocumentPath,
         LocalDate contractExpiryDate,
         Integer leaveDaysPerYear,
         PaymentMethod paymentMethod,
         BigDecimal monthlySalary,
-        BigDecimal hourlyRate
+        BigDecimal hourlyRate,
+        BigDecimal overtimeHourlyRate,
+        BigDecimal dailyWorkingHours
 ) {}
