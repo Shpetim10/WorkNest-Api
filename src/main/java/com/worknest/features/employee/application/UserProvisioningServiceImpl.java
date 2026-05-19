@@ -349,7 +349,8 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         applyJobDetails(employee, request.employmentType(), request.contractDocumentKey(),
                 request.contractDocumentPath(), request.contractExpiryDate(),
                 request.leaveDaysPerYear(), request.paymentMethod(),
-                request.monthlySalary(), request.hourlyRate(), request.dailyWorkingHours());
+                request.monthlySalary(), request.hourlyRate(), request.dailyWorkingHours(),
+                request.overtimeHourlyRate());
         employeeRepository.save(employee);
 
         User user = employee.getUser();
@@ -381,7 +382,8 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         applyJobDetails(employee, request.employmentType(), request.contractDocumentKey(),
                 request.contractDocumentPath(), request.contractExpiryDate(),
                 request.leaveDaysPerYear(), request.paymentMethod(),
-                request.monthlySalary(), request.hourlyRate(), request.dailyWorkingHours());
+                request.monthlySalary(), request.hourlyRate(), request.dailyWorkingHours(),
+                request.overtimeHourlyRate());
         employeeRepository.save(employee);
 
         User user = employee.getUser();
@@ -521,7 +523,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
             java.time.LocalDate contractExpiryDate, Integer leaveDaysPerYear,
             com.worknest.domain.enums.PaymentMethod paymentMethod,
             java.math.BigDecimal monthlySalary, java.math.BigDecimal hourlyRate,
-            java.math.BigDecimal dailyWorkingHours) {
+            java.math.BigDecimal dailyWorkingHours, java.math.BigDecimal overtimeHourlyRate) {
         employee.setEmploymentType(employmentType);
         employee.setContractDocumentKey(contractDocumentKey);
         employee.setContractDocumentPath(contractDocumentPath);
@@ -531,6 +533,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         employee.setMonthlySalary(monthlySalary);
         employee.setHourlyRate(hourlyRate);
         employee.setDailyWorkingHours(dailyWorkingHours);
+        employee.setOvertimeHourlyRate(overtimeHourlyRate);
     }
 
     private UpdateEmployeeResponse buildUpdateResponse(Employee employee, User user, RoleAssignment roleAssignment, String message) {

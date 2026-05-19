@@ -4,8 +4,10 @@ import com.worknest.common.api.ApiResponse;
 import com.worknest.features.payroll.application.PayrollService;
 import com.worknest.features.payroll.application.PayslipPdfService;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollCalculationResponse;
+import com.worknest.features.payroll.dto.PayrollDtos.PayrollMonthSummary;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -34,6 +36,13 @@ public class MobilePayrollController {
     ) {
         return ApiResponse.success("Payroll details loaded",
                 payrollService.previewCurrentEmployeePayroll(year, month));
+    }
+
+    @GetMapping("/history")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('EMPLOYEE', 'STAFF', 'ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "List current employee's payroll history — all persisted monthly payrolls, newest first")
+    public ApiResponse<List<PayrollMonthSummary>> history() {
+        return ApiResponse.success("Payroll history loaded", payrollService.listMyPayrollHistory());
     }
 
     @GetMapping("/payslip")

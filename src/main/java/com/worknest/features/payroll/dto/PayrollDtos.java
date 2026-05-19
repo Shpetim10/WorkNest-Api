@@ -103,6 +103,7 @@ public final class PayrollDtos {
             AdjustmentDetails adjustments,
             StatutoryDeductionDetails statutoryDeductions,
             AbsenceDetails absenceDetails,
+            OvertimeDetails overtimeDetails,
             PayrollTotals totals,
             List<String> warnings
     ) {
@@ -241,6 +242,7 @@ public final class PayrollDtos {
 
     public record PayrollTotals(
             BigDecimal basePay,
+            BigDecimal overtimePay,
             BigDecimal grossEarnings,
             BigDecimal statutoryDeductions,
             BigDecimal totalDeductions,
@@ -314,6 +316,29 @@ public final class PayrollDtos {
             BigDecimal rate,
             BigDecimal taxableSlice,
             BigDecimal taxAmount
+    ) {
+    }
+
+    // ── Overtime (applicable to both HOURLY and FIXED_MONTHLY) ──────────────
+
+    public record OvertimeDetails(
+            BigDecimal expectedHours,
+            BigDecimal workedHours,
+            BigDecimal overtimeHours,
+            BigDecimal overtimeHourlyRate,
+            BigDecimal overtimePay
+    ) {
+    }
+
+    // ── Employee payroll history summary ─────────────────────────────────────
+
+    public record PayrollMonthSummary(
+            int year,
+            int month,
+            PayrollStatus status,
+            BigDecimal grossEarnings,
+            BigDecimal netPay,
+            String currency
     ) {
     }
 
