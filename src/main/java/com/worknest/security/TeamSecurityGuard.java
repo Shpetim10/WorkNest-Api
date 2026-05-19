@@ -61,6 +61,59 @@ public class TeamSecurityGuard {
                 }).orElse(false);
     }
 
+    public boolean hasCurrentCompanyPermission(String permissionCode) {
+        return currentPrincipal()
+                .map(principal -> hasPermission(principal.companyId(), permissionCode))
+                .orElse(false);
+    }
+
+    public boolean hasCurrentCompanyRoleOrPermission(String permissionCode, String... roleNames) {
+        Optional<AuthSessionPrincipal> principalOpt = currentPrincipal();
+        if (principalOpt.isEmpty()) {
+            return false;
+        }
+        AuthSessionPrincipal principal = principalOpt.get();
+        if (matchesAnyRole(principal.role(), roleNames)) {
+            return true;
+        }
+        return hasPermission(principal.companyId(), permissionCode);
+    }
+
+    public boolean hasCompanyRoleOrPermission(UUID companyId, String permissionCode, String... roleNames) {
+        Optional<AuthSessionPrincipal> principalOpt = currentPrincipal();
+        if (principalOpt.isEmpty() || companyId == null || !companyId.equals(principalOpt.get().companyId())) {
+            return false;
+        }
+        AuthSessionPrincipal principal = principalOpt.get();
+        if (matchesAnyRole(principal.role(), roleNames)) {
+            return true;
+        }
+        return hasPermission(companyId, permissionCode);
+    }
+
+    public boolean canViewEmployee(UUID companyId, UUID employeeId, String permissionCode) {
+        Optional<AuthSessionPrincipal> principalOpt = currentPrincipal();
+        if (principalOpt.isEmpty() || companyId == null || employeeId == null || !companyId.equals(principalOpt.get().companyId())) {
+            return false;
+        }
+
+        AuthSessionPrincipal principal = principalOpt.get();
+        if (principal.role() == PlatformRole.SUPERADMIN || principal.role() == PlatformRole.ADMIN) {
+            return true;
+        }
+
+        Optional<Employee> target = employeeRepository.findById(employeeId);
+        if (target.isEmpty() || !target.get().getCompany().getId().equals(companyId)) {
+            return false;
+        }
+
+        if (principal.role() == PlatformRole.EMPLOYEE) {
+            return target.get().getUser().getId().equals(principal.userId());
+        }
+
+        return hasPermission(companyId, permissionCode);
+    }
+
     /**
      * Targeted guard: Verifies if the active user both has the permission to perform an action AND 
      * mathematically scoping ownership over the target employee's team context.
@@ -96,5 +149,17 @@ public class TeamSecurityGuard {
                     }).orElse(false);
 
                 }).orElse(false);
+    }
+
+    private boolean matchesAnyRole(PlatformRole role, String... roleNames) {
+        if (role == null || roleNames == null) {
+            return false;
+        }
+        for (String roleName : roleNames) {
+            if (roleName != null && role.name().equalsIgnoreCase(roleName.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 }

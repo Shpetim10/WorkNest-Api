@@ -126,17 +126,18 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
                 .filter(emp -> emp.getCompany().getId().equals(companyId))
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
 
-        if (e.getEmploymentTypeRole() != PlatformRole.EMPLOYEE) {
-            throw new ResourceNotFoundException("Target record is not an EMPLOYEE");
+        if (e.getEmploymentTypeRole() != PlatformRole.EMPLOYEE && !isAdmin(principal.role())) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "ACCESS_DENIED",
+                    "Staff details are restricted to admins.");
         }
 
-        if (principal.role() == PlatformRole.STAFF) {
+        if (e.getEmploymentTypeRole() == PlatformRole.EMPLOYEE && principal.role() == PlatformRole.STAFF) {
             if (e.getSupervisorRoleAssignment() == null
                     || !e.getSupervisorRoleAssignment().getId().equals(principal.roleAssignmentId())) {
                 throw new BusinessException(HttpStatus.FORBIDDEN, "ACCESS_DENIED",
                         "You do not have permission to view this employee.");
             }
-        } else if (!isAdmin(principal.role())) {
+        } else if (principal.role() == PlatformRole.EMPLOYEE && !e.getUser().getId().equals(principal.userId())) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "ACCESS_DENIED",
                     "You do not have permission to view this employee.");
         }
@@ -152,6 +153,17 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
                 ? (supervisorRa.getUser().getFirstName() + " " + supervisorRa.getUser().getLastName()).trim()
                 : null;
         String supervisorJobTitle = (supervisorRa != null) ? supervisorRa.getJobTitle() : null;
+        List<String> permissionCodes = List.of();
+        if (e.getEmploymentTypeRole() == PlatformRole.STAFF) {
+            permissionCodes = roleAssignmentRepository
+                    .findFirstByUserIdAndCompanyIdOrderByCreatedAtAsc(e.getUser().getId(), companyId)
+                    .map(ra -> roleAssignmentPermissionRepository.findAllByRoleAssignmentIdAndIsGranted(ra.getId(), true)
+                            .stream()
+                            .map(rap -> rap.getPermission().getCode())
+                            .sorted()
+                            .toList())
+                    .orElse(List.of());
+        }
 
         return new EmployeeDetailsResponse(
                 e.getId(),
@@ -169,6 +181,8 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
                 supervisorRa != null ? supervisorRa.getId() : null,
                 supervisorName,
                 supervisorJobTitle,
+                e.getEmploymentTypeRole(),
+                permissionCodes,
                 e.getEmploymentType(),
                 e.getContractDocumentKey(),
                 e.getContractDocumentPath(),

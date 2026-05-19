@@ -38,7 +38,7 @@ public class DepartmentController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'DEPARTMENT_CREATE')")
     @Operation(summary = "Create department", description = "Creates a new department for the current company")
     public ApiResponse<DepartmentResponse> createDepartment(
             @PathVariable UUID companyId,
@@ -47,7 +47,7 @@ public class DepartmentController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'DEPARTMENT_VIEW')")
     @Operation(summary = "Get department", description = "Retrieves a single department by ID for the current company")
     public ApiResponse<DepartmentResponse> getDepartment(
             @PathVariable UUID companyId,
@@ -56,7 +56,7 @@ public class DepartmentController {
     }
 
     @GetMapping
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'DEPARTMENT_VIEW')")
     @Operation(summary = "List departments", description = "Retrieves all departments for the current company")
     public ApiResponse<PaginatedResponse<DepartmentListResponse>> listDepartments(
             @PathVariable UUID companyId,
@@ -70,14 +70,14 @@ public class DepartmentController {
     }
 
     @GetMapping("/lookup")
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'DEPARTMENT_VIEW')")
     @Operation(summary = "Lookup departments", description = "Retrieves department ID and Name pairs for the current company (e.g. for dropdowns)")
     public ApiResponse<List<DepartmentLookup>> lookupDepartments(@PathVariable UUID companyId) {
         return ApiResponse.success("Departments lookup successful", departmentService.lookupDepartments(companyId));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'DEPARTMENT_UPDATE')")
     @Operation(summary = "Update department", description = "Updates an existing department for the current company")
     public ApiResponse<DepartmentResponse> updateDepartment(
             @PathVariable UUID companyId,
@@ -87,7 +87,7 @@ public class DepartmentController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'DEPARTMENT_DELETE')")
     @Operation(summary = "Delete department", description = "Hard deletes a department for the current company")
     public ApiResponse<Void> deleteDepartment(
             @PathVariable UUID companyId,

@@ -31,7 +31,7 @@ public class MediaController {
     private final MediaStorageService mediaStorageService;
 
     @PostMapping(path = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyRoleOrPermission('MEDIA_UPLOAD', 'EMPLOYEE')")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "File uploaded successfully")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "400",

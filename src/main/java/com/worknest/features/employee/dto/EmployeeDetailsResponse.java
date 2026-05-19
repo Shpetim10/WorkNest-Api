@@ -3,9 +3,11 @@ package com.worknest.features.employee.dto;
 import com.worknest.domain.enums.EmploymentStatus;
 import com.worknest.domain.enums.EmploymentType;
 import com.worknest.domain.enums.PaymentMethod;
+import com.worknest.domain.enums.PlatformRole;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public record EmployeeDetailsResponse(
@@ -24,6 +26,8 @@ public record EmployeeDetailsResponse(
         UUID supervisorRoleAssignmentId,
         String supervisorName,
         String supervisorJobTitle,
+        PlatformRole role,
+        List<String> permissionCodes,
 
         // Job & contract details
         EmploymentType employmentType,

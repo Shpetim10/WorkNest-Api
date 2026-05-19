@@ -27,7 +27,7 @@ public class EmployeeAssignmentController {
 
     @GetMapping("/managers")
     @Operation(summary = "List Assignable Managers", description = "Retrieves all STAFF members in the company capable of supervising employees.")
-    //@PreAuthorize("@teamSecurity.hasPermission(#companyId, 'MANAGE_ASSIGNMENTS')")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     public ResponseEntity<ApiResponse<PaginatedResponse<ManagerSummaryDto>>> listManagers(
             @PathVariable UUID companyId,
             @RequestParam(required = false) Integer page,
@@ -43,7 +43,7 @@ public class EmployeeAssignmentController {
 
     @GetMapping("/{roleAssignmentId}/employee-assignments")
     @Operation(summary = "Get Manager Assignment Board", description = "Retrieves both the assigned and unassigned employees for a specific manager.")
-    //@PreAuthorize("@teamSecurity.hasPermission(#companyId, 'MANAGE_ASSIGNMENTS')")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     public ResponseEntity<ApiResponse<EmployeeAssignmentBoardResponse>> getAssignmentBoard(
             @PathVariable UUID companyId,
             @PathVariable UUID roleAssignmentId,
@@ -62,7 +62,7 @@ public class EmployeeAssignmentController {
 
     @PutMapping("/{roleAssignmentId}/employee-assignments")
     @Operation(summary = "Update Manager Assignments", description = "Shuttles employees between assigned and unassigned states for a manager. Automatically audits history.")
-    //@PreAuthorize("@teamSecurity.hasPermission(#companyId, 'MANAGE_ASSIGNMENTS')")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     public ResponseEntity<ApiResponse<Void>> updateAssignments(
             @PathVariable UUID companyId,
             @PathVariable UUID roleAssignmentId,

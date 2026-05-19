@@ -36,7 +36,7 @@ public class StaffAttendanceController {
     private final StaffAttendanceService staffAttendanceService;
 
     @GetMapping
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('ATTENDANCE_VIEW')")
     @Operation(summary = "Get attendance dashboard — STAFF sees own team, ADMIN may pass siteId/departmentId")
     public ApiResponse<AttendanceDashboardResponse> dashboard(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -52,7 +52,7 @@ public class StaffAttendanceController {
     }
 
     @PostMapping("/employees/{employeeId}/check-in")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('ATTENDANCE_CREATE')")
     @Operation(summary = "Manually check in an employee")
     public ApiResponse<Void> checkIn(
             @PathVariable UUID employeeId,
@@ -63,7 +63,7 @@ public class StaffAttendanceController {
     }
 
     @PostMapping("/employees/{employeeId}/check-out")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('ATTENDANCE_CREATE')")
     @Operation(summary = "Manually check out an employee")
     public ApiResponse<Void> checkOut(
             @PathVariable UUID employeeId,
@@ -74,7 +74,7 @@ public class StaffAttendanceController {
     }
 
     @PostMapping("/day-records/{recordId}/dismiss-warnings")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('ATTENDANCE_UPDATE')")
     @Operation(summary = "Dismiss attendance warnings for a day record")
     public ApiResponse<Void> dismissWarnings(
             @PathVariable UUID recordId,
@@ -85,7 +85,7 @@ public class StaffAttendanceController {
     }
 
     @PostMapping("/manual-events")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('ATTENDANCE_CREATE')")
     @Operation(summary = "Create a manual attendance event")
     public ApiResponse<Void> manualEvent(@Valid @RequestBody ManualAttendanceRequest request) {
         staffAttendanceService.createManualEvent(request);
@@ -93,7 +93,7 @@ public class StaffAttendanceController {
     }
 
     @PostMapping("/events/{eventId}/review")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('ATTENDANCE_REVIEW')")
     @Operation(summary = "Review a flagged attendance event")
     public ApiResponse<Void> review(
             @PathVariable UUID eventId,
@@ -104,7 +104,7 @@ public class StaffAttendanceController {
     }
 
     @PutMapping("/day-records/{recordId}")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('ATTENDANCE_UPDATE')")
     @Operation(summary = "Adjust attendance day record")
     public ApiResponse<Void> adjust(
             @PathVariable UUID recordId,

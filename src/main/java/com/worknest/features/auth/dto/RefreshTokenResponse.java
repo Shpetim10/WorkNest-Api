@@ -3,6 +3,7 @@ package com.worknest.features.auth.dto;
 import com.worknest.domain.enums.PlatformAccess;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -29,6 +30,9 @@ public record RefreshTokenResponse(
         Instant accessTokenExpiresAt,
 
         @Schema(description = "Expiration timestamp of the new refresh token")
-        Instant refreshTokenExpiresAt
+        Instant refreshTokenExpiresAt,
+
+        @Schema(description = "Granted permission codes for STAFF role; empty for other roles.")
+        List<String> permissions
 ) {
 }

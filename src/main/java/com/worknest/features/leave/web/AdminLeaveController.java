@@ -31,7 +31,7 @@ public class AdminLeaveController {
     private final LeaveService leaveService;
 
     @GetMapping("/requests")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('LEAVE_VIEW')")
     @Operation(summary = "List all company leave requests — filterable by status and employee name")
     public ApiResponse<PaginatedResponse<LeaveRequestDto>> list(
             @RequestParam(required = false) String search,
@@ -46,14 +46,14 @@ public class AdminLeaveController {
     }
 
     @GetMapping("/requests/{requestId}")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('LEAVE_VIEW')")
     @Operation(summary = "View a single leave request in detail")
     public ApiResponse<LeaveRequestDto> get(@PathVariable UUID requestId) {
         return ApiResponse.success("Leave request loaded", leaveService.adminGetRequest(requestId));
     }
 
     @PostMapping("/requests/{requestId}/approve")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('LEAVE_APPROVE')")
     @Operation(summary = "Approve a pending leave request with an optional note")
     public ApiResponse<Void> approve(
             @PathVariable UUID requestId,
@@ -64,7 +64,7 @@ public class AdminLeaveController {
     }
 
     @PostMapping("/requests/{requestId}/reject")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('LEAVE_APPROVE')")
     @Operation(summary = "Reject a pending leave request with a reason")
     public ApiResponse<Void> reject(
             @PathVariable UUID requestId,

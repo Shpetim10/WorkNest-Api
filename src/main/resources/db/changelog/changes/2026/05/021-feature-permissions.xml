@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd"
+        objectQuotingStrategy="QUOTE_ONLY_RESERVED_WORDS">
+
+    <changeSet id="021-1-seed-feature-permissions" author="codex">
+        <sql dbms="postgresql"><![CDATA[
+            INSERT INTO permissions (id, resource, action, code, description, created_at)
+            VALUES
+                ('36f9311f-249f-d0ae-caa2-485d44760af4'::uuid, 'EMPLOYEE', 'VIEW', 'EMPLOYEE_VIEW', 'View employee records', now()),
+                ('0573b56d-c5d1-0efc-799b-abe90335483e'::uuid, 'EMPLOYEE', 'CREATE', 'EMPLOYEE_CREATE', 'Create employee records', now()),
+                ('37390db7-3673-c0d2-d375-ab9c8da36af7'::uuid, 'EMPLOYEE', 'UPDATE', 'EMPLOYEE_UPDATE', 'Update employee records', now()),
+                ('f44fe066-352b-3fd0-6043-adafd785df5e'::uuid, 'EMPLOYEE', 'DELETE', 'EMPLOYEE_DELETE', 'Delete employee records', now()),
+                ('fe1fc850-4ddd-3efa-ad04-11e14955feba'::uuid, 'EMPLOYEE_ASSIGNMENT', 'VIEW', 'EMPLOYEE_ASSIGNMENT_VIEW', 'View employee manager assignments', now()),
+                ('2bd710c1-4ac2-af76-e0f2-b6a50f8dc155'::uuid, 'EMPLOYEE_ASSIGNMENT', 'UPDATE', 'EMPLOYEE_ASSIGNMENT_UPDATE', 'Update employee manager assignments', now()),
+                ('b2907e9b-a0be-3d0c-e6be-483245365729'::uuid, 'STAFF', 'VIEW', 'STAFF_VIEW', 'View staff records', now()),
+                ('e9cbc389-a21e-8218-9a3f-5a49d3c15031'::uuid, 'STAFF', 'CREATE', 'STAFF_CREATE', 'Create staff records', now()),
+                ('33041984-6453-1106-fea4-d994f86ad6a9'::uuid, 'STAFF', 'UPDATE', 'STAFF_UPDATE', 'Update staff records', now()),
+                ('97f5c01d-89c0-cff3-1d5f-939e13e37be2'::uuid, 'STAFF', 'DELETE', 'STAFF_DELETE', 'Delete staff records', now()),
+                ('7767db17-ecf1-39d4-c31a-5cc3d70a6535'::uuid, 'STAFF_PERMISSION', 'MANAGE', 'STAFF_PERMISSION_MANAGE', 'Manage staff permissions', now()),
+                ('0e5eeaaf-fa6f-d913-ce61-1ca7dc4041e7'::uuid, 'DEPARTMENT', 'VIEW', 'DEPARTMENT_VIEW', 'View departments', now()),
+                ('6218bf06-c0a4-20b1-faa7-39c9bb2d0d98'::uuid, 'DEPARTMENT', 'CREATE', 'DEPARTMENT_CREATE', 'Create departments', now()),
+                ('fc608dc7-2b55-a561-57e6-4bbb634df245'::uuid, 'DEPARTMENT', 'UPDATE', 'DEPARTMENT_UPDATE', 'Update departments', now()),
+                ('fd52a355-1878-eacf-f673-fcbca0818fd1'::uuid, 'DEPARTMENT', 'DELETE', 'DEPARTMENT_DELETE', 'Delete departments', now()),
+                ('b3c89068-4ea5-aef3-b148-6e5d2e43d6f9'::uuid, 'COMPANY_SITE', 'VIEW', 'COMPANY_SITE_VIEW', 'View company sites', now()),
+                ('930b1d37-b620-1910-1b3a-46ffd89b61c6'::uuid, 'COMPANY_SITE', 'CREATE', 'COMPANY_SITE_CREATE', 'Create company sites', now()),
+                ('2f9995f7-bf44-4b08-ff1b-1fe3619db156'::uuid, 'COMPANY_SITE', 'UPDATE', 'COMPANY_SITE_UPDATE', 'Update company sites', now()),
+                ('ae962b13-edb7-60e0-ec62-f3aa64a8916a'::uuid, 'COMPANY_SITE', 'DELETE', 'COMPANY_SITE_DELETE', 'Delete company sites', now()),
+                ('f0209736-5a8e-38fa-c130-de2c284ff652'::uuid, 'COMPANY_SETTINGS', 'VIEW', 'COMPANY_SETTINGS_VIEW', 'View company settings', now()),
+                ('1f554a0c-bd2d-182a-171b-ca346887ae8c'::uuid, 'COMPANY_SETTINGS', 'UPDATE', 'COMPANY_SETTINGS_UPDATE', 'Update company settings', now()),
+                ('f9c1f18b-271f-7c6c-80e9-5f1d2e7eb5fb'::uuid, 'COMPANY_DATA', 'EXPORT', 'COMPANY_DATA_EXPORT', 'Export company data', now()),
+                ('83dbe24c-34c7-bf5d-96c2-527a848e90dd'::uuid, 'ATTENDANCE', 'VIEW', 'ATTENDANCE_VIEW', 'View attendance records', now()),
+                ('b23cca2b-6f99-9005-4dbc-3e692909125b'::uuid, 'ATTENDANCE', 'CREATE', 'ATTENDANCE_CREATE', 'Create attendance records', now()),
+                ('45287d23-5416-bfe0-e793-b93e16147852'::uuid, 'ATTENDANCE', 'UPDATE', 'ATTENDANCE_UPDATE', 'Update attendance records', now()),
+                ('648926b4-4399-2489-0eb8-a5ff8c579329'::uuid, 'ATTENDANCE', 'REVIEW', 'ATTENDANCE_REVIEW', 'Review attendance events', now()),
+                ('1cf4dd28-c5e1-bfad-657b-3ef70ca1d13e'::uuid, 'ATTENDANCE_POLICY', 'VIEW', 'ATTENDANCE_POLICY_VIEW', 'View attendance policies', now()),
+                ('60b687cc-6007-3179-bc8b-3ca5497b13ba'::uuid, 'ATTENDANCE_POLICY', 'UPDATE', 'ATTENDANCE_POLICY_UPDATE', 'Update attendance policies', now()),
+                ('95e8f69e-cf8d-7978-e036-b744cc4a2c4c'::uuid, 'QR_TERMINAL', 'VIEW', 'QR_TERMINAL_VIEW', 'View QR terminals', now()),
+                ('94a0f3d7-f4e9-4227-c06d-1d9e1ef99fd6'::uuid, 'QR_TERMINAL', 'CREATE', 'QR_TERMINAL_CREATE', 'Create QR terminals', now()),
+                ('626c4a48-47bf-00b5-b4d1-27460c96d9af'::uuid, 'QR_TERMINAL', 'UPDATE', 'QR_TERMINAL_UPDATE', 'Update QR terminals', now()),
+                ('98d89996-9433-fdcd-28dc-8e159a7cbb28'::uuid, 'LEAVE', 'VIEW', 'LEAVE_VIEW', 'View leave requests', now()),
+                ('f5591970-76c4-44f3-d735-529d1cf3e429'::uuid, 'LEAVE', 'CREATE', 'LEAVE_CREATE', 'Create leave requests', now()),
+                ('0b741877-e885-00c0-e979-20842e08ecef'::uuid, 'LEAVE', 'APPROVE', 'LEAVE_APPROVE', 'Approve or reject leave requests', now()),
+                ('446b2dcc-4649-fe15-14ad-e8d92e5ac2dd'::uuid, 'PAYROLL', 'VIEW', 'PAYROLL_VIEW', 'View payroll data', now()),
+                ('44f91230-db27-bdce-39d9-a2dca0739f02'::uuid, 'PAYROLL', 'CALCULATE', 'PAYROLL_CALCULATE', 'Calculate payroll', now()),
+                ('2d1daffd-56f2-4f28-88e7-d27956d9fecc'::uuid, 'PAYROLL', 'UPDATE', 'PAYROLL_UPDATE', 'Update payroll adjustments and settings', now()),
+                ('6b7bdcab-af56-6209-5eda-8929af07ef16'::uuid, 'PAYROLL', 'APPROVE', 'PAYROLL_APPROVE', 'Approve and finalize payroll', now()),
+                ('f57c82f4-efce-7cb0-d6a0-ef4d2f5cbd86'::uuid, 'ANNOUNCEMENT', 'VIEW', 'ANNOUNCEMENT_VIEW', 'View announcements', now()),
+                ('f0305702-dd68-24b7-3c4e-841e4cce3a6e'::uuid, 'ANNOUNCEMENT', 'CREATE', 'ANNOUNCEMENT_CREATE', 'Create announcements', now()),
+                ('f9920fad-ade9-a467-12fc-c1cb75b35004'::uuid, 'ANNOUNCEMENT', 'DELETE', 'ANNOUNCEMENT_DELETE', 'Delete announcements', now()),
+                ('a6181db8-ec6d-b73b-8a47-85e844cc9754'::uuid, 'DASHBOARD', 'VIEW', 'DASHBOARD_VIEW', 'View admin dashboard', now()),
+                ('0e967f2a-8324-d7ba-6124-b14ac857da9c'::uuid, 'MEDIA', 'UPLOAD', 'MEDIA_UPLOAD', 'Upload protected media', now())
+            ON CONFLICT (resource, action) DO UPDATE
+                SET code = EXCLUDED.code,
+                    description = EXCLUDED.description;
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

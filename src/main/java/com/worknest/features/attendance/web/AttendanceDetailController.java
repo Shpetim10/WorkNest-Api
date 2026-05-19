@@ -25,7 +25,7 @@ public class AttendanceDetailController {
     private final StaffAttendanceService staffAttendanceService;
 
     @GetMapping("/employees/{employeeId}/detail")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('ATTENDANCE_VIEW')")
     @Operation(summary = "Get full attendance day detail for an employee")
     public ApiResponse<EmployeeAttendanceDayDetailDto> detail(
             @PathVariable UUID employeeId,

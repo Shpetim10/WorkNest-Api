@@ -2,9 +2,12 @@ package com.worknest.features.employee.web;
 
 import com.worknest.common.api.ApiResponse;
 import com.worknest.features.employee.application.UserProvisioningService;
+import com.worknest.features.employee.application.StaffPermissionService;
 import com.worknest.features.employee.dto.CreateEmployeeRequest;
 import com.worknest.features.employee.dto.CreateStaffRequest;
 import com.worknest.features.employee.dto.ProvisioningResponse;
+import com.worknest.features.employee.dto.StaffPermissionsRequest;
+import com.worknest.features.employee.dto.StaffPermissionsResponse;
 import com.worknest.features.employee.dto.UpdateEmployeeJobDetailsRequest;
 import com.worknest.features.employee.dto.UpdateEmployeeRequest;
 import com.worknest.features.employee.dto.UpdateEmployeeResponse;
@@ -28,12 +31,14 @@ import java.util.UUID;
 public class UserProvisioningController {
 
     private final UserProvisioningService userProvisioningService;
+    private final StaffPermissionService staffPermissionService;
 
     // -------------------------------------------------------------------------
     // Create
     // -------------------------------------------------------------------------
 
     @PostMapping("/employee")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'EMPLOYEE_CREATE')")
     @Operation(summary = "Provision Employee", description = "Creates a mobile-only EMPLOYEE and attaches them to an optional supervisor.")
     public ResponseEntity<ApiResponse<ProvisioningResponse>> provisionEmployee(
             @PathVariable UUID companyId,
@@ -48,6 +53,7 @@ public class UserProvisioningController {
     }
 
     @PostMapping("/staff")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Provision Staff", description = "Creates a STAFF profile with configurable permissions.")
     public ResponseEntity<ApiResponse<ProvisioningResponse>> provisionStaff(
             @PathVariable UUID companyId,
@@ -62,6 +68,7 @@ public class UserProvisioningController {
     }
 
     @PostMapping("/{employeeId}/resend")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Resend Invitation", description = "Generates a new token and resends the onboarding email for a pending employee.")
     public ResponseEntity<ApiResponse<ProvisioningResponse>> resendInvitation(
             @PathVariable UUID companyId,
@@ -75,6 +82,7 @@ public class UserProvisioningController {
     // -------------------------------------------------------------------------
 
     @PutMapping("/employee/{employeeId}")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'EMPLOYEE_UPDATE')")
     @Operation(summary = "Update Employee Main Details",
             description = "Updates an EMPLOYEE's personal info (name, email, jobTitle), organisational placement, and start date.")
     public ResponseEntity<ApiResponse<UpdateEmployeeResponse>> updateEmployee(
@@ -87,6 +95,7 @@ public class UserProvisioningController {
     }
 
     @PutMapping("/staff/{employeeId}")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Update Staff Main Details",
             description = "Updates a STAFF member's personal info, organisational placement, permissions, and supervised employees.")
     public ResponseEntity<ApiResponse<UpdateEmployeeResponse>> updateStaff(
@@ -103,6 +112,7 @@ public class UserProvisioningController {
     // -------------------------------------------------------------------------
 
     @PutMapping("/employee/{employeeId}/job-details")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'EMPLOYEE_UPDATE')")
     @Operation(summary = "Update Employee Job Details",
             description = "Updates an EMPLOYEE's employment type, contract document, contract expiry, leave days, and payment info.")
     public ResponseEntity<ApiResponse<UpdateEmployeeResponse>> updateEmployeeJobDetails(
@@ -115,6 +125,7 @@ public class UserProvisioningController {
     }
 
     @PutMapping("/staff/{employeeId}/job-details")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Update Staff Job Details",
             description = "Updates a STAFF member's employment type, contract document, contract expiry, leave days, and payment info.")
     public ResponseEntity<ApiResponse<UpdateEmployeeResponse>> updateStaffJobDetails(
@@ -131,6 +142,7 @@ public class UserProvisioningController {
     // -------------------------------------------------------------------------
 
     @DeleteMapping("/employee/{employeeId}")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'EMPLOYEE_DELETE')")
     @Operation(summary = "Delete Employee",
             description = "Permanently removes an EMPLOYEE and all their company-specific data. Deletes the user entity if they have no other company memberships.")
     public ResponseEntity<ApiResponse<Void>> deleteEmployee(
@@ -142,6 +154,7 @@ public class UserProvisioningController {
     }
 
     @DeleteMapping("/staff/{employeeId}")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Delete Staff",
             description = "Permanently removes a STAFF member and all their company-specific data. Supervised employees become unassigned. Deletes the user entity if they have no other company memberships.")
     public ResponseEntity<ApiResponse<Void>> deleteStaff(
@@ -156,6 +169,7 @@ public class UserProvisioningController {
     // Lifecycle - Active/Inactive
     // -------------------------------------------------------------------------
     @PatchMapping("/employee/{employeeId}/activate")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'EMPLOYEE_UPDATE')")
     public ResponseEntity<ApiResponse<Void>> activateEmployee(
             @PathVariable UUID companyId,
             @PathVariable UUID employeeId
@@ -165,11 +179,39 @@ public class UserProvisioningController {
     }
 
     @PatchMapping("/employee/{employeeId}/terminate")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'EMPLOYEE_UPDATE')")
     public ResponseEntity<ApiResponse<Void>> deactivateEmployee(
             @PathVariable UUID companyId,
             @PathVariable UUID employeeId
     ){
         userProvisioningService.terminateEmployee(companyId, employeeId);
         return ResponseEntity.ok(ApiResponse.success("Employee deactivated successfully", null));
+    }
+
+    @GetMapping("/staff/{staffId}/permissions")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Get Staff Permissions", description = "Retrieves the feature permissions assigned to a STAFF user.")
+    public ResponseEntity<ApiResponse<StaffPermissionsResponse>> getStaffPermissions(
+            @PathVariable UUID companyId,
+            @PathVariable UUID staffId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Staff permissions retrieved successfully",
+                staffPermissionService.getPermissions(companyId, staffId)
+        ));
+    }
+
+    @PutMapping("/staff/{staffId}/permissions")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Update Staff Permissions", description = "Replaces the feature permissions assigned to a STAFF user.")
+    public ResponseEntity<ApiResponse<StaffPermissionsResponse>> updateStaffPermissions(
+            @PathVariable UUID companyId,
+            @PathVariable UUID staffId,
+            @RequestBody @Valid StaffPermissionsRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Staff permissions updated successfully",
+                staffPermissionService.replacePermissions(companyId, staffId, request.permissionCodes())
+        ));
     }
 }

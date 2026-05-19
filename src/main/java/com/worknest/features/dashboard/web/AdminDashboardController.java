@@ -21,7 +21,7 @@ public class AdminDashboardController {
     private final AdminDashboardService dashboardService;
 
     @GetMapping
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('DASHBOARD_VIEW')")
     @Operation(summary = "Get admin dashboard", description = "Returns KPIs, attendance trends, active days, recent activity, and quick stats for the company dashboard")
     public ApiResponse<AdminDashboardResponse> getDashboard(
             @RequestParam(required = false) String period,

@@ -32,7 +32,7 @@ public class EmployeeQueryController {
 
     @GetMapping("/staff")
     @Operation(summary = "List Company Staff", description = "Retrieves a comprehensive list of all staff and admin members for the company table view.")
-    //@PreAuthorize("@teamSecurity.hasPermission(#companyId, 'MANAGE_STAFF')")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     public ApiResponse<PaginatedResponse<StaffListResponse>> listStaff(
             @PathVariable UUID companyId,
             @RequestParam(required = false) Integer page,
@@ -46,7 +46,7 @@ public class EmployeeQueryController {
 
     @GetMapping("/staff/{staffId}")
     @Operation(summary = "Get Staff Details", description = "Retrieves full details for a specific staff member.")
-    //@PreAuthorize("@teamSecurity.hasPermission(#companyId, 'VIEW_STAFF')")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     public ApiResponse<StaffDetailsResponse> getStaff(
             @PathVariable UUID companyId,
             @PathVariable UUID staffId
@@ -56,7 +56,7 @@ public class EmployeeQueryController {
 
     @GetMapping("/employees")
     @Operation(summary = "List Company Employees", description = "Retrieves a comprehensive list of all mobile/field employees for the company table view.")
-    //@PreAuthorize("@teamSecurity.hasPermission(#companyId, 'MANAGE_EMPLOYEES')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'EMPLOYEE_VIEW')")
     public ApiResponse<PaginatedResponse<EmployeeListResponse>> listEmployees(
             @PathVariable UUID companyId,
             @RequestParam(required = false) Integer page,
@@ -70,7 +70,7 @@ public class EmployeeQueryController {
 
     @GetMapping("/employees/{employeeId}")
     @Operation(summary = "Get Employee Details", description = "Retrieves full details for a specific employee.")
-    //@PreAuthorize("@teamSecurity.hasPermission(#companyId, 'VIEW_EMPLOYEES')")
+    @PreAuthorize("@teamSecurity.canViewEmployee(#companyId, #employeeId, 'EMPLOYEE_VIEW')")
     public ApiResponse<EmployeeDetailsResponse> getEmployee(
             @PathVariable UUID companyId,
             @PathVariable UUID employeeId
@@ -80,7 +80,7 @@ public class EmployeeQueryController {
 
     @GetMapping("/employees/unassigned")
     @Operation(summary = "List Unassigned Employees", description = "Retrieves a list of employees not assigned to any manager within a specific department.")
-    //@PreAuthorize("@teamSecurity.hasPermission(#companyId, 'MANAGE_EMPLOYEES')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'EMPLOYEE_ASSIGNMENT_VIEW')")
     public ApiResponse<PaginatedResponse<EmployeeListResponse>> listUnassignedEmployees(
             @PathVariable UUID companyId,
             @RequestParam UUID departmentId,
@@ -97,7 +97,7 @@ public class EmployeeQueryController {
 
     @GetMapping("/employees/assigned")
     @Operation(summary = "List Assigned Employees", description = "Retrieves employees assigned to a specific supervisor within a specific department.")
-    //@PreAuthorize("@teamSecurity.hasPermission(#companyId, 'MANAGE_EMPLOYEES')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'EMPLOYEE_ASSIGNMENT_VIEW')")
     public ApiResponse<PaginatedResponse<EmployeeListResponse>> listAssignedEmployees(
             @PathVariable UUID companyId,
             @RequestParam UUID departmentId,
@@ -116,7 +116,7 @@ public class EmployeeQueryController {
 
     @GetMapping("/staff/lookup")
     @Operation(summary = "Lookup Staff", description = "Retrieves a lightweight list of staff (fullName/id) for dropdowns. Supports filtering by department.")
-    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'VIEW_STAFF')")
+    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
     public ApiResponse<List<StaffLookup>> lookupStaff(
             @PathVariable UUID companyId,
             @RequestParam(required = false) UUID departmentId) {

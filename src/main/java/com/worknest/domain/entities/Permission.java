@@ -63,7 +63,7 @@ public class Permission {
     public Permission(String resource, String action, String description) {
         this.resource = Objects.requireNonNull(resource, "resource must not be null");
         this.action = Objects.requireNonNull(action, "action must not be null");
-        this.code = resource + "." + action;
+        this.code = resource + "_" + action;
         this.description = description;
     }
 }

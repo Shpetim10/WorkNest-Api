@@ -45,6 +45,9 @@ public record LoginResponse(
         @Schema(description = "List of all organizations and roles the user is associated with.")
         List<AvailableLoginContextDto> availableContexts,
 
+        @Schema(description = "Granted permission codes for STAFF role; empty for other roles.")
+        List<String> permissions,
+
         @Schema(description = "Informative status message from the auth server.")
         String message
 ) {
