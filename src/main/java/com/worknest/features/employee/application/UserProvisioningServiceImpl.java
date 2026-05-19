@@ -118,6 +118,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         employee.setMonthlySalary(request.monthlySalary());
         employee.setHourlyRate(request.hourlyRate());
         employee.setDailyWorkingHours(request.dailyWorkingHours());
+        employee.setOvertimeHourlyRate(request.overtimeHourlyRate());
         Employee savedEmployee = employeeRepository.save(employee);
 
         ProvisioningResponse response = processInvitation(normalizedEmail, user, company, roleAssignment, savedEmployee, authenticatedUser, inviterRole, PlatformRole.EMPLOYEE, request.jobTitle(), null);
@@ -162,6 +163,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         employee.setMonthlySalary(request.monthlySalary());
         employee.setHourlyRate(request.hourlyRate());
         employee.setDailyWorkingHours(request.dailyWorkingHours());
+        employee.setOvertimeHourlyRate(request.overtimeHourlyRate());
         Employee savedEmployee = employeeRepository.save(employee);
 
         assignEmployeesToStaff(request.assignedEmployeeIds(), roleAssignment, company);
