@@ -29,6 +29,7 @@ import com.worknest.features.companySite.repository.SiteTrustedNetworkRepository
 import com.worknest.features.companySite.validation.CidrValidator;
 import com.worknest.features.companySite.validation.GeofenceValidator;
 import com.worknest.features.company.repository.CompanyRepository;
+import com.worknest.common.plan.PlanEnforcementService;
 import com.worknest.security.AuthSessionPrincipal;
 import com.worknest.tenant.TenantContextHolder;
 import jakarta.persistence.EntityManager;
@@ -78,6 +79,7 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
     private final SiteAttendanceProvisioningPort   attendanceProvisioning;
     private final EntityManager                    entityManager;
     private final ApplicationEventPublisher        eventPublisher;
+    private final PlanEnforcementService           planEnforcementService;
 
     @Override
     @Transactional
@@ -102,7 +104,10 @@ public class CompanySiteCreationServiceImpl implements CompanySiteCreationServic
             throw new CompanyNotFoundException();
         }
 
-        // ── 4. Site code uniqueness ──────────────────────────────────────────────
+        // ── 4. Plan limit check ──────────────────────────────────────────────────
+        planEnforcementService.assertCanAddLocation(companyId);
+
+        // ── 5. Site code uniqueness ──────────────────────────────────────────────
         if (request.code() == null) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "MISSING_FIELD", "Site code is required");
         }

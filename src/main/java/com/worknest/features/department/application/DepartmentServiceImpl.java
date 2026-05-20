@@ -14,6 +14,7 @@ import com.worknest.features.department.exception.DepartmentNotFoundException;
 import com.worknest.features.department.exception.DuplicateDepartmentNameException;
 import com.worknest.features.department.repository.DepartmentRepository;
 import com.worknest.features.employee.repository.EmployeeRepository;
+import com.worknest.common.plan.PlanEnforcementService;
 import com.worknest.realtime.event.DepartmentCreatedDomainEvent;
 import com.worknest.realtime.event.DepartmentDeletedDomainEvent;
 import com.worknest.realtime.event.DepartmentUpdatedDomainEvent;
@@ -38,6 +39,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     private final EntityManager entityManager;
     private final EmployeeRepository employeeRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final PlanEnforcementService planEnforcementService;
 
     private UUID getCurrentCompanyId() {
         return TenantContextHolder.get()
@@ -53,6 +55,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional
     public DepartmentResponse createDepartment(CreateDepartmentRequest request) {
         UUID companyId = getCurrentCompanyId();
+        planEnforcementService.assertCanAddDepartment(companyId);
         
         if (departmentRepository.existsByCompanyIdAndName(companyId, request.name().trim())) {
             throw new DuplicateDepartmentNameException();

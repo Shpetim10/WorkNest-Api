@@ -41,6 +41,7 @@ import com.worknest.features.employee.repository.EmployeeRepository;
 import com.worknest.features.invitation.exception.InvalidInvitationRequestException;
 import com.worknest.features.invitation.repository.UserInvitationRepository;
 import com.worknest.features.notification.email.service.InvitationEmailService;
+import com.worknest.common.plan.PlanEnforcementService;
 import com.worknest.realtime.event.EmployeeProvisionedDomainEvent;
 
 import java.time.Instant;
@@ -76,6 +77,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
     private final InvitationEmailService invitationEmailService;
     private final AuthAuditService authAuditService;
     private final ApplicationEventPublisher eventPublisher;
+    private final PlanEnforcementService planEnforcementService;
 
     @Value("${app.frontend.activation-link-base:https://app.worknest.local/activate-invitation}")
     private String activationLinkBase;
@@ -83,6 +85,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
     @Override
     @Transactional
     public ProvisioningResponse createEmployee(CreateEmployeeRequest request) {
+        planEnforcementService.assertCanAddEmployee(request.companyId());
         Company company = validateAndGetCompany(request.companyId());
         User authenticatedUser = resolveCurrentAuthenticatedUser();
         RoleAssignment inviterRole = resolveActiveRoleAssignment(authenticatedUser.getId(), company.getId());
@@ -129,6 +132,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
     @Override
     @Transactional
     public ProvisioningResponse createStaff(CreateStaffRequest request) {
+        planEnforcementService.assertCanAddManager(request.companyId());
         Company company = validateAndGetCompany(request.companyId());
         User authenticatedUser = resolveCurrentAuthenticatedUser();
         RoleAssignment inviterRole = resolveActiveRoleAssignment(authenticatedUser.getId(), company.getId());

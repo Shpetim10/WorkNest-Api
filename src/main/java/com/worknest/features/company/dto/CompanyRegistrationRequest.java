@@ -1,5 +1,6 @@
 package com.worknest.features.company.dto;
 
+import com.worknest.domain.enums.SubscriptionPlan;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
 
@@ -105,6 +106,13 @@ public record CompanyRegistrationRequest(
 
         @Size(max = 1000)
         @Schema(description = "Path/URL of the pre-uploaded company logo", example = "storage/media/public/registrations/logos/2026/04/uuid.png")
-        String logoPath
+        String logoPath,
+
+        @Schema(description = "Subscription plan chosen during signup; if provided together with paymentMethodId the trial is started immediately", example = "GROWTH")
+        SubscriptionPlan plan,
+
+        @Size(max = 255)
+        @Schema(description = "Stripe PaymentMethod ID collected on the payment step; required when plan is set", example = "pm_card_visa")
+        String paymentMethodId
 ) {
 }
