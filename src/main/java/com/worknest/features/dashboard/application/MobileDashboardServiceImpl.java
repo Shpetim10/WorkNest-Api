@@ -99,6 +99,7 @@ public class MobileDashboardServiceImpl implements MobileDashboardService {
         // 3. Payroll (try current month first, fallback up to 6 months back)
         String latestPayrollMonth = null;
         BigDecimal latestPayrollNetPay = null;
+        String latestPayrollCurrency = null;
         try {
             LocalDate today = LocalDate.now(ZoneOffset.UTC);
             for (int i = 0; i <= 6; i++) {
@@ -108,6 +109,7 @@ public class MobileDashboardServiceImpl implements MobileDashboardService {
                             targetDate.getYear(), targetDate.getMonthValue());
                     if (payroll != null && payroll.totals() != null && payroll.totals().netPay() != null) {
                         latestPayrollNetPay = payroll.totals().netPay();
+                        latestPayrollCurrency = payroll.currency();
                         latestPayrollMonth = targetDate.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH));
                         break;
                     }
@@ -145,6 +147,7 @@ public class MobileDashboardServiceImpl implements MobileDashboardService {
                 leaveBalances,
                 latestPayrollMonth,
                 latestPayrollNetPay,
+                latestPayrollCurrency,
                 announcementUnreadCount,
                 latestAnnouncementTitle
         );

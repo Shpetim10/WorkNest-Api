@@ -1,6 +1,7 @@
 package com.worknest.features.employee.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.LocalDate;
 
 public record MobileProfileResponse(
         @Schema(description = "First name of the employee")
@@ -25,5 +26,23 @@ public record MobileProfileResponse(
         String role,
 
         @Schema(description = "Email of the employee")
-        String email
+        String email,
+
+        @Schema(description = "Department name of the employee")
+        String departmentName,
+
+        @Schema(description = "Site name of the employee")
+        String siteName,
+
+        @Schema(description = "Contract type of the employee")
+        String contractType,
+
+        @Schema(description = "Contract status of the employee")
+        String contractStatus,
+
+        @Schema(description = "Contract start date of the employee")
+        LocalDate contractStartDate,
+
+        @Schema(description = "Contract end date of the employee")
+        LocalDate contractEndDate
 ) {}

@@ -17,6 +17,9 @@ public record MobileDashboardResponse(
         @Schema(description = "Latest payroll net pay amount or null if none")
         BigDecimal latestPayrollNetPay,
 
+        @Schema(description = "Latest payroll ISO 4217 currency code or null if none")
+        String latestPayrollCurrency,
+
         @Schema(description = "Number of unread announcements for the current employee")
         int announcementUnreadCount,
 
