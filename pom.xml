@@ -34,6 +34,7 @@
         <liquibase.password>dev</liquibase.password>
         <postgresql.version>42.7.4</postgresql.version>
         <lombok.version>1.18.38</lombok.version>
+        <stripe.version>26.3.0</stripe.version>
         <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
         <maven.surefire.plugin.version>3.3.1</maven.surefire.plugin.version>
         <maven.failsafe.plugin.version>3.3.1</maven.failsafe.plugin.version>
@@ -142,6 +143,12 @@
             <artifactId>jjwt-jackson</artifactId>
             <version>${jjwt.version}</version>
             <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.stripe</groupId>
+            <artifactId>stripe-java</artifactId>
+            <version>${stripe.version}</version>
         </dependency>
 
         <dependency>

@@ -153,6 +153,9 @@ public class SuperAdminCompaniesServiceImpl implements SuperAdminCompaniesServic
         return switch (plan) {
             case BASIC -> "Starter";
             case PREMIUM -> "Professional";
+            case FOUNDATION -> "Foundation";
+            case GROWTH -> "Growth";
+            case PROFESSIONAL -> "Professional";
         };
     }
 

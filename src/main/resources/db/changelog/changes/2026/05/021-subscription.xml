@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <changeSet id="016-create-subscriptions-table" author="worknest">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="subscriptions" schemaName="public"/></not>
+        </preConditions>
+        <createTable tableName="subscriptions">
+            <column name="id" type="uuid">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_subscriptions"/>
+            </column>
+            <column name="company_id" type="uuid">
+                <constraints nullable="false" foreignKeyName="fk_subscriptions_company" references="companies(id)"/>
+            </column>
+            <column name="stripe_customer_id" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="stripe_subscription_id" type="varchar(255)"/>
+            <column name="plan" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="trial_ends_at" type="timestamp with time zone"/>
+            <column name="current_period_end" type="timestamp with time zone"/>
+            <column name="created_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="subscriptions" indexName="idx_subscriptions_company_id">
+            <column name="company_id"/>
+        </createIndex>
+
+        <createIndex tableName="subscriptions" indexName="idx_subscriptions_stripe_customer">
+            <column name="stripe_customer_id"/>
+        </createIndex>
+
+        <addUniqueConstraint tableName="subscriptions"
+                             constraintName="uq_subscriptions_stripe_subscription_id"
+                             columnNames="stripe_subscription_id"/>
+    </changeSet>
+
+    <changeSet id="016-create-plan-limits-table" author="worknest">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="plan_limits" schemaName="public"/></not>
+        </preConditions>
+        <createTable tableName="plan_limits">
+            <column name="plan" type="varchar(50)">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_plan_limits"/>
+            </column>
+            <column name="max_employees" type="int"/>
+            <column name="max_managers" type="int"/>
+            <column name="max_departments" type="int"/>
+            <column name="max_locations" type="int"/>
+            <column name="payroll_enabled" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="audit_logs_enabled" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="price_monthly_cents" type="int">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="016-seed-plan-limits" author="worknest">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM plan_limits WHERE plan = 'FOUNDATION'</sqlCheck>
+        </preConditions>
+        <!-- FOUNDATION: $29/mo, 20 employees, 2 managers, 3 departments, 1 location, no payroll, no audit -->
+        <insert tableName="plan_limits">
+            <column name="plan" value="FOUNDATION"/>
+            <column name="max_employees" valueNumeric="20"/>
+            <column name="max_managers" valueNumeric="2"/>
+            <column name="max_departments" valueNumeric="3"/>
+            <column name="max_locations" valueNumeric="1"/>
+            <column name="payroll_enabled" valueBoolean="false"/>
+            <column name="audit_logs_enabled" valueBoolean="false"/>
+            <column name="price_monthly_cents" valueNumeric="2900"/>
+        </insert>
+        <!-- GROWTH: $79/mo, 50 employees, 4 managers, 7 departments, 3 locations, payroll, no audit -->
+        <insert tableName="plan_limits">
+            <column name="plan" value="GROWTH"/>
+            <column name="max_employees" valueNumeric="50"/>
+            <column name="max_managers" valueNumeric="4"/>
+            <column name="max_departments" valueNumeric="7"/>
+            <column name="max_locations" valueNumeric="3"/>
+            <column name="payroll_enabled" valueBoolean="true"/>
+            <column name="audit_logs_enabled" valueBoolean="false"/>
+            <column name="price_monthly_cents" valueNumeric="7900"/>
+        </insert>
+        <!-- PROFESSIONAL: $149/mo, unlimited (NULL = no limit), payroll + audit logs -->
+        <insert tableName="plan_limits">
+            <column name="plan" value="PROFESSIONAL"/>
+            <column name="payroll_enabled" valueBoolean="true"/>
+            <column name="audit_logs_enabled" valueBoolean="true"/>
+            <column name="price_monthly_cents" valueNumeric="14900"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

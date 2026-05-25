@@ -55,6 +55,7 @@ springdoc:
 
 app:
   frontend:
+    url: ${APP_FRONTEND_URL:http://localhost:3000}
     activation-link-base: ${APP_FRONTEND_ACTIVATION_LINK_BASE:https://app.worknest.local/activate-invitation}
     reset-password-link-base: ${APP_FRONTEND_RESET_PASSWORD_LINK_BASE:https://app.worknest.local/reset-password}
   media:
@@ -108,6 +109,14 @@ app:
       attendance-days: ${APP_SEED_DEV_DATA_ATTENDANCE_DAYS:180}
       leave-requests-per-employee: ${APP_SEED_DEV_DATA_LEAVE_REQUESTS_PER_EMPLOYEE:8}
       payroll-months: ${APP_SEED_DEV_DATA_PAYROLL_MONTHS:12}
+
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET}
+  prices:
+    foundation: ${STRIPE_PRICE_FOUNDATION}
+    growth: ${STRIPE_PRICE_GROWTH}
+    professional: ${STRIPE_PRICE_PROFESSIONAL}
 
 logging:
   level:

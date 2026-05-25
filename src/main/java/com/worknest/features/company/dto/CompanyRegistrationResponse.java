@@ -34,6 +34,9 @@ public record CompanyRegistrationResponse(
         Boolean activationEmailSent,
 
         @Schema(description = "Inforamative success message", example = "Company registration successful. Activation e-mail sent to admin@acme.com")
-        String message
+        String message,
+
+        @Schema(description = "Stripe client secret for confirming card setup; present only when a plan and payment method were supplied at registration")
+        String clientSecret
 ) {
 }

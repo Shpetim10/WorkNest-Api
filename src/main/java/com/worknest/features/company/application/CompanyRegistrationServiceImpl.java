@@ -25,6 +25,7 @@ import com.worknest.features.auth.repository.RoleAssignmentRepository;
 import com.worknest.features.invitation.repository.UserInvitationRepository;
 import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.notification.email.service.InvitationEmailService;
+import com.worknest.common.plan.TrialInitializationService;
 import com.worknest.features.auth.utility.SecureTokenGenerator;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import com.worknest.features.media.application.MediaStorageService;
@@ -61,6 +62,7 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
     private final AuthAuditService authAuditService;
     private final MediaStorageService mediaStorageService;
     private final EncryptionService encryptionService;
+    private final TrialInitializationService trialInitializationService;
 
     @Override
     @Transactional
@@ -93,7 +95,8 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
         company.setDateFormat(defaultIfBlank(request.dateFormat(), DEFAULT_DATE_FORMAT));
         company.setIndustry(trimToNull(request.industry()));
         company.setOnboardingCompletedAt(null);
-        company.setSubscriptionPlan(SubscriptionPlan.BASIC);
+        SubscriptionPlan resolvedPlan = request.plan() != null ? request.plan() : SubscriptionPlan.FOUNDATION;
+        company.setSubscriptionPlan(resolvedPlan);
         company.setSubscriptionStatus(SubscriptionStatus.TRIAL);
         company.setDataRetentionDays(90);
 
@@ -181,6 +184,23 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
                 savedCompany.getSubscriptionStatus().name()
         );
 
+        // 7. Start Stripe trial inline when plan + payment method are supplied
+        String clientSecret = null;
+        if (request.plan() != null && StringUtils.hasText(request.paymentMethodId())) {
+            try {
+                clientSecret = trialInitializationService.initializeTrial(
+                        savedCompany.getId(),
+                        savedCompany.getName(),
+                        normalizedPrimaryEmail,
+                        request.plan(),
+                        request.paymentMethodId()
+                ).orElse(null);
+            } catch (Exception e) {
+                log.error("Failed to initialize Stripe trial for company {}: {}", savedCompany.getId(), e.getMessage());
+                throw new RuntimeException("Payment setup failed. Please try again.", e);
+            }
+        }
+
         return new CompanyRegistrationResponse(
                 savedCompany.getId(),
                 savedAdminUser.getId(),
@@ -189,7 +209,8 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
                 savedCompany.getStatus(),
                 false,
                 true,
-                "Company registered successfully. An activation invitation has been sent to " + normalizedAdminEmail + "."
+                "Company registered successfully. An activation invitation has been sent to " + normalizedAdminEmail + ".",
+                clientSecret
         );
     }
 

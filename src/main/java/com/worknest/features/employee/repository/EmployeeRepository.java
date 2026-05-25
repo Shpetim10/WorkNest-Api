@@ -56,6 +56,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
             @Param("departmentId") UUID departmentId,
             @Param("supervisorRoleAssignmentId") UUID supervisorRoleAssignmentId);
 
+    long countByCompanyIdAndEmploymentTypeRole(UUID companyId, PlatformRole role);
+
     java.util.Optional<Employee> findByUserIdAndCompanyId(UUID userId, UUID companyId);
 
     java.util.Optional<Employee> findByIdAndCompanyId(UUID id, UUID companyId);
