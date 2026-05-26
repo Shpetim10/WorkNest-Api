@@ -13,6 +13,9 @@ public class DefaultWorkHoursProvider implements WorkHoursProvider {
     @Override
     public WorkHoursResult getWorkedHours(Employee employee, PayrollContext context,
                                           BigDecimal payableWorkingDays, LocalDate payableFrom, LocalDate payableTo) {
-        return new WorkHoursResult(payableWorkingDays.multiply(context.defaultDailyWorkingHours()), SOURCE);
+        BigDecimal dailyHours = employee.getDailyWorkingHours() != null
+                ? employee.getDailyWorkingHours()
+                : context.defaultDailyWorkingHours();
+        return new WorkHoursResult(payableWorkingDays.multiply(dailyHours), SOURCE);
     }
 }

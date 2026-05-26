@@ -9,6 +9,14 @@ public interface WorkHoursProvider {
     WorkHoursResult getWorkedHours(Employee employee, PayrollContext context,
                                    BigDecimal payableWorkingDays, LocalDate payableFrom, LocalDate payableTo);
 
-    record WorkHoursResult(BigDecimal hours, String source) {
+    record WorkHoursResult(
+            BigDecimal hours,
+            String source,
+            boolean attendanceRecordsFound,
+            BigDecimal paidHolidayWorkedHours
+    ) {
+        public WorkHoursResult(BigDecimal hours, String source) {
+            this(hours, source, false, BigDecimal.ZERO);
+        }
     }
 }
