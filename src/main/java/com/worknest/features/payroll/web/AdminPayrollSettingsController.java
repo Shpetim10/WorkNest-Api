@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/admin/payroll/settings")
 @Tag(name = "Admin Payroll Settings", description = "Company-level payroll configuration: work-week, statutory rates, tax brackets, public holidays.")
-@PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+@PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_UPDATE')")
 public class AdminPayrollSettingsController {
 
     private final PayrollSettingsService settingsService;

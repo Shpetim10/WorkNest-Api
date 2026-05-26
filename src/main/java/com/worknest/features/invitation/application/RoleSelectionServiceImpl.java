@@ -3,6 +3,7 @@ package com.worknest.features.invitation.application;
 import com.worknest.domain.entities.Company;
 import com.worknest.domain.enums.CompanyStatus;
 import com.worknest.domain.enums.PlatformAccess;
+import com.worknest.domain.enums.PlatformRole;
 import com.worknest.domain.entities.RefreshToken;
 import com.worknest.domain.entities.RoleAssignment;
 import com.worknest.domain.entities.User;
@@ -13,6 +14,7 @@ import com.worknest.features.auth.dto.TenantContextDto;
 import com.worknest.features.auth.exception.AuthenticationFailedException;
 import com.worknest.features.auth.exception.NoPlatformAccessException;
 import com.worknest.features.auth.repository.RefreshTokenRepository;
+import com.worknest.features.auth.repository.RoleAssignmentPermissionRepository;
 import com.worknest.features.auth.repository.RoleAssignmentRepository;
 import com.worknest.features.auth.utility.SecureTokenGenerator;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
@@ -22,6 +24,7 @@ import com.worknest.audit.service.AuthAuditService;
 import com.worknest.audit.service.model.AuthAuditActorContext;
 import com.worknest.audit.service.model.AuthSessionContext;
 import java.time.Instant;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,6 +38,7 @@ public class RoleSelectionServiceImpl implements RoleSelectionService {
 
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final RoleAssignmentPermissionRepository roleAssignmentPermissionRepository;
     private final SecureTokenGenerator secureTokenGenerator;
     private final Sha256TokenHashUtility sha256TokenHashUtility;
     private final JwtService jwtService;
@@ -113,7 +117,8 @@ public class RoleSelectionServiceImpl implements RoleSelectionService {
                 accessTokenExpiresAt,
                 rawRefreshToken,
                 toTenantContext(assignment.getCompany()),
-                refreshTokenExpiresAt
+                refreshTokenExpiresAt,
+                resolvePermissions(assignment)
         );
     }
 
@@ -194,6 +199,18 @@ public class RoleSelectionServiceImpl implements RoleSelectionService {
             return assignmentPlatformAccess == PlatformAccess.BOTH;
         }
         return assignmentPlatformAccess == requestedPlatformAccess;
+    }
+
+    private List<String> resolvePermissions(RoleAssignment assignment) {
+        if (assignment.getRole() != PlatformRole.STAFF) {
+            return List.of();
+        }
+        return roleAssignmentPermissionRepository
+                .findAllByRoleAssignmentIdAndIsGranted(assignment.getId(), true)
+                .stream()
+                .map(grant -> grant.getPermission().getCode())
+                .sorted()
+                .toList();
     }
 
     private TenantContextDto toTenantContext(Company company) {

@@ -47,6 +47,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -337,6 +338,36 @@ class PayrollServiceImplTest {
                 .hasMessageContaining("PAID");
     }
 
+    // --- Payroll list display values ---
+
+    @Test
+    void listAdminPayrollEmployeesSummaryMapsDeductionFieldsCorrectly() {
+        Employee employee = employee();
+        PayrollCalculationResponse liveResponse = calculationResponse(
+                PayrollStatus.DRAFT, true, new BigDecimal("50.00"), new BigDecimal("300.00"));
+        when(employeeRepository.findPayrollCandidatesForAdmin(
+                eq(companyId), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of(employee)));
+        when(resultRepository.findByCompanyIdAndEmployeeIdAndYearAndMonth(companyId, employeeId, 2026, 5))
+                .thenReturn(Optional.empty());
+        when(leaveRequestRepository.findApprovedOverlappingPayrollPeriod(any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(leaveRequestRepository.findApprovedOverlappingRange(any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(adjustmentRepository.findAllByCompanyIdAndEmployeeIdAndYearAndMonthOrderByCreatedAtAsc(any(), any(), eq(2026), eq(5)))
+                .thenReturn(List.of());
+        when(leaveBalanceRepository.findAllByCompanyIdAndEmployeeIdAndYear(any(), any(), eq(2026)))
+                .thenReturn(List.of());
+        when(calculationEngine.calculate(any(), any(), any(), any(), any(), any(), eq(PayrollStatus.DRAFT), eq(true)))
+                .thenReturn(liveResponse);
+
+        var response = service.listAdminPayrollEmployees(2026, 5, null, 0, 20);
+
+        assertThat(response.items()).hasSize(1);
+        assertThat(response.items().get(0).totalManualDeduction()).isEqualByComparingTo("50.00");
+        assertThat(response.items().get(0).totalDeductions()).isEqualByComparingTo("300.00"); // full deductions (statutory + manual + leave)
+        assertThat(response.items().get(0).deductions()).isEqualByComparingTo("50.00"); // alias for manual deductions only
+    }
+
     // --- Batch calculation skip logic ---
 
     @Test
@@ -442,6 +473,15 @@ class PayrollServiceImplTest {
     }
 
     private PayrollCalculationResponse calculationResponse(PayrollStatus status, boolean preview) {
+        return calculationResponse(status, preview, BigDecimal.ZERO, BigDecimal.ZERO);
+    }
+
+    private PayrollCalculationResponse calculationResponse(
+            PayrollStatus status,
+            boolean preview,
+            BigDecimal manualDeduction,
+            BigDecimal totalDeductions
+    ) {
         return new PayrollCalculationResponse(
                 employeeId, "Jane Doe", 2026, 5, "EUR",
                 PaymentMethod.FIXED_MONTHLY, PayrollCalculationStatus.SUCCESS,
@@ -455,18 +495,19 @@ class PayrollServiceImplTest {
                         new BigDecimal("2000.00"), null, new BigDecimal("21"), 21,
                         null, new BigDecimal("2000.00"), "WORKING_DAYS"),
                 null,
+                null,
                 new LeaveCalculationDetails(20, BigDecimal.ZERO, BigDecimal.ZERO,
                         BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, List.of()),
                 new SickLeaveCalculationDetails(BigDecimal.ZERO, null, null, null,
                         null, null, null, null, null, null, null, null, "TODO_SICK_LEAVE_POLICY_NOT_CONFIGURED"),
-                new AdjustmentDetails(List.of(), List.of(), BigDecimal.ZERO, BigDecimal.ZERO),
+                new AdjustmentDetails(List.of(), List.of(), BigDecimal.ZERO, manualDeduction),
                 new StatutoryDeductionDetails(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                         BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                         BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, List.of(), true),
                 new AbsenceDetails(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, false),
                 null,
                 new PayrollTotals(new BigDecimal("2000.00"), BigDecimal.ZERO, new BigDecimal("2000.00"),
-                        BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("2000.00"), false, BigDecimal.ZERO),
+                        BigDecimal.ZERO, totalDeductions, new BigDecimal("2000.00"), false, BigDecimal.ZERO),
                 List.of());
     }
 }

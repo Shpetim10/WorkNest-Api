@@ -65,6 +65,8 @@ class PayrollCalculationEngineTest {
         // WorkingDayCalculator: delegate to PayrollDateUtils defaults (SAT+SUN, no holidays)
         lenient().when(workingDayCalculatorMock.countWorkingDays(any(), any(), any()))
                 .thenAnswer(inv -> PayrollDateUtils.countWorkingDays(inv.getArgument(1), inv.getArgument(2)));
+        lenient().when(workingDayCalculatorMock.countPaidHolidays(any(), any(), any()))
+                .thenReturn(BigDecimal.ZERO);
         lenient().when(workingDayCalculatorMock.resolveWeekendDays(any()))
                 .thenReturn(java.util.EnumSet.of(java.time.DayOfWeek.SATURDAY, java.time.DayOfWeek.SUNDAY));
 
@@ -246,6 +248,106 @@ class PayrollCalculationEngineTest {
         // effectiveAttendanceTo == payableTo for a closed month
         assertThat(result.workPeriod().effectiveAttendanceTo()).isEqualTo(LocalDate.of(2026, 4, 30));
         assertThat(result.workPeriod().effectivePayableWorkingDays()).isEqualByComparingTo("22");
+    }
+
+    @Test
+    void hourlyEmployeeWithZeroHourAttendanceRecordsIsNotPaidDefaultHours() {
+        PayrollCalculationEngine attendanceEngine = new PayrollCalculationEngine(
+                (employee, context, payableWorkingDays, payableFrom, payableTo) ->
+                        new WorkHoursProvider.WorkHoursResult(
+                                BigDecimal.ZERO, AttendanceWorkHoursProvider.SOURCE, true, BigDecimal.ZERO),
+                new PlaceholderSickLeavePolicy(),
+                workingDayCalculatorMock,
+                settingsRepository,
+                taxBracketRepository
+        );
+        Employee employee = employee(PaymentMethod.HOURLY, null, "10.00", LocalDate.of(2026, 1, 1));
+        employee.setDailyWorkingHours(new BigDecimal("8.0"));
+
+        PayrollCalculationResponse result = attendanceEngine.calculate(employee, YearMonth.of(2026, 4),
+                List.of(), List.of(), List.of(), List.of(), PayrollStatus.DRAFT, true);
+
+        assertThat(result.totals().basePay()).isEqualByComparingTo("0.00");
+        assertThat(result.hourlyAttendancePayment().paymentReceived()).isEqualByComparingTo("0.00");
+        assertThat(result.hourlyAttendancePayment().attendanceDeduction()).isEqualByComparingTo("1760.00");
+        assertThat(result.workPeriod().workHoursSource()).isEqualTo(AttendanceWorkHoursProvider.SOURCE);
+    }
+
+    @Test
+    void hourlyEmployeeReceivesPaidHolidayTopUpWithoutAttendanceHours() {
+        when(workingDayCalculatorMock.countPaidHolidays(any(), any(), any())).thenReturn(BigDecimal.ONE);
+        PayrollCalculationEngine attendanceEngine = new PayrollCalculationEngine(
+                (employee, context, payableWorkingDays, payableFrom, payableTo) ->
+                        new WorkHoursProvider.WorkHoursResult(
+                                BigDecimal.ZERO, AttendanceWorkHoursProvider.SOURCE, true, BigDecimal.ZERO),
+                new PlaceholderSickLeavePolicy(),
+                workingDayCalculatorMock,
+                settingsRepository,
+                taxBracketRepository
+        );
+        Employee employee = employee(PaymentMethod.HOURLY, null, "10.00", LocalDate.of(2026, 1, 1));
+        employee.setDailyWorkingHours(new BigDecimal("8.0"));
+
+        PayrollCalculationResponse result = attendanceEngine.calculate(employee, YearMonth.of(2026, 4),
+                List.of(), List.of(), List.of(), List.of(), PayrollStatus.DRAFT, true);
+
+        assertThat(result.hourlyAttendancePayment().attendedHours()).isEqualByComparingTo("0.00");
+        assertThat(result.hourlyAttendancePayment().paidHolidayHours()).isEqualByComparingTo("8.00");
+        assertThat(result.hourlyAttendancePayment().payableHours()).isEqualByComparingTo("8.00");
+        assertThat(result.totals().basePay()).isEqualByComparingTo("80.00");
+    }
+
+    @Test
+    void fixedMonthlyEmployeeKeepsBaseSalaryButAddsExcessAttendancePay() {
+        PayrollCalculationEngine attendanceEngine = new PayrollCalculationEngine(
+                (employee, context, payableWorkingDays, payableFrom, payableTo) ->
+                        new WorkHoursProvider.WorkHoursResult(
+                                new BigDecimal("186.00"), AttendanceWorkHoursProvider.SOURCE, true, BigDecimal.ZERO),
+                new PlaceholderSickLeavePolicy(),
+                workingDayCalculatorMock,
+                settingsRepository,
+                taxBracketRepository
+        );
+        Employee employee = employee(PaymentMethod.FIXED_MONTHLY, "3520.00", null, LocalDate.of(2026, 1, 1));
+        employee.setDailyWorkingHours(new BigDecimal("8.0"));
+
+        PayrollCalculationResponse result = attendanceEngine.calculate(employee, YearMonth.of(2026, 4),
+                List.of(), List.of(), List.of(), List.of(), PayrollStatus.DRAFT, true);
+
+        assertThat(result.totals().basePay()).isEqualByComparingTo("3520.00");
+        assertThat(result.fixedSalaryAttendancePayment().attendanceEquivalentPay()).isEqualByComparingTo("3720.00");
+        assertThat(result.fixedSalaryAttendancePayment().excessHours()).isEqualByComparingTo("10.00");
+        assertThat(result.fixedSalaryAttendancePayment().excessPay()).isEqualByComparingTo("200.00");
+        assertThat(result.totals().overtimePay()).isEqualByComparingTo("200.00");
+        assertThat(result.totals().grossEarnings()).isEqualByComparingTo("3720.00");
+    }
+
+    @Test
+    void hourlyEmployeeOvertimeNotDoubleCountedInBasePay() {
+        // April 2026: 22 working days × 8h = 176h expected. Worked 186h (10h OT).
+        // rate=10, overtimeRate=15 → basePay = 176×10 = 1760, overtimePay = 10×15 = 150, gross = 1910.
+        // Old (buggy) behaviour: basePay = 186×10 = 1860, gross = 1860+150 = 2010.
+        PayrollCalculationEngine attendanceEngine = new PayrollCalculationEngine(
+                (employee, context, payableWorkingDays, payableFrom, payableTo) ->
+                        new WorkHoursProvider.WorkHoursResult(
+                                new BigDecimal("186.00"), AttendanceWorkHoursProvider.SOURCE, true, BigDecimal.ZERO),
+                new PlaceholderSickLeavePolicy(),
+                workingDayCalculatorMock,
+                settingsRepository,
+                taxBracketRepository
+        );
+        Employee employee = employee(PaymentMethod.HOURLY, null, "10.00", LocalDate.of(2026, 1, 1));
+        employee.setDailyWorkingHours(new BigDecimal("8.0"));
+        employee.setOvertimeHourlyRate(new BigDecimal("15.00"));
+
+        PayrollCalculationResponse result = attendanceEngine.calculate(employee, YearMonth.of(2026, 4),
+                List.of(), List.of(), List.of(), List.of(), PayrollStatus.DRAFT, true);
+
+        assertThat(result.totals().basePay()).isEqualByComparingTo("1760.00");   // 176 regular hours × 10
+        assertThat(result.totals().overtimePay()).isEqualByComparingTo("150.00"); // 10 OT hours × 15
+        assertThat(result.totals().grossEarnings()).isEqualByComparingTo("1910.00");
+        assertThat(result.overtimeDetails().overtimeHours()).isEqualByComparingTo("10.00");
+        assertThat(result.hourlyAttendancePayment().paymentReceived()).isEqualByComparingTo("1760.00");
     }
 
     @Test

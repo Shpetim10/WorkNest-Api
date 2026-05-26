@@ -1,9 +1,13 @@
 package com.worknest.features.company.application.export;
 
+import com.worknest.domain.entities.PayrollAdjustment;
+import com.worknest.domain.entities.PayrollResult;
 import com.worknest.domain.enums.AttendanceDayStatus;
 import com.worknest.domain.enums.AttendanceReviewStatus;
 import com.worknest.domain.enums.AttendanceState;
+import com.worknest.domain.enums.PayrollAdjustmentType;
 import jakarta.persistence.EntityManager;
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -17,8 +21,10 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -305,48 +311,67 @@ public class JpaCompanyDataExportDataProvider implements CompanyDataExportDataPr
     }
 
     private ExportWorkbookData payroll(String locale, UUID companyId) {
-        List<Object[]> results = nativeRows("""
-                        /* export:payroll */
-                        select
-                            coalesce(nullif(u.display_name, ''), nullif(trim(concat(coalesce(u.first_name, ''), ' ', coalesce(u.last_name, ''))), ''), u.email) as employee_name,
-                            e.employment_type_role,
-                            e.employment_type,
-                            e.payment_method,
-                            pr.base_pay,
-                            coalesce(b.bonuses, 0) as bonuses,
-                            pr.total_deductions,
-                            pr.gross_earnings,
-                            pr.status
-                        from payroll_results pr
-                        left join employees e on e.id = pr.employee_id
-                        left join users u on u.id = e.user_id
-                        left join (
-                            select employee_id, payroll_year, payroll_month, sum(amount) as bonuses
-                            from payroll_adjustments
-                            where company_id = :companyId
-                              and adjustment_type = 'BONUS'
-                            group by employee_id, payroll_year, payroll_month
-                        ) b on b.employee_id = pr.employee_id
-                            and b.payroll_year = pr.payroll_year
-                            and b.payroll_month = pr.payroll_month
-                        where pr.company_id = :companyId
-                        order by pr.payroll_year desc, pr.payroll_month desc, pr.created_at desc
-                        """, companyId);
+        List<PayrollResult> results = entityManager.createQuery(
+                        "select pr from PayrollResult pr" +
+                        " join fetch pr.employee e" +
+                        " join fetch e.user u" +
+                        " where pr.company.id = :companyId" +
+                        " order by pr.year desc, pr.month desc, pr.createdAt desc",
+                        PayrollResult.class)
+                .setParameter("companyId", companyId)
+                .getResultList();
+
+        Map<String, BigDecimal> bonusByKey = entityManager.createQuery(
+                        "select a from PayrollAdjustment a" +
+                        " join fetch a.employee" +
+                        " where a.company.id = :companyId" +
+                        " and a.type = :type",
+                        PayrollAdjustment.class)
+                .setParameter("companyId", companyId)
+                .setParameter("type", PayrollAdjustmentType.BONUS)
+                .getResultList()
+                .stream()
+                .collect(Collectors.groupingBy(
+                        a -> a.getEmployee().getId() + ":" + a.getYear() + ":" + a.getMonth(),
+                        Collectors.reducing(BigDecimal.ZERO, PayrollAdjustment::getAmount, BigDecimal::add)
+                ));
+        Map<String, BigDecimal> manualDeductionByKey = entityManager.createQuery(
+                        "select a from PayrollAdjustment a" +
+                        " join fetch a.employee" +
+                        " where a.company.id = :companyId" +
+                        " and a.type = :type",
+                        PayrollAdjustment.class)
+                .setParameter("companyId", companyId)
+                .setParameter("type", PayrollAdjustmentType.DEDUCTION)
+                .getResultList()
+                .stream()
+                .collect(Collectors.groupingBy(
+                        a -> a.getEmployee().getId() + ":" + a.getYear() + ":" + a.getMonth(),
+                        Collectors.reducing(BigDecimal.ZERO, PayrollAdjustment::getAmount, BigDecimal::add)
+                ));
 
         List<List<Object>> rows = results.stream()
-                .map(result -> row(
-                        string(result[0]),
-                        String.join(" / ", nonBlank(List.of(
-                                localization.roleLabel(locale, result[1]),
-                                localization.employmentTypeLabel(locale, result[2])
-                        ))),
-                        localization.paymentMethodLabel(locale, result[3]),
-                        result[4],
-                        result[5],
-                        result[6],
-                        result[7],
-                        localization.payrollStatusLabel(locale, result[8])
-                ))
+                .map(pr -> {
+                    var emp = pr.getEmployee();
+                    var user = emp.getUser();
+                    String name = resolveDisplayName(user.getDisplayName(), user.getFirstName(), user.getLastName(), user.getEmail());
+                    String adjustmentKey = emp.getId() + ":" + pr.getYear() + ":" + pr.getMonth();
+                    BigDecimal bonuses = bonusByKey.getOrDefault(adjustmentKey, BigDecimal.ZERO);
+                    BigDecimal manualDeductions = manualDeductionByKey.getOrDefault(adjustmentKey, BigDecimal.ZERO);
+                    return row(
+                            name,
+                            String.join(" / ", nonBlank(List.of(
+                                    localization.roleLabel(locale, emp.getEmploymentTypeRole()),
+                                    localization.employmentTypeLabel(locale, emp.getEmploymentType())
+                            ))),
+                            localization.paymentMethodLabel(locale, emp.getPaymentMethod()),
+                            pr.getBasePay(),
+                            bonuses,
+                            manualDeductions,
+                            pr.getGrossEarnings(),
+                            localization.payrollStatusLabel(locale, pr.getStatus())
+                    );
+                })
                 .toList();
 
         return workbook(
@@ -506,6 +531,14 @@ public class JpaCompanyDataExportDataProvider implements CompanyDataExportDataPr
 
     private String string(Object value) {
         return value == null ? "" : value.toString();
+    }
+
+    private String resolveDisplayName(String displayName, String firstName, String lastName, String email) {
+        if (StringUtils.hasText(displayName)) {
+            return displayName;
+        }
+        String full = ((firstName == null ? "" : firstName) + " " + (lastName == null ? "" : lastName)).trim();
+        return StringUtils.hasText(full) ? full : (email == null ? "" : email);
     }
 
     private List<String> nonBlank(Collection<String> values) {

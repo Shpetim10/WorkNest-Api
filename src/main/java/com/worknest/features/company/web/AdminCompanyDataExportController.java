@@ -41,7 +41,7 @@ public class AdminCompanyDataExportController {
     private final CompanyDataExportService companyDataExportService;
 
     @GetMapping(value = "/export", produces = "application/zip")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('COMPANY_DATA_EXPORT')")
     @Operation(summary = "Download all company dashboard table data as a ZIP of Excel workbooks")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Company data ZIP generated"),

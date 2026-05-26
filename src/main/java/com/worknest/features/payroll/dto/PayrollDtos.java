@@ -1,5 +1,6 @@
 package com.worknest.features.payroll.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.worknest.domain.enums.EmploymentType;
 import com.worknest.domain.enums.PaymentMethod;
 import com.worknest.domain.enums.PayrollAdjustmentType;
@@ -98,6 +99,7 @@ public final class PayrollDtos {
             WorkPeriodDetails workPeriod,
             BasePayDetails basePayCalculation,
             HourlyAttendancePaymentDetails hourlyAttendancePayment,
+            FixedSalaryAttendancePaymentDetails fixedSalaryAttendancePayment,
             LeaveCalculationDetails leaveCalculation,
             SickLeaveCalculationDetails sickLeaveCalculation,
             AdjustmentDetails adjustments,
@@ -122,6 +124,7 @@ public final class PayrollDtos {
             PayrollCalculationStatus calculationStatus,
             boolean preview,
             BigDecimal basePay,
+            BigDecimal overtimePay,
             BigDecimal totalBonus,
             BigDecimal totalManualDeduction,
             BigDecimal hourlyFullPayment,
@@ -137,6 +140,15 @@ public final class PayrollDtos {
             BigDecimal employerCostTotal,
             List<String> warnings
     ) {
+        @JsonProperty("status")
+        public PayrollStatus status() {
+            return payrollStatus;
+        }
+
+        @JsonProperty("deductions")
+        public BigDecimal deductions() {
+            return totalManualDeduction;
+        }
     }
 
     public record EmploymentPeriodDetails(
@@ -178,9 +190,25 @@ public final class PayrollDtos {
     public record HourlyAttendancePaymentDetails(
             BigDecimal fullPayableHours,
             BigDecimal attendedHours,
+            BigDecimal paidHolidayHours,
+            BigDecimal payableHours,
             BigDecimal fullPayment,
             BigDecimal attendanceDeduction,
             BigDecimal paymentReceived,
+            String workHoursSource
+    ) {
+    }
+
+    public record FixedSalaryAttendancePaymentDetails(
+            BigDecimal expectedHours,
+            BigDecimal attendedHours,
+            BigDecimal paidHolidayHours,
+            BigDecimal payableAttendanceHours,
+            BigDecimal attendanceEquivalentPay,
+            BigDecimal baseSalary,
+            BigDecimal excessHours,
+            BigDecimal excessHourlyRate,
+            BigDecimal excessPay,
             String workHoursSource
     ) {
     }

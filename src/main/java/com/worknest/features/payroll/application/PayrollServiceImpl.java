@@ -535,6 +535,7 @@ public class PayrollServiceImpl implements PayrollService {
                 payroll.calculationStatus(),
                 payroll.preview(),
                 payroll.totals().basePay(),
+                payroll.totals().overtimePay(),
                 payroll.adjustments().totalBonus(),
                 payroll.adjustments().totalManualDeduction(),
                 payroll.hourlyAttendancePayment() != null ? payroll.hourlyAttendancePayment().fullPayment() : null,

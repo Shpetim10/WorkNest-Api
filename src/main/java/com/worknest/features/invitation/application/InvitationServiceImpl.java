@@ -5,6 +5,7 @@ import com.worknest.audit.service.model.AuthAuditActorContext;
 import com.worknest.domain.entities.Company;
 import com.worknest.domain.enums.CompanyStatus;
 import com.worknest.domain.enums.InvitationKind;
+import com.worknest.domain.enums.PermissionCode;
 import com.worknest.domain.entities.Permission;
 import com.worknest.domain.enums.PlatformAccess;
 import com.worknest.domain.enums.PlatformRole;
@@ -265,12 +266,17 @@ public class InvitationServiceImpl implements InvitationService {
                 ? List.of()
                 : request.permissionCodes().stream()
                         .filter(StringUtils::hasText)
-                        .map(String::trim)
+                        .map(code -> code.trim().toUpperCase())
                         .distinct()
                         .toList();
 
         if (codes.isEmpty()) {
             return;
+        }
+
+        List<String> unknownCodes = codes.stream().filter(code -> !PermissionCode.isKnown(code)).toList();
+        if (!unknownCodes.isEmpty()) {
+            throw new InvalidInvitationRequestException("Unknown permission code: " + unknownCodes.getFirst());
         }
 
         List<Permission> permissions = permissionRepository.findAllByCodeIn(codes);

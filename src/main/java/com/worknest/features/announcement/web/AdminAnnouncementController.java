@@ -33,7 +33,7 @@ public class AdminAnnouncementController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'ANNOUNCEMENT_CREATE')")
     @Operation(summary = "Create announcement", description = "Creates a new company announcement")
     public ApiResponse<AnnouncementListResponse> create(
             @PathVariable UUID companyId,
@@ -42,7 +42,7 @@ public class AdminAnnouncementController {
     }
 
     @GetMapping
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'ANNOUNCEMENT_VIEW')")
     @Operation(summary = "List announcements", description = "Retrieves all announcements for the company")
     public ApiResponse<PaginatedResponse<AnnouncementListResponse>> list(
             @PathVariable UUID companyId,
@@ -56,7 +56,7 @@ public class AdminAnnouncementController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'ANNOUNCEMENT_DELETE')")
     @Operation(summary = "Delete announcement", description = "Deletes an announcement")
     public ApiResponse<Void> delete(
             @PathVariable UUID companyId,

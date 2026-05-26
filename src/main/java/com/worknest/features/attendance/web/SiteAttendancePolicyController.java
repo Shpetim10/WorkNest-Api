@@ -26,7 +26,7 @@ public class SiteAttendancePolicyController {
     private final SiteAttendancePolicyService siteAttendancePolicyService;
 
     @GetMapping
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'ATTENDANCE_POLICY_VIEW')")
     @Operation(summary = "Get effective site attendance policy")
     public ApiResponse<SiteAttendancePolicyResponse> getPolicy(
             @PathVariable UUID companyId,
@@ -39,7 +39,7 @@ public class SiteAttendancePolicyController {
     }
 
     @PutMapping
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'ATTENDANCE_POLICY_UPDATE')")
     @Operation(summary = "Create or update site attendance policy override")
     public ApiResponse<SiteAttendancePolicyResponse> updatePolicy(
             @PathVariable UUID companyId,

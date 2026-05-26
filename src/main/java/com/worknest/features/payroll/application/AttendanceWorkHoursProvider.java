@@ -3,7 +3,6 @@ package com.worknest.features.payroll.application;
 import com.worknest.domain.entities.AttendanceDayRecord;
 import com.worknest.domain.entities.Employee;
 import com.worknest.domain.enums.AttendanceDayStatus;
-import com.worknest.domain.enums.PaymentMethod;
 import com.worknest.features.attendance.repository.AttendanceDayRecordRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -33,27 +32,29 @@ public class AttendanceWorkHoursProvider implements WorkHoursProvider {
     private static final BigDecimal MINUTES_PER_HOUR = BigDecimal.valueOf(60);
 
     private final AttendanceDayRecordRepository attendanceRepository;
+    private final WorkingDayCalculator workingDayCalculator;
 
     @Override
     public WorkHoursResult getWorkedHours(Employee employee, PayrollContext context,
                                           BigDecimal payableWorkingDays, LocalDate payableFrom, LocalDate payableTo) {
-        if (employee.getPaymentMethod() != PaymentMethod.HOURLY) {
-            return new WorkHoursResult(
-                    payableWorkingDays.multiply(context.defaultDailyWorkingHours()),
-                    DefaultWorkHoursProvider.SOURCE);
-        }
-
         LocalDate effectiveTo = payableTo.isAfter(LocalDate.now()) ? LocalDate.now() : payableTo;
-        BigDecimal hours = computeWorkedHours(
-                employee.getCompany().getId(), employee.getId(), payableFrom, effectiveTo);
+        List<AttendanceDayRecord> records = attendanceRepository
+                .findAllByCompanyIdAndEmployeeIdAndWorkDateBetweenOrderByWorkDateAsc(
+                        employee.getCompany().getId(), employee.getId(), payableFrom, effectiveTo);
 
-        if (hours.signum() == 0) {
+        if (records.isEmpty()) {
             // No attendance records: fall back to default so the payroll does not produce zero silently.
+            BigDecimal dailyHours = employee.getDailyWorkingHours() != null
+                    ? employee.getDailyWorkingHours()
+                    : context.defaultDailyWorkingHours();
             return new WorkHoursResult(
-                    payableWorkingDays.multiply(context.defaultDailyWorkingHours()),
+                    payableWorkingDays.multiply(dailyHours),
                     DefaultWorkHoursProvider.SOURCE);
         }
-        return new WorkHoursResult(hours, SOURCE);
+
+        BigDecimal hours = sumWorkedHours(records);
+        BigDecimal paidHolidayWorkedHours = sumPaidHolidayWorkedHours(employee, records);
+        return new WorkHoursResult(hours, SOURCE, true, paidHolidayWorkedHours);
     }
 
     public BigDecimal computeWorkedHours(java.util.UUID companyId, java.util.UUID employeeId,
@@ -61,7 +62,21 @@ public class AttendanceWorkHoursProvider implements WorkHoursProvider {
         List<AttendanceDayRecord> records = attendanceRepository
                 .findAllByCompanyIdAndEmployeeIdAndWorkDateBetweenOrderByWorkDateAsc(
                         companyId, employeeId, from, to);
+        return sumWorkedHours(records);
+    }
+
+    private BigDecimal sumWorkedHours(List<AttendanceDayRecord> records) {
         long totalMinutes = records.stream()
+                .filter(r -> WORKED_STATUSES.contains(r.getDayStatus()))
+                .mapToLong(r -> r.getWorkedMinutes() != null ? r.getWorkedMinutes() : 0L)
+                .sum();
+        return BigDecimal.valueOf(totalMinutes)
+                .divide(MINUTES_PER_HOUR, 2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal sumPaidHolidayWorkedHours(Employee employee, List<AttendanceDayRecord> records) {
+        long totalMinutes = records.stream()
+                .filter(r -> workingDayCalculator.isPaidHoliday(employee.getCompany().getId(), r.getWorkDate()))
                 .filter(r -> WORKED_STATUSES.contains(r.getDayStatus()))
                 .mapToLong(r -> r.getWorkedMinutes() != null ? r.getWorkedMinutes() : 0L)
                 .sum();

@@ -37,7 +37,7 @@ public class SiteNetworkDetectionController {
      * edit them before submitting the final create-site request.
      */
     @PostMapping("/detect")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('COMPANY_SITE_UPDATE')")
     @Operation(
             summary = "Detect network",
             description = "Resolves the caller's IP server-side and returns a suggested trusted-network rule " +

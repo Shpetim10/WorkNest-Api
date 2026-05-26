@@ -86,6 +86,18 @@ public class WorkingDayCalculator {
         return false;
     }
 
+    public BigDecimal countPaidHolidays(UUID companyId, LocalDate start, LocalDate end) {
+        if (start == null || end == null || end.isBefore(start)) {
+            return BigDecimal.ZERO;
+        }
+        Set<DayOfWeek> weekendDays = resolveWeekendDays(companyId);
+        Set<LocalDate> paidHolidays = resolvePaidHolidays(companyId, start, end);
+        long count = paidHolidays.stream()
+                .filter(date -> !weekendDays.contains(date.getDayOfWeek()))
+                .count();
+        return BigDecimal.valueOf(count);
+    }
+
     public Set<DayOfWeek> resolveWeekendDays(UUID companyId) {
         return settingsRepository.findByCompanyId(companyId)
                 .map(this::parseWeekendDays)
@@ -119,6 +131,22 @@ public class WorkingDayCalculator {
             }
         }
         return unpaid;
+    }
+
+    private Set<LocalDate> resolvePaidHolidays(UUID companyId, LocalDate from, LocalDate to) {
+        List<PublicHoliday> holidays = holidayRepository.findAllByCompanyId(companyId);
+        if (holidays.isEmpty()) {
+            return Collections.emptySet();
+        }
+        Set<LocalDate> paid = new HashSet<>();
+        for (PublicHoliday h : holidays) {
+            if (h.isPaid()) {
+                for (LocalDate resolved : resolveOccurrences(h, from, to)) {
+                    paid.add(resolved);
+                }
+            }
+        }
+        return paid;
     }
 
     private boolean matches(PublicHoliday h, LocalDate date) {

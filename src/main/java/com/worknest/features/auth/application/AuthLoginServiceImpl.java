@@ -6,6 +6,7 @@ import com.worknest.domain.entities.User;
 import com.worknest.domain.entities.Company;
 import com.worknest.domain.enums.CompanyStatus;
 import com.worknest.domain.enums.PlatformAccess;
+import com.worknest.domain.enums.PlatformRole;
 import com.worknest.domain.enums.UserStatus;
 import com.worknest.audit.service.AuthAuditService;
 import com.worknest.audit.service.model.AuthAuditActorContext;
@@ -18,6 +19,7 @@ import com.worknest.features.auth.exception.AuthenticationFailedException;
 import com.worknest.features.auth.exception.InvalidCredentialsException;
 import com.worknest.features.auth.exception.NoPlatformAccessException;
 import com.worknest.features.auth.repository.RefreshTokenRepository;
+import com.worknest.features.auth.repository.RoleAssignmentPermissionRepository;
 import com.worknest.features.auth.repository.RoleAssignmentRepository;
 import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.auth.utility.SecureTokenGenerator;
@@ -47,6 +49,7 @@ public class AuthLoginServiceImpl implements AuthLoginService {
     private final UserRepository userRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final RoleAssignmentPermissionRepository roleAssignmentPermissionRepository;
     private final PasswordEncoder passwordEncoder;
     private final SecureTokenGenerator secureTokenGenerator;
     private final Sha256TokenHashUtility sha256TokenHashUtility;
@@ -135,6 +138,7 @@ public class AuthLoginServiceImpl implements AuthLoginService {
                     validAssignments.stream()
                             .map(assignment -> toAvailableContext(assignment, request.platformAccess()))
                             .toList(),
+                    resolvePermissions(sessionRoleAssignment),
                     "Role selection required"
             );
         }
@@ -171,6 +175,7 @@ public class AuthLoginServiceImpl implements AuthLoginService {
                 request.platformAccess(),
                 toTenantContext(sessionRoleAssignment.getCompany()),
                 List.of(toAvailableContext(sessionRoleAssignment, request.platformAccess())),
+                resolvePermissions(sessionRoleAssignment),
                 "Login successful"
         );
     }
@@ -385,6 +390,18 @@ public class AuthLoginServiceImpl implements AuthLoginService {
                         .map(RoleAssignment::getCompany)
                         .findFirst()
                         .orElse(null));
+    }
+
+    private List<String> resolvePermissions(RoleAssignment assignment) {
+        if (assignment.getRole() != PlatformRole.STAFF) {
+            return List.of();
+        }
+        return roleAssignmentPermissionRepository
+                .findAllByRoleAssignmentIdAndIsGranted(assignment.getId(), true)
+                .stream()
+                .map(grant -> grant.getPermission().getCode())
+                .sorted()
+                .toList();
     }
 
     private record AuthenticatedLoginScope(

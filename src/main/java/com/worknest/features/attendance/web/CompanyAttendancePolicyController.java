@@ -26,7 +26,7 @@ public class CompanyAttendancePolicyController {
     private final CompanyAttendancePolicyService companyAttendancePolicyService;
 
     @GetMapping
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'ATTENDANCE_POLICY_VIEW')")
     @Operation(summary = "Get company default attendance policy")
     public ApiResponse<CompanyAttendancePolicyResponse> getPolicy(@PathVariable UUID companyId) {
         return ApiResponse.success(
@@ -36,7 +36,7 @@ public class CompanyAttendancePolicyController {
     }
 
     @PutMapping
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'ATTENDANCE_POLICY_UPDATE')")
     @Operation(summary = "Create or update company default attendance policy")
     public ApiResponse<CompanyAttendancePolicyResponse> updatePolicy(
             @PathVariable UUID companyId,

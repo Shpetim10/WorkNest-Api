@@ -14,6 +14,7 @@ import com.worknest.domain.entities.UserInvitation;
 import com.worknest.domain.enums.CompanyStatus;
 import com.worknest.domain.enums.EmploymentStatus;
 import com.worknest.domain.enums.InvitationKind;
+import com.worknest.domain.enums.PermissionCode;
 import com.worknest.domain.enums.PlatformAccess;
 import com.worknest.domain.enums.PlatformRole;
 import com.worknest.domain.enums.UserStatus;
@@ -652,8 +653,16 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
 
     private void assignPermissions(RoleAssignment roleAssignment, List<String> permissionCodes, User grantedBy) {
         if (permissionCodes == null || permissionCodes.isEmpty()) return;
-        List<String> codes = permissionCodes.stream().filter(StringUtils::hasText).map(String::trim).distinct().toList();
+        List<String> codes = permissionCodes.stream()
+                .filter(StringUtils::hasText)
+                .map(code -> code.trim().toUpperCase())
+                .distinct()
+                .toList();
         if (codes.isEmpty()) return;
+        List<String> unknownCodes = codes.stream().filter(code -> !PermissionCode.isKnown(code)).toList();
+        if (!unknownCodes.isEmpty()) {
+            throw new InvalidInvitationRequestException("Unknown permission code: " + unknownCodes.getFirst());
+        }
 
         List<Permission> permissions = permissionRepository.findAllByCodeIn(codes);
         if (permissions.size() != codes.size()) {
