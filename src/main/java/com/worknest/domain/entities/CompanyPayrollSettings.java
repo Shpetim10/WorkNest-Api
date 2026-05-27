@@ -79,12 +79,6 @@ public class CompanyPayrollSettings {
     @Column(name = "contribution_max_base", precision = 14, scale = 2)
     private BigDecimal contributionMaxBase;
 
-    @Column(name = "maternity_employer_topup_rate", nullable = false, precision = 6, scale = 3)
-    private BigDecimal maternityEmployerTopupRate = BigDecimal.ZERO;
-
-    @Column(name = "paternity_employer_topup_rate", nullable = false, precision = 6, scale = 3)
-    private BigDecimal paternityEmployerTopupRate = BigDecimal.ZERO;
-
     @Version
     @Column(name = "version", nullable = false)
     private Long version = 0L;

@@ -7,6 +7,7 @@ public record LeaveBalanceDto(
         LeaveType leaveType,
         BigDecimal totalDays,
         BigDecimal usedDays,
-        BigDecimal availableDays
+        BigDecimal availableDays,
+        Integer maxCompanyPaidDays
 ) {
 }

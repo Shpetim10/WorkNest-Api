@@ -21,6 +21,7 @@ import com.worknest.features.payroll.dto.PayrollDtos.FixedSalaryAttendancePaymen
 import com.worknest.features.payroll.dto.PayrollDtos.HourlyAttendancePaymentDetails;
 import com.worknest.features.payroll.dto.PayrollDtos.LeaveCalculationDetails;
 import com.worknest.features.payroll.dto.PayrollDtos.OvertimeDetails;
+import com.worknest.features.payroll.dto.PayrollDtos.ParentalLeaveCalculationDetails;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollAdjustmentLine;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollCalculationResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollLeaveTreatment;
@@ -52,6 +53,7 @@ public class PayrollCalculationEngine {
 
     private final WorkHoursProvider workHoursProvider;
     private final SickLeavePolicy sickLeavePolicy;
+    private final ParentalLeavePolicy parentalLeavePolicy;
     private final WorkingDayCalculator workingDayCalculator;
     private final CompanyPayrollSettingsRepository settingsRepository;
     private final CompanyTaxBracketRepository taxBracketRepository;
@@ -145,6 +147,12 @@ public class PayrollCalculationEngine {
             warnings.add("Sick leave policy is not configured for this company. Sick leave has no financial effect.");
         }
 
+        var parentalLeaveDetails = parentalLeavePolicy.calculate(
+                employee, parentalLeaves(approvedLeavesInMonth), parentalLeaves(approvedLeavesInYear), context);
+        if (PlaceholderParentalLeavePolicy.STATUS.equals(parentalLeaveDetails.status())) {
+            warnings.add("Parental leave policy is not configured for this company. Parental leave has no financial effect.");
+        }
+
         AdjustmentDetails adjustmentDetails = calculateAdjustments(adjustments);
 
         FixedSalaryAttendancePaymentDetails fixedSalaryAttendancePayment = calculateFixedSalaryAttendancePayment(
@@ -156,17 +164,22 @@ public class PayrollCalculationEngine {
         if (employee.getPaymentMethod() == PaymentMethod.HOURLY) {
             BigDecimal sickPaidAmount = sickLeaveDetails.companyPaidAmount() != null
                     ? sickLeaveDetails.companyPaidAmount() : BigDecimal.ZERO;
+            BigDecimal parentalPaidAmount = parentalLeaveDetails.companyPaidAmount() != null
+                    ? parentalLeaveDetails.companyPaidAmount() : BigDecimal.ZERO;
             grossEarnings = money(earnedBasePay
                     .add(leaveDetails.paidLeaveAmount())
                     .add(sickPaidAmount)
+                    .add(parentalPaidAmount)
                     .add(adjustmentDetails.totalBonus())
                     .add(overtimePay));
             unpaidLeaveAndSickDeduction = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         } else {
             BigDecimal sickDeduction = sickLeaveDetails.totalSickLeaveDeduction() != null
                     ? sickLeaveDetails.totalSickLeaveDeduction() : BigDecimal.ZERO;
+            BigDecimal parentalDeduction = parentalLeaveDetails.totalParentalLeaveDeduction() != null
+                    ? parentalLeaveDetails.totalParentalLeaveDeduction() : BigDecimal.ZERO;
             grossEarnings = money(earnedBasePay.add(adjustmentDetails.totalBonus()).add(overtimePay));
-            unpaidLeaveAndSickDeduction = money(leaveDetails.unpaidLeaveDeduction().add(sickDeduction));
+            unpaidLeaveAndSickDeduction = money(leaveDetails.unpaidLeaveDeduction().add(sickDeduction).add(parentalDeduction));
         }
 
         // ── Absence info (I1) — FIXED_MONTHLY only, informational ────────────
@@ -223,6 +236,7 @@ public class PayrollCalculationEngine {
                 fixedSalaryAttendancePayment,
                 leaveDetails,
                 sickLeaveDetails,
+                parentalLeaveDetails,
                 adjustmentDetails,
                 statutory,
                 absenceDetails,
@@ -441,7 +455,7 @@ public class PayrollCalculationEngine {
         List<PayrollLeaveRecordDetails> records = new ArrayList<>();
 
         List<LeaveRequest> sortedInMonth = approvedLeavesInMonth.stream()
-                .filter(l -> l.getLeaveType() != LeaveType.SICK)
+                .filter(l -> l.getLeaveType() != LeaveType.SICK && l.getLeaveType() != LeaveType.PARENTAL)
                 .sorted(Comparator.comparing(LeaveRequest::getStartDate))
                 .toList();
 
@@ -459,31 +473,14 @@ public class PayrollCalculationEngine {
             BigDecimal paidDays = BigDecimal.ZERO;
             BigDecimal unpaidDays = BigDecimal.ZERO;
 
-            switch (type) {
-                case UNPAID -> {
-                    treatment = PayrollLeaveTreatment.UNPAID_EXPLICIT;
-                    unpaidDays = daysInPeriod;
-                }
-                case MATERNITY -> {
-                    treatment = PayrollLeaveTreatment.STATUTORY_MATERNITY;
-                    // statutory; no cost to leave pool, no deduction
-                }
-                case PATERNITY -> {
-                    treatment = PayrollLeaveTreatment.STATUTORY_PATERNITY;
-                    // statutory; no cost to leave pool, no deduction
-                }
-                default -> {
-                    // VACATION, PERSONAL, OTHER — paid from per-type LeaveBalance
-                    BigDecimal remaining = remainingBalance.getOrDefault(type, BigDecimal.ZERO);
-                    paidDays = daysInPeriod.min(remaining);
-                    unpaidDays = daysInPeriod.subtract(paidDays).max(BigDecimal.ZERO);
-                    // Consume from the running balance map
-                    remainingBalance.put(type, remaining.subtract(paidDays).max(BigDecimal.ZERO));
-                    treatment = unpaidDays.signum() > 0
-                            ? PayrollLeaveTreatment.UNPAID_EXCESS
-                            : PayrollLeaveTreatment.PAID_FROM_BALANCE;
-                }
-            }
+            // VACATION — paid from per-type LeaveBalance; excess days are unpaid deduction
+            BigDecimal remaining = remainingBalance.getOrDefault(type, BigDecimal.ZERO);
+            paidDays = daysInPeriod.min(remaining);
+            unpaidDays = daysInPeriod.subtract(paidDays).max(BigDecimal.ZERO);
+            remainingBalance.put(type, remaining.subtract(paidDays).max(BigDecimal.ZERO));
+            treatment = unpaidDays.signum() > 0
+                    ? PayrollLeaveTreatment.UNPAID_EXCESS
+                    : PayrollLeaveTreatment.PAID_FROM_BALANCE;
 
             if (employee.getPaymentMethod() == PaymentMethod.HOURLY) {
                 if (paidDays.signum() > 0 && !DefaultWorkHoursProvider.SOURCE.equals(workHoursSource)) {
@@ -734,6 +731,10 @@ public class PayrollCalculationEngine {
 
     private List<LeaveRequest> sickLeaves(List<LeaveRequest> leaves) {
         return leaves.stream().filter(l -> l.getLeaveType() == LeaveType.SICK).toList();
+    }
+
+    private List<LeaveRequest> parentalLeaves(List<LeaveRequest> leaves) {
+        return leaves.stream().filter(l -> l.getLeaveType() == LeaveType.PARENTAL).toList();
     }
 
     // ── Utilities ─────────────────────────────────────────────────────────────

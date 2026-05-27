@@ -11,6 +11,7 @@ import com.worknest.domain.entities.CompanyTaxBracket;
 import com.worknest.domain.entities.PublicHoliday;
 import com.worknest.domain.enums.TaxBase;
 import com.worknest.features.company.repository.CompanyRepository;
+import com.worknest.features.payroll.dto.PayrollDtos.ParentalLeavePolicyResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollSettingsResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PublicHolidayRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.PublicHolidayResponse;
@@ -19,6 +20,7 @@ import com.worknest.features.payroll.dto.PayrollDtos.SickLeavePolicyResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.TaxBracketRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.TaxBracketResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.UpsertPayrollSettingsRequest;
+import com.worknest.features.payroll.repository.CompanyParentalLeavePolicyConfigRepository;
 import com.worknest.features.payroll.repository.CompanyPayrollSettingsRepository;
 import com.worknest.features.payroll.repository.CompanySickLeavePolicyConfigRepository;
 import com.worknest.features.payroll.repository.CompanyTaxBracketRepository;
@@ -46,11 +48,14 @@ public class PayrollSettingsServiceImpl implements PayrollSettingsService {
 
     private static final BigDecimal DEFAULT_SICK_PERCENTAGE = new BigDecimal("70.00");
     private static final int DEFAULT_SICK_MAX_DAYS = 14;
+    private static final BigDecimal DEFAULT_PARENTAL_PERCENTAGE = new BigDecimal("80.00");
+    private static final int DEFAULT_PARENTAL_MAX_DAYS = 90;
 
     private final CompanyPayrollSettingsRepository settingsRepository;
     private final CompanyTaxBracketRepository taxBracketRepository;
     private final PublicHolidayRepository holidayRepository;
     private final CompanySickLeavePolicyConfigRepository sickPolicyRepository;
+    private final CompanyParentalLeavePolicyConfigRepository parentalPolicyRepository;
     private final CompanyRepository companyRepository;
     private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
@@ -85,8 +90,6 @@ public class PayrollSettingsServiceImpl implements PayrollSettingsService {
         settings.setPensionEmployerRate(request.pensionEmployerRate().setScale(3, java.math.RoundingMode.HALF_UP));
         settings.setContributionMinBase(request.contributionMinBase());
         settings.setContributionMaxBase(request.contributionMaxBase());
-        settings.setMaternityEmployerTopupRate(request.maternityEmployerTopupRate().setScale(3, java.math.RoundingMode.HALF_UP));
-        settings.setPaternityEmployerTopupRate(request.paternityEmployerTopupRate().setScale(3, java.math.RoundingMode.HALF_UP));
         settingsRepository.save(settings);
         audit("PAYROLL_SETTINGS_UPSERTED", "company_payroll_settings", settings.getId(),
                 Map.of("taxEnabled", settings.isTaxEnabled(), "taxBase", settings.getTaxBase()),
@@ -257,14 +260,17 @@ public class PayrollSettingsServiceImpl implements PayrollSettingsService {
         SickLeavePolicyResponse sickPolicy = sickPolicyRepository.findByCompanyId(companyId)
                 .map(c -> new SickLeavePolicyResponse(c.getCompanyPaidPercentage(), c.getMaxCompanyPaidDays(), false))
                 .orElse(new SickLeavePolicyResponse(DEFAULT_SICK_PERCENTAGE, DEFAULT_SICK_MAX_DAYS, true));
+        ParentalLeavePolicyResponse parentalPolicy = parentalPolicyRepository.findByCompanyId(companyId)
+                .map(c -> new ParentalLeavePolicyResponse(c.getCompanyPaidPercentage(), c.getMaxCompanyPaidDays(), false))
+                .orElse(new ParentalLeavePolicyResponse(DEFAULT_PARENTAL_PERCENTAGE, DEFAULT_PARENTAL_MAX_DAYS, true));
         boolean isDefault = settings == null;
         if (isDefault) {
             return new PayrollSettingsResponse(
                     BigDecimal.valueOf(8), List.of("SATURDAY", "SUNDAY"), true,
                     TaxBase.GROSS_MINUS_CONTRIBUTIONS,
                     BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                    null, null, BigDecimal.ZERO, BigDecimal.ZERO,
-                    sickPolicy, true);
+                    null, null,
+                    sickPolicy, parentalPolicy, true);
         }
         List<String> weekendDays = parseJson(settings.getWeekendDaysJson());
         return new PayrollSettingsResponse(
@@ -273,8 +279,7 @@ public class PayrollSettingsServiceImpl implements PayrollSettingsService {
                 settings.getSocialSecurityEmployeeRate(), settings.getSocialSecurityEmployerRate(),
                 settings.getPensionEmployeeRate(), settings.getPensionEmployerRate(),
                 settings.getContributionMinBase(), settings.getContributionMaxBase(),
-                settings.getMaternityEmployerTopupRate(), settings.getPaternityEmployerTopupRate(),
-                sickPolicy, false);
+                sickPolicy, parentalPolicy, false);
     }
 
     private TaxBracketResponse toBracketResponse(CompanyTaxBracket b) {

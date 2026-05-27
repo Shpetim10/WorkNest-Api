@@ -102,6 +102,7 @@ public final class PayrollDtos {
             FixedSalaryAttendancePaymentDetails fixedSalaryAttendancePayment,
             LeaveCalculationDetails leaveCalculation,
             SickLeaveCalculationDetails sickLeaveCalculation,
+            ParentalLeaveCalculationDetails parentalLeaveCalculation,
             AdjustmentDetails adjustments,
             StatutoryDeductionDetails statutoryDeductions,
             AbsenceDetails absenceDetails,
@@ -252,6 +253,23 @@ public final class PayrollDtos {
     ) {
     }
 
+    public record ParentalLeaveCalculationDetails(
+            BigDecimal daysTakenThisMonth,
+            BigDecimal companyPaidDays,
+            BigDecimal statePaidDays,
+            BigDecimal companyPaidPercentage,
+            BigDecimal companyPaidAmount,
+            BigDecimal paidParentalLeaveDeductionEquivalent,
+            BigDecimal totalParentalLeaveDeduction,
+            BigDecimal paidParentalLeaveHours,
+            BigDecimal stateParentalLeaveHours,
+            BigDecimal stateParentalLeaveAmount,
+            BigDecimal insuranceCoveredDays,
+            BigDecimal insuranceCoveredAmount,
+            String status
+    ) {
+    }
+
     public record AdjustmentDetails(
             List<PayrollAdjustmentLine> bonuses,
             List<PayrollAdjustmentLine> deductions,
@@ -314,6 +332,26 @@ public final class PayrollDtos {
     }
 
     public record SickLeavePolicyResponse(
+            BigDecimal companyPaidPercentage,
+            int maxCompanyPaidDays,
+            boolean isDefault
+    ) {
+    }
+
+    public record UpsertParentalLeavePolicyRequest(
+            @NotNull(message = "companyPaidPercentage is required")
+            @DecimalMin(value = "0.01", message = "companyPaidPercentage must be > 0")
+            @DecimalMax(value = "100.00", message = "companyPaidPercentage must be <= 100")
+            BigDecimal companyPaidPercentage,
+
+            @NotNull(message = "maxCompanyPaidDays is required")
+            @Min(value = 1, message = "maxCompanyPaidDays must be >= 1")
+            @Max(value = 365, message = "maxCompanyPaidDays must be <= 365")
+            Integer maxCompanyPaidDays
+    ) {
+    }
+
+    public record ParentalLeavePolicyResponse(
             BigDecimal companyPaidPercentage,
             int maxCompanyPaidDays,
             boolean isDefault
@@ -388,8 +426,7 @@ public final class PayrollDtos {
         UNPAID_EXCESS,
         UNPAID_EXPLICIT,
         SICK_COMPANY_POLICY,
-        STATUTORY_MATERNITY,
-        STATUTORY_PATERNITY
+        PARENTAL_COMPANY_POLICY
     }
 
     // ── Settings DTOs (§3) ───────────────────────────────────────────────────
@@ -405,9 +442,8 @@ public final class PayrollDtos {
             BigDecimal pensionEmployerRate,
             BigDecimal contributionMinBase,
             BigDecimal contributionMaxBase,
-            BigDecimal maternityEmployerTopupRate,
-            BigDecimal paternityEmployerTopupRate,
             SickLeavePolicyResponse sickLeavePolicy,
+            ParentalLeavePolicyResponse parentalLeavePolicy,
             boolean isDefault
     ) {
     }
@@ -439,13 +475,7 @@ public final class PayrollDtos {
 
             BigDecimal contributionMinBase,
 
-            BigDecimal contributionMaxBase,
-
-            @NotNull @DecimalMin("0") @DecimalMax("100")
-            BigDecimal maternityEmployerTopupRate,
-
-            @NotNull @DecimalMin("0") @DecimalMax("100")
-            BigDecimal paternityEmployerTopupRate
+            BigDecimal contributionMaxBase
     ) {
     }
 

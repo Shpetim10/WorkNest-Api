@@ -11,7 +11,9 @@ import com.worknest.features.payroll.dto.PayrollDtos.PayrollAdjustmentResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollCalculationResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollEmployeeSummaryResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollPeriodRequest;
+import com.worknest.features.payroll.dto.PayrollDtos.ParentalLeavePolicyResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.SickLeavePolicyResponse;
+import com.worknest.features.payroll.dto.PayrollDtos.UpsertParentalLeavePolicyRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.UpsertSickLeavePolicyRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -210,5 +212,21 @@ public class AdminPayrollController {
             @Valid @RequestBody UpsertSickLeavePolicyRequest request
     ) {
         return ApiResponse.success("Sick leave policy updated", payrollService.upsertSickLeavePolicy(request));
+    }
+
+    @GetMapping("/parental-leave-policy")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_UPDATE')")
+    @Operation(summary = "Get the company's parental leave policy configuration")
+    public ApiResponse<ParentalLeavePolicyResponse> getParentalLeavePolicy() {
+        return ApiResponse.success("Parental leave policy retrieved", payrollService.getParentalLeavePolicy());
+    }
+
+    @PutMapping("/parental-leave-policy")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_UPDATE')")
+    @Operation(summary = "Create or update the company's parental leave policy (company-paid % and max days per year, remainder covered by social security)")
+    public ApiResponse<ParentalLeavePolicyResponse> upsertParentalLeavePolicy(
+            @Valid @RequestBody UpsertParentalLeavePolicyRequest request
+    ) {
+        return ApiResponse.success("Parental leave policy updated", payrollService.upsertParentalLeavePolicy(request));
     }
 }

@@ -9,6 +9,7 @@ import com.worknest.common.api.PaginatedResponse;
 import com.worknest.common.api.PaginationSupport;
 import com.worknest.common.exception.BusinessException;
 import com.worknest.domain.entities.Company;
+import com.worknest.domain.entities.CompanyParentalLeavePolicyConfig;
 import com.worknest.domain.entities.CompanySickLeavePolicyConfig;
 import com.worknest.domain.entities.Employee;
 import com.worknest.domain.entities.LeaveBalance;
@@ -38,8 +39,11 @@ import com.worknest.features.payroll.dto.PayrollDtos.PayrollCalculationResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollEmployeeSummaryResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollMonthSummary;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollPeriodRequest;
+import com.worknest.features.payroll.dto.PayrollDtos.ParentalLeavePolicyResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.SickLeavePolicyResponse;
+import com.worknest.features.payroll.dto.PayrollDtos.UpsertParentalLeavePolicyRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.UpsertSickLeavePolicyRequest;
+import com.worknest.features.payroll.repository.CompanyParentalLeavePolicyConfigRepository;
 import com.worknest.features.payroll.repository.CompanySickLeavePolicyConfigRepository;
 import com.worknest.features.payroll.repository.PayrollAdjustmentRepository;
 import com.worknest.features.payroll.repository.PayrollResultRepository;
@@ -83,6 +87,7 @@ public class PayrollServiceImpl implements PayrollService {
     private final PayrollCalculationEngine calculationEngine;
     private final ObjectMapper objectMapper;
     private final CompanySickLeavePolicyConfigRepository sickLeavePolicyRepository;
+    private final CompanyParentalLeavePolicyConfigRepository parentalLeavePolicyRepository;
     private final CompanyRepository companyRepository;
     private final AttendanceDayRecordRepository attendanceDayRecordRepository;
     private final AuditLogService auditLogService;
@@ -256,6 +261,35 @@ public class PayrollServiceImpl implements PayrollService {
                 Map.of("percentage", cfg.getCompanyPaidPercentage(), "maxDays", cfg.getMaxCompanyPaidDays()),
                 Map.of("companyId", companyId));
         return new SickLeavePolicyResponse(cfg.getCompanyPaidPercentage(), cfg.getMaxCompanyPaidDays(), false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ParentalLeavePolicyResponse getParentalLeavePolicy() {
+        UUID companyId = principal().companyId();
+        return parentalLeavePolicyRepository.findByCompanyId(companyId)
+                .map(cfg -> new ParentalLeavePolicyResponse(cfg.getCompanyPaidPercentage(), cfg.getMaxCompanyPaidDays(), false))
+                .orElse(new ParentalLeavePolicyResponse(new BigDecimal("80.00"), 90, true));
+    }
+
+    @Override
+    public ParentalLeavePolicyResponse upsertParentalLeavePolicy(UpsertParentalLeavePolicyRequest request) {
+        UUID companyId = principal().companyId();
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "COMPANY_NOT_FOUND", "Company not found."));
+        CompanyParentalLeavePolicyConfig cfg = parentalLeavePolicyRepository.findByCompanyId(companyId)
+                .orElseGet(() -> {
+                    CompanyParentalLeavePolicyConfig c = new CompanyParentalLeavePolicyConfig();
+                    c.setCompany(company);
+                    return c;
+                });
+        cfg.setCompanyPaidPercentage(request.companyPaidPercentage().setScale(2, java.math.RoundingMode.HALF_UP));
+        cfg.setMaxCompanyPaidDays(request.maxCompanyPaidDays());
+        parentalLeavePolicyRepository.save(cfg);
+        audit("PARENTAL_POLICY_UPSERTED", "parental_leave_policy", companyId,
+                Map.of("percentage", cfg.getCompanyPaidPercentage(), "maxDays", cfg.getMaxCompanyPaidDays()),
+                Map.of("companyId", companyId));
+        return new ParentalLeavePolicyResponse(cfg.getCompanyPaidPercentage(), cfg.getMaxCompanyPaidDays(), false);
     }
 
     @Override

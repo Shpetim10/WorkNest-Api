@@ -9,7 +9,9 @@ import com.worknest.features.payroll.dto.PayrollDtos.PayrollCalculationResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollEmployeeSummaryResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollMonthSummary;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollPeriodRequest;
+import com.worknest.features.payroll.dto.PayrollDtos.ParentalLeavePolicyResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.SickLeavePolicyResponse;
+import com.worknest.features.payroll.dto.PayrollDtos.UpsertParentalLeavePolicyRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.UpsertSickLeavePolicyRequest;
 import java.util.List;
 import java.util.UUID;
@@ -54,6 +56,10 @@ public interface PayrollService {
     SickLeavePolicyResponse getSickLeavePolicy();
 
     SickLeavePolicyResponse upsertSickLeavePolicy(UpsertSickLeavePolicyRequest request);
+
+    ParentalLeavePolicyResponse getParentalLeavePolicy();
+
+    ParentalLeavePolicyResponse upsertParentalLeavePolicy(UpsertParentalLeavePolicyRequest request);
 
     /** Returns all persisted payroll periods for the current authenticated employee, newest first. */
     List<PayrollMonthSummary> listMyPayrollHistory();
