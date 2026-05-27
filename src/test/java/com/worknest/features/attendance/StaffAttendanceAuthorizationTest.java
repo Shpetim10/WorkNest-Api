@@ -21,6 +21,7 @@ import com.worknest.domain.enums.AttendancePolicySource;
 import com.worknest.features.attendance.application.AttendancePolicyResolver;
 import com.worknest.features.attendance.application.ResolvedAttendancePolicy;
 import com.worknest.features.attendance.application.StaffAttendanceServiceImpl;
+import org.springframework.context.ApplicationEventPublisher;
 import com.worknest.features.attendance.dto.EffectiveAttendancePolicyDto;
 import com.worknest.features.attendance.dto.ManualCheckInRequest;
 import com.worknest.features.attendance.repository.AttendanceDayRecordRepository;
@@ -64,6 +65,7 @@ class StaffAttendanceAuthorizationTest {
     @Mock private CompanyRepository companyRepository;
     @Mock private ObjectMapper objectMapper;
     @Mock private AttendancePolicyResolver attendancePolicyResolver;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks private StaffAttendanceServiceImpl service;
 

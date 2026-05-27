@@ -29,7 +29,7 @@ class AttendanceWorkHoursProviderTest {
     private WorkingDayCalculator workingDayCalculator;
 
     @Test
-    void fallsBackToDefaultHoursOnlyWhenNoAttendanceRecordsExist() {
+    void returnsZeroPayWhenNoAttendanceRecordsExist() {
         Company company = company();
         Employee employee = employee(company);
         PayrollContext context = context();
@@ -42,8 +42,9 @@ class AttendanceWorkHoursProviderTest {
         WorkHoursProvider.WorkHoursResult result = provider.getWorkedHours(
                 employee, context, new BigDecimal("22"), LocalDate.of(2026, 4, 1), LocalDate.of(2026, 4, 30));
 
-        assertThat(result.source()).isEqualTo(DefaultWorkHoursProvider.SOURCE);
-        assertThat(result.hours()).isEqualByComparingTo("176.0");
+        assertThat(result.source()).isEqualTo(AttendanceWorkHoursProvider.SOURCE);
+        assertThat(result.attendanceRecordsFound()).isFalse();
+        assertThat(result.hours()).isEqualByComparingTo("0.00");
     }
 
     @Test
