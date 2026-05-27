@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/companies/{companyId}/audit-log")
 @Tag(name = "Company Audit Log", description = "Company-scoped audit log API")
-public class AdminAuditLogController {
+public class CompanyAuditLogController {
 
     private final CompanyAuditLogService auditLogService;
 
