@@ -18,6 +18,7 @@ import com.worknest.features.company.repository.CompanyRepository;
 import com.worknest.features.employee.repository.EmployeeRepository;
 import com.worknest.features.leave.repository.LeaveBalanceRepository;
 import com.worknest.features.leave.repository.LeaveRequestRepository;
+import com.worknest.features.notification.application.NotificationService;
 import com.worknest.features.payroll.dto.PayrollDtos.AbsenceDetails;
 import com.worknest.features.payroll.dto.PayrollDtos.AdjustmentDetails;
 import com.worknest.features.payroll.dto.PayrollDtos.BasePayDetails;
@@ -73,6 +74,7 @@ class PayrollServiceImplTest {
     @Mock private CompanyRepository companyRepository;
     @Mock private AttendanceDayRecordRepository attendanceDayRecordRepository;
     @Mock private AuditLogService auditLogService;
+    @Mock private NotificationService notificationService;
 
     private PayrollServiceImpl service;
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
@@ -87,9 +89,10 @@ class PayrollServiceImplTest {
                 employeeRepository, userRepository, leaveRequestRepository,
                 leaveBalanceRepository, adjustmentRepository, resultRepository,
                 calculationEngine, objectMapper, sickLeavePolicyRepository,
-                companyRepository, attendanceDayRecordRepository, auditLogService);
+                companyRepository, attendanceDayRecordRepository, auditLogService,
+                notificationService);
         AuthSessionPrincipal principal = new AuthSessionPrincipal(
-                userId, "testuser", companyId, "test-slug", UUID.randomUUID(),
+                userId, "test.user@example.com", companyId, "test-slug", UUID.randomUUID(),
                 PlatformRole.ADMIN, PlatformAccess.WEB);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(principal, null, List.of()));
@@ -363,9 +366,9 @@ class PayrollServiceImplTest {
         var response = service.listAdminPayrollEmployees(2026, 5, null, 0, 20);
 
         assertThat(response.items()).hasSize(1);
-        assertThat(response.items().get(0).totalManualDeduction()).isEqualByComparingTo("50.00");
-        assertThat(response.items().get(0).totalDeductions()).isEqualByComparingTo("300.00"); // full deductions (statutory + manual + leave)
-        assertThat(response.items().get(0).deductions()).isEqualByComparingTo("50.00"); // alias for manual deductions only
+        assertThat(response.items().getFirst().totalManualDeduction()).isEqualByComparingTo("50.00");
+        assertThat(response.items().getFirst().totalDeductions()).isEqualByComparingTo("300.00"); // full deductions (statutory + manual + leave)
+        assertThat(response.items().getFirst().deductions()).isEqualByComparingTo("50.00"); // alias for manual deductions only
     }
 
     // --- Batch calculation skip logic ---
@@ -385,7 +388,7 @@ class PayrollServiceImplTest {
         assertThat(response.successfulCalculations()).isEqualTo(0);
         assertThat(response.skippedCalculations()).isEqualTo(1);
         assertThat(response.failedCalculations()).isEqualTo(0);
-        assertThat(response.results().get(0).errorCode()).isEqualTo("PAYROLL_PERIOD_LOCKED");
+        assertThat(response.results().getFirst().errorCode()).isEqualTo("PAYROLL_PERIOD_LOCKED");
         verify(calculationEngine, never()).calculate(any(), any(), any(), any(), any(), any(), any(), any(Boolean.class));
     }
 
@@ -401,7 +404,7 @@ class PayrollServiceImplTest {
 
         assertThat(response.skippedCalculations()).isEqualTo(1);
         assertThat(response.failedCalculations()).isEqualTo(0);
-        assertThat(response.results().get(0).errorCode()).isEqualTo("CONTRACT_EXPIRED");
+        assertThat(response.results().getFirst().errorCode()).isEqualTo("CONTRACT_EXPIRED");
     }
 
     @Test
@@ -416,7 +419,7 @@ class PayrollServiceImplTest {
 
         assertThat(response.skippedCalculations()).isEqualTo(1);
         assertThat(response.failedCalculations()).isEqualTo(0);
-        assertThat(response.results().get(0).errorCode()).isEqualTo("NO_ACTIVE_CONTRACT_IN_PERIOD");
+        assertThat(response.results().getFirst().errorCode()).isEqualTo("NO_ACTIVE_CONTRACT_IN_PERIOD");
     }
 
     // --- Helpers ---
