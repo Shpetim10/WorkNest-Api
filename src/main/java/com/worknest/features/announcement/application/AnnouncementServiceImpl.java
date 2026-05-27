@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import com.worknest.features.notification.application.NotificationService;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -47,6 +48,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     private final EmployeeRepository employeeRepository;
     private final EntityManager entityManager;
     private final ApplicationEventPublisher eventPublisher;
+    private final NotificationService notificationService;
 
     @Override
     public AnnouncementListResponse create(UUID companyId, CreateAnnouncementRequest request) {
@@ -78,6 +80,10 @@ public class AnnouncementServiceImpl implements AnnouncementService {
         announcement = announcementRepository.save(announcement);
         AnnouncementListResponse response = toListResponse(announcement);
         eventPublisher.publishEvent(new AnnouncementCreatedDomainEvent(companyId, announcement.getId(), principal.userId(), response));
+
+        // Create in-app notifications for targeted employees
+        notificationService.createAnnouncementNotifications(announcement);
+
         return response;
     }
 

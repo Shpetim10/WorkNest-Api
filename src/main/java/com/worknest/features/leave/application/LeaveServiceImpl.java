@@ -9,6 +9,9 @@ import com.worknest.domain.enums.EmploymentStatus;
 import com.worknest.domain.enums.LeaveStatus;
 import com.worknest.domain.enums.LeaveType;
 import com.worknest.domain.enums.PayrollStatus;
+import com.worknest.domain.enums.NotificationType;
+import com.worknest.domain.enums.NotificationTargetType;
+import com.worknest.features.notification.application.NotificationService;
 import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.employee.repository.EmployeeRepository;
 import com.worknest.features.leave.dto.ApproveLeaveRequestDto;
@@ -54,6 +57,7 @@ public class LeaveServiceImpl implements LeaveService {
     private final UserRepository userRepository;
     private final PayrollResultRepository payrollResultRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final NotificationService notificationService;
 
     @Override
     public List<LeaveBalanceDto> getMyBalance() {
@@ -173,6 +177,21 @@ public class LeaveServiceImpl implements LeaveService {
                 principal.companyId(), requestId, request.getEmployee().getId(),
                 employeeUserId, principal.userId(), request.getLeaveType()
         ));
+
+        // Create in-app notification
+        String message = "Your " + request.getLeaveType().name().toLowerCase() + " leave (" + request.getStartDate() + " to " + request.getEndDate() + ") has been approved";
+        if (request.getApprovalNote() != null && !request.getApprovalNote().isBlank()) {
+            message += ": " + request.getApprovalNote();
+        }
+        notificationService.createNotification(
+                request.getCompany(),
+                request.getEmployee().getUser(),
+                NotificationType.LEAVE_APPROVED,
+                "Leave Request Approved",
+                message,
+                request.getId(),
+                NotificationTargetType.LEAVE_REQUEST
+        );
     }
 
     @Override
@@ -197,6 +216,21 @@ public class LeaveServiceImpl implements LeaveService {
                 principal.companyId(), requestId, request.getEmployee().getId(),
                 employeeUserId, principal.userId(), request.getLeaveType(), dto.reason()
         ));
+
+        // Create in-app notification
+        String message = "Your " + request.getLeaveType().name().toLowerCase() + " leave (" + request.getStartDate() + " to " + request.getEndDate() + ") has been rejected";
+        if (dto.reason() != null && !dto.reason().isBlank()) {
+            message += ": " + dto.reason();
+        }
+        notificationService.createNotification(
+                request.getCompany(),
+                request.getEmployee().getUser(),
+                NotificationType.LEAVE_REJECTED,
+                "Leave Request Rejected",
+                message,
+                request.getId(),
+                NotificationTargetType.LEAVE_REQUEST
+        );
     }
 
     @Override
@@ -221,6 +255,11 @@ public class LeaveServiceImpl implements LeaveService {
         }
 
         if (request.getStatus() == LeaveStatus.APPROVED) {
+            if (!LocalDate.now().isBefore(request.getStartDate())) {
+                throw new BusinessException(HttpStatus.CONFLICT, "LEAVE_ALREADY_STARTED",
+                        "Approved leave requests can only be cancelled before the leave start date.");
+            }
+
             ensurePayrollNotLocked(employee, request);
 
             leaveBalanceRepository

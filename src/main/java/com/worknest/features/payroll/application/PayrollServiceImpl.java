@@ -20,6 +20,9 @@ import com.worknest.domain.enums.PayrollAdjustmentType;
 import com.worknest.domain.enums.PayrollCalculationStatus;
 import com.worknest.domain.enums.PayrollStatus;
 import com.worknest.domain.enums.PlatformRole;
+import com.worknest.domain.enums.NotificationType;
+import com.worknest.domain.enums.NotificationTargetType;
+import com.worknest.features.notification.application.NotificationService;
 import com.worknest.features.attendance.repository.AttendanceDayRecordRepository;
 import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.company.repository.CompanyRepository;
@@ -83,6 +86,7 @@ public class PayrollServiceImpl implements PayrollService {
     private final CompanyRepository companyRepository;
     private final AttendanceDayRecordRepository attendanceDayRecordRepository;
     private final AuditLogService auditLogService;
+    private final NotificationService notificationService;
 
     @Override
     public PayrollAdjustmentResponse addBonus(UUID employeeId, PayrollAdjustmentRequest request) {
@@ -309,6 +313,20 @@ public class PayrollServiceImpl implements PayrollService {
                 Map.of("year", request.year(), "month", request.month(), "netPay", result.getNetPay()),
                 Map.of("companyId", principal.companyId(), "employeeId", employeeId,
                         "actorUserId", principal.userId(), "from", "CALCULATED", "to", "APPROVED"));
+
+        // Create in-app notification for the employee
+        String monthFormatted = String.format("%02d", result.getMonth());
+        String period = result.getYear() + "-" + monthFormatted;
+        notificationService.createNotification(
+                result.getCompany(),
+                result.getEmployee().getUser(),
+                NotificationType.PAYSLIP_READY,
+                "Payslip Ready",
+                "Your payslip for " + period + " is now available",
+                result.getId(),
+                NotificationTargetType.PAYSLIP
+        );
+
         return responseFromSnapshot(result, false);
     }
 

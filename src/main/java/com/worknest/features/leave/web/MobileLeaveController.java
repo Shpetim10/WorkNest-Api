@@ -57,4 +57,12 @@ public class MobileLeaveController {
         leaveService.submitRequest(request);
         return ApiResponse.success("Leave request submitted successfully", null);
     }
+
+    @PostMapping("/requests/{requestId}/cancel")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('EMPLOYEE', 'STAFF', 'ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Cancel a pending or approved leave request")
+    public ApiResponse<Void> cancel(@PathVariable UUID requestId) {
+        leaveService.cancelRequest(requestId);
+        return ApiResponse.success("Leave request cancelled successfully", null);
+    }
 }

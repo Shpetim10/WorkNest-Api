@@ -22,6 +22,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -122,5 +123,30 @@ public class PasswordResetController {
     ) {
         GenericMessageResponse response = changePasswordService.changePassword(request, principal);
         return ResponseEntity.ok(ApiResponse.success(response.message(), response));
+    }
+
+    @PutMapping("/change-password")
+    @PreAuthorize("isAuthenticated()")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+            summary = "Change Password (PUT)",
+            description = "Changes the password for the currently authenticated user. Requires the current password for verification."
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Password changed successfully")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "400",
+            description = "New password does not meet strength requirements",
+            content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "401",
+            description = "Current password is incorrect",
+            content = @Content(schema = @Schema(implementation = com.worknest.common.api.ApiErrorResponse.class))
+    )
+    public ResponseEntity<ApiResponse<GenericMessageResponse>> changePasswordPut(
+            @RequestBody @Valid ChangePasswordRequest request,
+            @AuthenticationPrincipal AuthSessionPrincipal principal
+    ) {
+        return changePassword(request, principal);
     }
 }
