@@ -11,6 +11,14 @@ public interface StripeService {
 
     void cancelSubscription(String stripeSubscriptionId);
 
+    void updatePaymentMethod(String stripeCustomerId, String paymentMethodId);
+
+    com.stripe.model.PaymentMethod getDefaultPaymentMethod(String stripeCustomerId);
+
+    com.stripe.model.Subscription updateSubscriptionPlan(String stripeSubscriptionId, String newPriceId);
+
+    com.stripe.model.Subscription createSubscriptionImmediate(String stripeCustomerId, String priceId);
+
     com.stripe.model.billingportal.Session createBillingPortalSession(String customerId, String returnUrl);
 
     Event constructWebhookEvent(String payload, String sigHeader);

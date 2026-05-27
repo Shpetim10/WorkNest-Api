@@ -108,4 +108,44 @@
         </insert>
     </changeSet>
 
+
+    <changeSet id="021-migrate-subscription-plan-values" author="worknest">
+        <update tableName="companies">
+            <column name="subscription_plan" value="FOUNDATION"/>
+            <where>subscription_plan = 'BASIC'</where>
+        </update>
+        <update tableName="companies">
+            <column name="subscription_plan" value="PROFESSIONAL"/>
+            <where>subscription_plan = 'PREMIUM'</where>
+        </update>
+    </changeSet>
+
+    <changeSet id="021-migrate-subscription-status-values" author="worknest">
+        <update tableName="companies">
+            <column name="subscription_status" value="TRIALING"/>
+            <where>subscription_status = 'TRIAL'</where>
+        </update>
+        <update tableName="companies">
+            <column name="subscription_status" value="CANCELED"/>
+            <where>subscription_status = 'CANCELLED'</where>
+        </update>
+        <update tableName="companies">
+            <column name="subscription_status" value="PAST_DUE"/>
+            <where>subscription_status = 'NOT_PAID'</where>
+        </update>
+        <update tableName="companies">
+            <column name="subscription_status" value="ACTIVE"/>
+            <where>subscription_status = 'INACTIVE'</where>
+        </update>
+    </changeSet>
+
+    <changeSet id="021-add-deactivation-requested-at" author="worknest">
+        <preConditions onFail="MARK_RAN">
+            <not><columnExists tableName="companies" columnName="deactivation_requested_at"/></not>
+        </preConditions>
+        <addColumn tableName="companies">
+            <column name="deactivation_requested_at" type="timestamp with time zone"/>
+        </addColumn>
+    </changeSet>
+
 </databaseChangeLog>

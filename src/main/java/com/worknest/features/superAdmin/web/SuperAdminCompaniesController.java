@@ -7,6 +7,7 @@ import com.worknest.features.superAdmin.application.SuperAdminCompaniesService;
 import com.worknest.features.superAdmin.dto.CompanyRowDto;
 import com.worknest.features.superAdmin.dto.ExtendTrialRequest;
 import com.worknest.features.superAdmin.dto.ExtendTrialResponse;
+import com.worknest.features.superAdmin.dto.PendingDeactivationDto;
 import com.worknest.features.superAdmin.dto.SuspendCompanyRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -64,5 +65,25 @@ public class SuperAdminCompaniesController {
             @Valid @RequestBody ExtendTrialRequest request
     ) {
         return ApiResponse.success("Trial extended successfully", companiesService.extendTrial(companyId, request));
+    }
+
+    @GetMapping("/pending-deactivation")
+    @PreAuthorize("@superAdminSecurity.isSuperAdmin()")
+    @Operation(summary = "List companies pending deactivation", description = "Returns companies that have requested deactivation and are within the 30-day deletion window")
+    public ApiResponse<PaginatedResponse<PendingDeactivationDto>> listPendingDeactivation(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        return ApiResponse.success(
+                "Pending deactivations retrieved successfully",
+                companiesService.listPendingDeactivation(PaginationSupport.pageable(page, size))
+        );
+    }
+
+    @PostMapping("/{companyId}/reactivate")
+    @PreAuthorize("@superAdminSecurity.isSuperAdmin()")
+    @Operation(summary = "Reactivate a company", description = "Cancels a pending deactivation request, keeping the company active")
+    public ApiResponse<CompanyRowDto> reactivateCompany(@PathVariable UUID companyId) {
+        return ApiResponse.success("Company reactivated successfully", companiesService.reactivateCompany(companyId));
     }
 }

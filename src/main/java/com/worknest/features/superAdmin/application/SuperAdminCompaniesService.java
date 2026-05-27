@@ -4,6 +4,7 @@ import com.worknest.common.api.PaginatedResponse;
 import com.worknest.features.superAdmin.dto.CompanyRowDto;
 import com.worknest.features.superAdmin.dto.ExtendTrialRequest;
 import com.worknest.features.superAdmin.dto.ExtendTrialResponse;
+import com.worknest.features.superAdmin.dto.PendingDeactivationDto;
 import com.worknest.features.superAdmin.dto.SuspendCompanyRequest;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
@@ -15,4 +16,8 @@ public interface SuperAdminCompaniesService {
     CompanyRowDto toggleSuspend(UUID companyId, SuspendCompanyRequest request);
 
     ExtendTrialResponse extendTrial(UUID companyId, ExtendTrialRequest request);
+
+    PaginatedResponse<PendingDeactivationDto> listPendingDeactivation(Pageable pageable);
+
+    CompanyRowDto reactivateCompany(UUID companyId);
 }

@@ -216,7 +216,7 @@ public class AuthLoginServiceImpl implements AuthLoginService {
 
         List<RoleAssignment> validAssignments = passwordMatchedUsers.stream()
                 .flatMap(user -> roleAssignmentRepository.findAllByUserIdAndIsActiveTrue(user.getId()).stream())
-                .filter(assignment -> isCompanyUsableForLogin(assignment.getCompany()))
+                .filter(assignment -> isCompanyUsableForLogin(assignment))
                 .filter(assignment -> isAssignmentValidForPlatform(assignment, request.platformAccess()))
                 .sorted(Comparator
                         .comparing((RoleAssignment assignment) -> assignment.getCompany().getName(), String.CASE_INSENSITIVE_ORDER)
@@ -231,13 +231,14 @@ public class AuthLoginServiceImpl implements AuthLoginService {
         return new AuthenticatedLoginScope(sessionUser, passwordMatchedUsers, validAssignments);
     }
 
-    private boolean isCompanyUsableForLogin(Company company) {
-        if (company == null) {
-            return false;
+    private boolean isCompanyUsableForLogin(RoleAssignment assignment) {
+        Company company = assignment.getCompany();
+        if (company == null) return false;
+        if (company.getStatus() == CompanyStatus.DELETED || company.getDeletedAt() != null) return false;
+        if (company.getStatus() == CompanyStatus.SUSPENDED) {
+            return company.getDeactivationRequestedAt() != null;
         }
-        return company.getStatus() != CompanyStatus.SUSPENDED
-                && company.getStatus() != CompanyStatus.DELETED
-                && company.getDeletedAt() == null;
+        return true;
     }
 
     private void validateUserBeforePasswordCheck(User user, String email, PlatformAccess platformAccess, String ipAddress, Instant now) {
@@ -322,17 +323,23 @@ public class AuthLoginServiceImpl implements AuthLoginService {
             return false;
         }
 
-        PlatformAccess assignmentPlatformAccess = assignment.getPlatformAccess();
-        if (assignmentPlatformAccess == null || requestedPlatformAccess == null) {
+        if (requestedPlatformAccess == null) {
             return false;
         }
 
+        PlatformAccess assignmentPlatformAccess = assignment.getPlatformAccess();
+
         return switch (assignment.getRole()) {
-            case ADMIN, SUPERADMIN -> requestedPlatformAccess == PlatformAccess.WEB
+            // SUPERADMIN is platform-level; the stored assignment platformAccess is irrelevant
+            case SUPERADMIN -> requestedPlatformAccess == PlatformAccess.SUPERADMIN_WEB;
+            case ADMIN -> assignmentPlatformAccess != null
+                    && requestedPlatformAccess == PlatformAccess.WEB
                     && supportsRequestedPlatform(assignmentPlatformAccess, requestedPlatformAccess);
-            case EMPLOYEE -> requestedPlatformAccess == PlatformAccess.MOBILE
+            case EMPLOYEE -> assignmentPlatformAccess != null
+                    && requestedPlatformAccess == PlatformAccess.MOBILE
                     && supportsRequestedPlatform(assignmentPlatformAccess, requestedPlatformAccess);
-            case STAFF -> supportsRequestedPlatform(assignmentPlatformAccess, requestedPlatformAccess);
+            case STAFF -> assignmentPlatformAccess != null
+                    && supportsRequestedPlatform(assignmentPlatformAccess, requestedPlatformAccess);
         };
     }
 

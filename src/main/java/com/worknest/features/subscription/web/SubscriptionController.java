@@ -3,6 +3,10 @@ package com.worknest.features.subscription.web;
 import com.worknest.common.api.ApiResponse;
 import com.worknest.features.subscription.application.SubscriptionService;
 import com.worknest.features.subscription.dto.BillingPortalResponse;
+import com.worknest.features.subscription.dto.ChangePlanRequest;
+import com.worknest.features.subscription.dto.DeactivationStatusResponse;
+import com.worknest.features.subscription.dto.PaymentMethodResponse;
+import com.worknest.features.subscription.dto.UpdatePaymentMethodRequest;
 import com.worknest.features.subscription.dto.PlanDetailsResponse;
 import com.worknest.features.subscription.dto.StartTrialRequest;
 import com.worknest.features.subscription.dto.StartTrialResponse;
@@ -14,9 +18,11 @@ import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -52,6 +58,16 @@ public class SubscriptionController {
         return ApiResponse.success("Subscription retrieved successfully.", response);
     }
 
+    @PutMapping("/plan")
+    @Operation(summary = "Change subscription plan", description = "Upgrades or downgrades the current subscription plan via Stripe with proration.")
+    public ApiResponse<SubscriptionResponse> changePlan(
+            @AuthenticationPrincipal AuthSessionPrincipal principal,
+            @Valid @RequestBody ChangePlanRequest request
+    ) {
+        SubscriptionResponse response = subscriptionService.changePlan(principal.companyId(), request);
+        return ApiResponse.success("Plan changed successfully.", response);
+    }
+
     @PostMapping("/billing-portal")
     @Operation(summary = "Open Stripe billing portal", description = "Returns a Stripe Billing Portal URL for the company to manage payment methods, invoices, and plan changes.")
     public ApiResponse<BillingPortalResponse> createBillingPortalSession(
@@ -70,5 +86,55 @@ public class SubscriptionController {
     public ApiResponse<List<PlanDetailsResponse>> getAllPlans() {
         List<PlanDetailsResponse> plans = subscriptionService.getAllPlans();
         return ApiResponse.success("Plans retrieved successfully.", plans);
+    }
+
+    @PostMapping("/cancel")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN')")
+    @Operation(summary = "Cancel subscription", description = "Cancels the active Stripe subscription immediately. The account remains accessible but billing stops.")
+    public ApiResponse<SubscriptionResponse> cancelSubscription(
+            @AuthenticationPrincipal AuthSessionPrincipal principal
+    ) {
+        SubscriptionResponse response = subscriptionService.cancelSubscription(principal.companyId());
+        return ApiResponse.success("Subscription canceled.", response);
+    }
+
+    @GetMapping("/payment-method")
+    @Operation(summary = "Get saved payment method", description = "Returns the card brand, last 4 digits, and expiry for the company's default Stripe payment method.")
+    public ApiResponse<PaymentMethodResponse> getPaymentMethod(
+            @AuthenticationPrincipal AuthSessionPrincipal principal
+    ) {
+        PaymentMethodResponse response = subscriptionService.getPaymentMethod(principal.companyId());
+        return ApiResponse.success("Payment method retrieved.", response);
+    }
+
+    @PostMapping("/payment-method")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN')")
+    @Operation(summary = "Update payment method", description = "Attaches a new card as the default payment method for the company's Stripe customer.")
+    public ApiResponse<Void> updatePaymentMethod(
+            @AuthenticationPrincipal AuthSessionPrincipal principal,
+            @Valid @RequestBody UpdatePaymentMethodRequest request
+    ) {
+        subscriptionService.updatePaymentMethod(principal.companyId(), request.paymentMethodId());
+        return ApiResponse.success("Payment method updated.", null);
+    }
+
+    @PostMapping("/deactivate")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN')")
+    @Operation(summary = "Request account deactivation", description = "Schedules the company for deletion in 30 days. The company remains accessible during this period.")
+    public ApiResponse<DeactivationStatusResponse> deactivateAccount(
+            @AuthenticationPrincipal AuthSessionPrincipal principal
+    ) {
+        DeactivationStatusResponse response = subscriptionService.deactivateAccount(principal.companyId());
+        return ApiResponse.success("Deactivation requested. Your account will be deleted in 30 days.", response);
+    }
+
+    @PostMapping("/reactivate")
+    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN')")
+    @Operation(summary = "Cancel account deactivation", description = "Cancels a pending deactivation request, keeping the company active.")
+    public ApiResponse<DeactivationStatusResponse> reactivateAccount(
+            @AuthenticationPrincipal AuthSessionPrincipal principal
+    ) {
+        DeactivationStatusResponse response = subscriptionService.reactivateAccount(principal.companyId());
+        return ApiResponse.success("Deactivation cancelled. Your account is now active.", response);
     }
 }

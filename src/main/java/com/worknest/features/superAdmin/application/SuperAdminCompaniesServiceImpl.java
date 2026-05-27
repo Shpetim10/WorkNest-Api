@@ -4,13 +4,16 @@ import com.worknest.audit.domain.PlatformEvent;
 import com.worknest.common.api.PaginatedResponse;
 import com.worknest.common.exception.BusinessException;
 import com.worknest.domain.entities.Company;
+import com.worknest.domain.entities.Subscription;
 import com.worknest.domain.enums.CompanyStatus;
 import com.worknest.domain.enums.SubscriptionPlan;
 import com.worknest.domain.enums.SubscriptionStatus;
 import com.worknest.features.company.repository.CompanyRepository;
+import com.worknest.features.subscription.repository.SubscriptionRepository;
 import com.worknest.features.superAdmin.dto.CompanyRowDto;
 import com.worknest.features.superAdmin.dto.ExtendTrialRequest;
 import com.worknest.features.superAdmin.dto.ExtendTrialResponse;
+import com.worknest.features.superAdmin.dto.PendingDeactivationDto;
 import com.worknest.features.superAdmin.dto.SuspendCompanyRequest;
 import com.worknest.features.notification.email.service.CompanyStatusEmailService;
 import com.worknest.features.superAdmin.repository.SuperAdminCompanyQueryRepository;
@@ -21,8 +24,11 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -40,6 +46,7 @@ public class SuperAdminCompaniesServiceImpl implements SuperAdminCompaniesServic
 
     private final SuperAdminCompanyQueryRepository companyQueryRepository;
     private final CompanyRepository companyRepository;
+    private final SubscriptionRepository subscriptionRepository;
     private final EntityManager entityManager;
     private final CompanyStatusEmailService companyStatusEmailService;
     private final SuperAdminSecurity superAdminSecurity;
@@ -48,10 +55,17 @@ public class SuperAdminCompaniesServiceImpl implements SuperAdminCompaniesServic
     @Transactional(readOnly = true)
     public PaginatedResponse<CompanyRowDto> listCompanies(String search, String status, String plan, Pageable pageable) {
         Page<Company> page = companyQueryRepository.findCompanies(search, status, plan, pageable);
-        Map<UUID, Long> employeeCounts = companyQueryRepository.countEmployeesByCompanyIds(
-                page.getContent().stream().map(Company::getId).toList()
-        );
-        return PaginatedResponse.from(page.map(company -> toDto(company, employeeCounts.getOrDefault(company.getId(), 0L))));
+        List<UUID> companyIds = page.getContent().stream().map(Company::getId).toList();
+
+        Map<UUID, Long> employeeCounts = companyQueryRepository.countEmployeesByCompanyIds(companyIds);
+        Map<UUID, Subscription> subscriptions = subscriptionRepository.findLatestPerCompany(companyIds)
+                .stream().collect(Collectors.toMap(Subscription::getCompanyId, s -> s, (a, b) -> a));
+
+        return PaginatedResponse.from(page.map(company -> toDto(
+                company,
+                employeeCounts.getOrDefault(company.getId(), 0L),
+                subscriptions.get(company.getId())
+        )));
     }
 
     @Override
@@ -84,7 +98,7 @@ public class SuperAdminCompaniesServiceImpl implements SuperAdminCompaniesServic
             companyStatusEmailService.sendCompanyUnsuspendedEmail(company);
         }
 
-        return toDto(company, countEmployees(company.getId()));
+        return toDto(company, countEmployees(company.getId()), latestSubscription(company.getId()));
     }
 
     @Override
@@ -101,14 +115,14 @@ public class SuperAdminCompaniesServiceImpl implements SuperAdminCompaniesServic
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "COMPANY_NOT_FOUND",
                         "Company not found: " + companyId));
 
-        String oldEndDate = subscriptionEndDate(company);
+        String oldEndDate = resolveEndDate(company.getSubscriptionStatus(), company.getTrialEndsAt(), company.getSubscriptionRenewalAt());
         company.setTrialEndsAt(toEndOfDayUtc(trialEndDate));
         if (company.getSubscriptionStatus() == null) {
-            company.setSubscriptionStatus(SubscriptionStatus.TRIAL);
+            company.setSubscriptionStatus(SubscriptionStatus.TRIALING);
         }
         companyRepository.save(company);
 
-        String newEndDate = subscriptionEndDate(company);
+        String newEndDate = resolveEndDate(company.getSubscriptionStatus(), company.getTrialEndsAt(), company.getSubscriptionRenewalAt());
         String description = "Trial extended from %s to %s".formatted(
                 oldEndDate != null ? oldEndDate : "none",
                 newEndDate
@@ -124,7 +138,27 @@ public class SuperAdminCompaniesServiceImpl implements SuperAdminCompaniesServic
         return new ExtendTrialResponse(company.getId().toString(), newEndDate);
     }
 
-    private CompanyRowDto toDto(Company c, long employeeCount) {
+    private CompanyRowDto toDto(Company c, long employeeCount, Subscription sub) {
+        // Prefer live subscription table data; fall back to Company entity fields
+        SubscriptionPlan plan = sub != null ? sub.getPlan() : c.getSubscriptionPlan();
+        SubscriptionStatus subStatus = sub != null ? sub.getStatus() : c.getSubscriptionStatus();
+        Instant trialEndsAtInstant = sub != null ? sub.getTrialEndsAt() : c.getTrialEndsAt();
+        Instant renewalInstant = sub != null ? sub.getCurrentPeriodEnd() : c.getSubscriptionRenewalAt();
+
+        // If the trial end date has passed but status is still TRIALING (webhook missed in dev),
+        // treat it as ACTIVE so the UI shows the correct state
+        if (subStatus == SubscriptionStatus.TRIALING
+                && trialEndsAtInstant != null
+                && trialEndsAtInstant.isBefore(Instant.now())) {
+            subStatus = SubscriptionStatus.ACTIVE;
+        }
+
+        String trialEndsAt = trialEndsAtInstant != null
+                ? ISO_DATE_FMT.format(trialEndsAtInstant.atZone(ZoneOffset.UTC).toLocalDate())
+                : null;
+
+        String subscriptionEndDate = resolveEndDate(subStatus, trialEndsAtInstant, renewalInstant);
+
         return new CompanyRowDto(
                 c.getId().toString(),
                 c.getName(),
@@ -133,12 +167,20 @@ public class SuperAdminCompaniesServiceImpl implements SuperAdminCompaniesServic
                 c.getNipt() != null ? c.getNipt() : "",
                 c.getNipt() != null ? c.getNipt() : "",
                 c.getEmail(),
-                planLabel(c.getSubscriptionPlan()),
+                planLabel(plan),
                 employeeCount,
                 statusLabel(c.getStatus()),
                 DATE_FMT.format(c.getCreatedAt()),
-                subscriptionEndDate(c)
+                subscriptionEndDate,
+                subStatus != null ? subStatus.name() : null,
+                trialEndsAt,
+                c.getDeactivationRequestedAt() != null ? c.getDeactivationRequestedAt().toString() : null,
+                c.getDeletionScheduledAt() != null ? c.getDeletionScheduledAt().toString() : null
         );
+    }
+
+    private Subscription latestSubscription(UUID companyId) {
+        return subscriptionRepository.findTopByCompanyIdOrderByCreatedAtDesc(companyId).orElse(null);
     }
 
     private long countEmployees(UUID companyId) {
@@ -151,8 +193,6 @@ public class SuperAdminCompaniesServiceImpl implements SuperAdminCompaniesServic
             return "";
         }
         return switch (plan) {
-            case BASIC -> "Starter";
-            case PREMIUM -> "Professional";
             case FOUNDATION -> "Foundation";
             case GROWTH -> "Growth";
             case PROFESSIONAL -> "Professional";
@@ -163,16 +203,15 @@ public class SuperAdminCompaniesServiceImpl implements SuperAdminCompaniesServic
         return status == CompanyStatus.SUSPENDED ? "suspended" : "active";
     }
 
-    private String subscriptionEndDate(Company company) {
+    private String resolveEndDate(SubscriptionStatus status, Instant trialEndsAt, Instant renewalAt) {
         Instant end = null;
-        if (company.getSubscriptionStatus() == SubscriptionStatus.TRIAL && company.getTrialEndsAt() != null) {
-            end = company.getTrialEndsAt();
-        } else if (company.getSubscriptionRenewalAt() != null) {
-            end = company.getSubscriptionRenewalAt();
-        } else if (company.getTrialEndsAt() != null) {
-            end = company.getTrialEndsAt();
+        if (status == SubscriptionStatus.TRIALING && trialEndsAt != null) {
+            end = trialEndsAt;
+        } else if (renewalAt != null) {
+            end = renewalAt;
+        } else if (trialEndsAt != null) {
+            end = trialEndsAt;
         }
-
         return end != null ? ISO_DATE_FMT.format(end.atZone(ZoneOffset.UTC).toLocalDate()) : null;
     }
 
@@ -187,6 +226,52 @@ public class SuperAdminCompaniesServiceImpl implements SuperAdminCompaniesServic
             throw new BusinessException(HttpStatus.BAD_REQUEST, "INVALID_TRIAL_END_DATE",
                     "Trial end date must use YYYY-MM-DD format");
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PaginatedResponse<PendingDeactivationDto> listPendingDeactivation(Pageable pageable) {
+        Page<Company> page = companyQueryRepository.findPendingDeactivation(pageable);
+        return PaginatedResponse.from(page.map(this::toPendingDeactivationDto));
+    }
+
+    @Override
+    @Transactional
+    public CompanyRowDto reactivateCompany(UUID companyId) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "COMPANY_NOT_FOUND",
+                        "Company not found: " + companyId));
+
+        if (company.getDeactivationRequestedAt() == null) {
+            throw new BusinessException(HttpStatus.CONFLICT, "NO_DEACTIVATION_REQUESTED",
+                    "No pending deactivation request found for company: " + companyId);
+        }
+
+        company.setStatus(CompanyStatus.ACTIVE);
+        company.setDeactivationRequestedAt(null);
+        company.setDeletionScheduledAt(null);
+        companyRepository.save(company);
+
+        entityManager.persist(new PlatformEvent("COMPANY_REACTIVATED", company.getId(), company.getName(),
+                superAdminSecurity.currentPrincipal().map(p -> p.userId()).orElse(null), null));
+
+        return toDto(company, countEmployees(company.getId()), latestSubscription(company.getId()));
+    }
+
+    private PendingDeactivationDto toPendingDeactivationDto(Company c) {
+        Instant deactivationRequestedAt = c.getDeactivationRequestedAt();
+        Instant deletionScheduledAt = c.getDeletionScheduledAt();
+        long daysUntilDeletion = deletionScheduledAt != null
+                ? ChronoUnit.DAYS.between(Instant.now(), deletionScheduledAt)
+                : 0L;
+        return new PendingDeactivationDto(
+                c.getId().toString(),
+                c.getName(),
+                c.getEmail(),
+                deactivationRequestedAt != null ? ISO_DATE_FMT.format(deactivationRequestedAt.atZone(ZoneOffset.UTC).toLocalDate()) : null,
+                deletionScheduledAt != null ? ISO_DATE_FMT.format(deletionScheduledAt.atZone(ZoneOffset.UTC).toLocalDate()) : null,
+                Math.max(daysUntilDeletion, 0L)
+        );
     }
 
     private Instant toEndOfDayUtc(LocalDate date) {

@@ -69,7 +69,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
         User user = existingToken.getUser();
         validateUser(user);
-        validateCompany(activeRoleAssignment.getCompany());
+        validateCompany(activeRoleAssignment);
 
         Instant accessTokenExpiresAt = now.plus(jwtProperties.getAccessTokenExpiry());
         Instant refreshTokenExpiresAt = now.plus(jwtProperties.getRefreshTokenExpiry());
@@ -234,8 +234,18 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         }
     }
 
-    private void validateCompany(Company company) {
-        if (company.getStatus() != CompanyStatus.ACTIVE || company.getDeletedAt() != null) {
+    private void validateCompany(RoleAssignment roleAssignment) {
+        Company company = roleAssignment.getCompany();
+        if (company.getDeletedAt() != null || company.getStatus() == CompanyStatus.DELETED) {
+            throw new AuthenticationFailedException("COMPANY_INACTIVE", "Company account is no longer active");
+        }
+        if (company.getStatus() == CompanyStatus.SUSPENDED) {
+            if (company.getDeactivationRequestedAt() == null) {
+                throw new AuthenticationFailedException("COMPANY_INACTIVE", "Company account is no longer active");
+            }
+            return;
+        }
+        if (company.getStatus() != CompanyStatus.ACTIVE) {
             throw new AuthenticationFailedException("COMPANY_INACTIVE", "Company account is no longer active");
         }
     }

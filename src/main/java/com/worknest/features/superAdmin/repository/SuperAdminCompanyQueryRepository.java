@@ -100,11 +100,21 @@ public class SuperAdminCompanyQueryRepository {
         }
     }
 
+    public Page<Company> findPendingDeactivation(Pageable pageable) {
+        String dataJpql = "SELECT c FROM Company c WHERE c.deactivationRequestedAt IS NOT NULL AND c.deletedAt IS NULL ORDER BY c.deactivationRequestedAt ASC";
+        String countJpql = "SELECT COUNT(c) FROM Company c WHERE c.deactivationRequestedAt IS NOT NULL AND c.deletedAt IS NULL";
+
+        List<Company> companies = entityManager.createQuery(dataJpql, Company.class)
+                .setFirstResult((int) pageable.getOffset())
+                .setMaxResults(pageable.getPageSize())
+                .getResultList();
+
+        long total = entityManager.createQuery(countJpql, Long.class).getSingleResult();
+
+        return new PageImpl<>(companies, pageable, total);
+    }
+
     private SubscriptionPlan parsePlan(String plan) {
-        return switch (plan.trim().toLowerCase()) {
-            case "starter", "basic" -> SubscriptionPlan.BASIC;
-            case "professional", "premium" -> SubscriptionPlan.PREMIUM;
-            default -> SubscriptionPlan.valueOf(plan.toUpperCase());
-        };
+        return SubscriptionPlan.valueOf(plan.trim().toUpperCase());
     }
 }
