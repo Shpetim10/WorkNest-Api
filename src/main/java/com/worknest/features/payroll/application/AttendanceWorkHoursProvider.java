@@ -26,7 +26,10 @@ public class AttendanceWorkHoursProvider implements WorkHoursProvider {
     public static final Set<AttendanceDayStatus> WORKED_STATUSES = Set.of(
             AttendanceDayStatus.PRESENT,
             AttendanceDayStatus.LATE,
-            AttendanceDayStatus.HALF_DAY
+            AttendanceDayStatus.HALF_DAY,
+            AttendanceDayStatus.MISSING_CHECKOUT,
+            AttendanceDayStatus.FLAGGED,
+            AttendanceDayStatus.PENDING_REVIEW
     );
 
     private static final BigDecimal MINUTES_PER_HOUR = BigDecimal.valueOf(60);
@@ -43,13 +46,7 @@ public class AttendanceWorkHoursProvider implements WorkHoursProvider {
                         employee.getCompany().getId(), employee.getId(), payableFrom, effectiveTo);
 
         if (records.isEmpty()) {
-            // No attendance records: fall back to default so the payroll does not produce zero silently.
-            BigDecimal dailyHours = employee.getDailyWorkingHours() != null
-                    ? employee.getDailyWorkingHours()
-                    : context.defaultDailyWorkingHours();
-            return new WorkHoursResult(
-                    payableWorkingDays.multiply(dailyHours),
-                    DefaultWorkHoursProvider.SOURCE);
+            return new WorkHoursResult(BigDecimal.ZERO, SOURCE, false, BigDecimal.ZERO);
         }
 
         BigDecimal hours = sumWorkedHours(records);
