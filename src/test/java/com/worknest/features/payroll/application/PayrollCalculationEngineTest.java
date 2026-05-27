@@ -87,28 +87,30 @@ class PayrollCalculationEngineTest {
 
         assertThat(result.totals().basePay()).isEqualByComparingTo("2200.00");
         assertThat(result.totals().grossEarnings()).isEqualByComparingTo("2200.00");
-        assertThat(result.basePayCalculation().prorationMethod()).isEqualTo("WORKING_DAYS");
+        assertThat(result.basePayCalculation().prorationMethod()).isNull();
     }
 
     @Test
-    void monthlyEmployeeStartingMidMonthIsProratedByWorkingDays() {
+    void monthlyEmployeeStartingMidMonthStillUsesFullMonthlySalary() {
         Employee employee = employee(PaymentMethod.FIXED_MONTHLY, "2200.00", null, LocalDate.of(2026, 5, 18));
 
         PayrollCalculationResponse result = calculate(engine, employee, YearMonth.of(2026, 5), List.of(), List.of(), List.of());
 
         assertThat(result.workPeriod().workingDaysInMonth()).isEqualTo(21);
         assertThat(result.workPeriod().payableWorkingDays()).isEqualByComparingTo("10");
-        assertThat(result.totals().basePay()).isEqualByComparingTo("1047.62");
+        // Base pay reflects the registered monthly salary, not a working-day proration.
+        assertThat(result.totals().basePay()).isEqualByComparingTo("2200.00");
     }
 
     @Test
     void hourlyEmployeeFullMonthUsesDefaultHoursPlaceholder() {
+        // Use a closed past month (April 2026 = 22 working days) so effectivePayableDays == payableWorkingDays.
         Employee employee = employee(PaymentMethod.HOURLY, null, "10.00", LocalDate.of(2026, 1, 1));
 
-        PayrollCalculationResponse result = calculate(engine, employee, YearMonth.of(2026, 5), List.of(), List.of(), List.of());
+        PayrollCalculationResponse result = calculate(engine, employee, YearMonth.of(2026, 4), List.of(), List.of(), List.of());
 
-        assertThat(result.workPeriod().payableHours()).isEqualByComparingTo("168");
-        assertThat(result.totals().basePay()).isEqualByComparingTo("1680.00");
+        assertThat(result.workPeriod().payableHours()).isEqualByComparingTo("176");
+        assertThat(result.totals().basePay()).isEqualByComparingTo("1760.00");
         assertThat(result.workPeriod().workHoursSource()).isEqualTo(DefaultWorkHoursProvider.SOURCE);
     }
 
@@ -158,16 +160,17 @@ class PayrollCalculationEngineTest {
 
     @Test
     void bonusAndDeductionAreAppliedSeparately() {
+        // Use April 2026 (closed month, 22 working days × 8h = 176h) so result is deterministic.
         Employee employee = employee(PaymentMethod.HOURLY, null, "10.00", LocalDate.of(2026, 1, 1));
         PayrollAdjustment bonus = adjustment(employee, PayrollAdjustmentType.BONUS, "300.00");
         PayrollAdjustment deduction = adjustment(employee, PayrollAdjustmentType.DEDUCTION, "100.00");
 
-        PayrollCalculationResponse result = calculate(engine, employee, YearMonth.of(2026, 5),
+        PayrollCalculationResponse result = calculate(engine, employee, YearMonth.of(2026, 4),
                 List.of(), List.of(), List.of(), bonus, deduction);
 
         assertThat(result.adjustments().totalBonus()).isEqualByComparingTo("300.00");
         assertThat(result.adjustments().totalManualDeduction()).isEqualByComparingTo("100.00");
-        assertThat(result.totals().grossEarnings()).isEqualByComparingTo("1980.00"); // 1680 + 300
+        assertThat(result.totals().grossEarnings()).isEqualByComparingTo("2060.00"); // 176h × 10 + 300
     }
 
     @Test
@@ -213,9 +216,11 @@ class PayrollCalculationEngineTest {
         PayrollCalculationResponse result = attendanceEngine.calculate(employee, YearMonth.of(2026, 5),
                 List.of(vacation), List.of(vacation), List.of(balance), List.of(), PayrollStatus.DRAFT, true);
 
-        assertThat(result.totals().basePay()).isEqualByComparingTo("1280.00");
+        // basePay is theoretical (registration): rate 10 × 8h × 21 working days = 1680.
+        assertThat(result.totals().basePay()).isEqualByComparingTo("1680.00");
         assertThat(result.leaveCalculation().paidLeaveDaysThisMonth()).isEqualByComparingTo("5");
         assertThat(result.leaveCalculation().paidLeaveAmount()).isEqualByComparingTo("400.00");
+        // gross is attendance-earned: 128 worked hours × 10 = 1280, + 400 paid leave = 1680.
         assertThat(result.totals().grossEarnings()).isEqualByComparingTo("1680.00");
     }
 
@@ -244,7 +249,10 @@ class PayrollCalculationEngineTest {
         assertThat(result.hourlyAttendancePayment().fullPayment()).isEqualByComparingTo("1760.00");
         assertThat(result.hourlyAttendancePayment().attendanceDeduction()).isEqualByComparingTo("560.00");
         assertThat(result.hourlyAttendancePayment().paymentReceived()).isEqualByComparingTo("1200.00");
-        assertThat(result.totals().basePay()).isEqualByComparingTo("1200.00");
+        // attendance-earned gross = 120h × 10
+        assertThat(result.totals().grossEarnings()).isEqualByComparingTo("1200.00");
+        // basePay is theoretical (registration): rate 10 × 8h × 22 working days = 1760.
+        assertThat(result.totals().basePay()).isEqualByComparingTo("1760.00");
         // effectiveAttendanceTo == payableTo for a closed month
         assertThat(result.workPeriod().effectiveAttendanceTo()).isEqualTo(LocalDate.of(2026, 4, 30));
         assertThat(result.workPeriod().effectivePayableWorkingDays()).isEqualByComparingTo("22");
@@ -267,7 +275,9 @@ class PayrollCalculationEngineTest {
         PayrollCalculationResponse result = attendanceEngine.calculate(employee, YearMonth.of(2026, 4),
                 List.of(), List.of(), List.of(), List.of(), PayrollStatus.DRAFT, true);
 
-        assertThat(result.totals().basePay()).isEqualByComparingTo("0.00");
+        // No hours worked → attendance-earned gross is 0, even though theoretical basePay is full.
+        assertThat(result.totals().grossEarnings()).isEqualByComparingTo("0.00");
+        assertThat(result.totals().basePay()).isEqualByComparingTo("1760.00");
         assertThat(result.hourlyAttendancePayment().paymentReceived()).isEqualByComparingTo("0.00");
         assertThat(result.hourlyAttendancePayment().attendanceDeduction()).isEqualByComparingTo("1760.00");
         assertThat(result.workPeriod().workHoursSource()).isEqualTo(AttendanceWorkHoursProvider.SOURCE);
@@ -294,7 +304,8 @@ class PayrollCalculationEngineTest {
         assertThat(result.hourlyAttendancePayment().attendedHours()).isEqualByComparingTo("0.00");
         assertThat(result.hourlyAttendancePayment().paidHolidayHours()).isEqualByComparingTo("8.00");
         assertThat(result.hourlyAttendancePayment().payableHours()).isEqualByComparingTo("8.00");
-        assertThat(result.totals().basePay()).isEqualByComparingTo("80.00");
+        // Paid-holiday top-up flows into attendance-earned gross (8h × 10), not into theoretical basePay.
+        assertThat(result.totals().grossEarnings()).isEqualByComparingTo("80.00");
     }
 
     @Test
@@ -348,6 +359,95 @@ class PayrollCalculationEngineTest {
         assertThat(result.totals().grossEarnings()).isEqualByComparingTo("1910.00");
         assertThat(result.overtimeDetails().overtimeHours()).isEqualByComparingTo("10.00");
         assertThat(result.hourlyAttendancePayment().paymentReceived()).isEqualByComparingTo("1760.00");
+    }
+
+    @Test
+    void hourlyEmployeeAbsenceDetailsPopulatedAndApplied() {
+        // April 2026: 22 working days × 8h = 176h expected. Worked 152h → 24h absent.
+        PayrollCalculationEngine attendanceEngine = new PayrollCalculationEngine(
+                (employee, context, payableWorkingDays, payableFrom, payableTo) ->
+                        new WorkHoursProvider.WorkHoursResult(new BigDecimal("152"), AttendanceWorkHoursProvider.SOURCE, true, BigDecimal.ZERO),
+                new PlaceholderSickLeavePolicy(),
+                workingDayCalculatorMock,
+                settingsRepository,
+                taxBracketRepository
+        );
+        Employee employee = employee(PaymentMethod.HOURLY, null, "10.00", LocalDate.of(2026, 1, 1));
+        employee.setDailyWorkingHours(new BigDecimal("8.0"));
+
+        PayrollCalculationResponse result = attendanceEngine.calculate(employee, YearMonth.of(2026, 4),
+                List.of(), List.of(), List.of(), List.of(), PayrollStatus.DRAFT, true);
+
+        // Absence info is present and deduction is applied
+        assertThat(result.absenceDetails()).isNotNull();
+        assertThat(result.absenceDetails().absentMinutes()).isEqualByComparingTo("1440"); // 24h × 60
+        assertThat(result.absenceDetails().attendedMinutes()).isEqualByComparingTo("9120"); // 152h × 60
+        assertThat(result.absenceDetails().monetaryEquivalent()).isEqualByComparingTo("240.00"); // 24h × 10
+        assertThat(result.absenceDetails().applied()).isTrue();
+        // Gross reflects actual hours only
+        assertThat(result.totals().grossEarnings()).isEqualByComparingTo("1520.00"); // 152h × 10
+    }
+
+    @Test
+    void hourlyEmployeeZeroHoursAbsenceAppliedAndGrossIsZero() {
+        // April 2026: 22 working days × 8h = 176h expected. Worked 0h.
+        PayrollCalculationEngine attendanceEngine = new PayrollCalculationEngine(
+                (employee, context, payableWorkingDays, payableFrom, payableTo) ->
+                        new WorkHoursProvider.WorkHoursResult(BigDecimal.ZERO, AttendanceWorkHoursProvider.SOURCE, true, BigDecimal.ZERO),
+                new PlaceholderSickLeavePolicy(),
+                workingDayCalculatorMock,
+                settingsRepository,
+                taxBracketRepository
+        );
+        Employee employee = employee(PaymentMethod.HOURLY, null, "10.00", LocalDate.of(2026, 1, 1));
+        employee.setDailyWorkingHours(new BigDecimal("8.0"));
+
+        PayrollCalculationResponse result = attendanceEngine.calculate(employee, YearMonth.of(2026, 4),
+                List.of(), List.of(), List.of(), List.of(), PayrollStatus.DRAFT, true);
+
+        assertThat(result.totals().basePay()).isEqualByComparingTo("1760.00"); // theoretical: 22 × 8 × 10
+        assertThat(result.totals().grossEarnings()).isEqualByComparingTo("0.00");
+        assertThat(result.absenceDetails()).isNotNull();
+        assertThat(result.absenceDetails().absentMinutes()).isEqualByComparingTo("10560"); // 176h × 60
+        assertThat(result.absenceDetails().monetaryEquivalent()).isEqualByComparingTo("1760.00");
+        assertThat(result.absenceDetails().applied()).isTrue();
+    }
+
+    @Test
+    void hourlyEmployeeDefaultSourceAbsenceNotApplied() {
+        // DEFAULT source → no real attendance → applied=false, absent=0
+        Employee employee = employee(PaymentMethod.HOURLY, null, "10.00", LocalDate.of(2026, 1, 1));
+        employee.setDailyWorkingHours(new BigDecimal("8.0"));
+
+        PayrollCalculationResponse result = calculate(engine, employee, YearMonth.of(2026, 4), List.of(), List.of(), List.of());
+
+        assertThat(result.absenceDetails()).isNotNull();
+        assertThat(result.absenceDetails().absentMinutes()).isEqualByComparingTo("0"); // no data → assume present
+        assertThat(result.absenceDetails().applied()).isFalse();
+    }
+
+    @Test
+    void fixedMonthlyEmployeeAbsenceShownButNotDeducted() {
+        // April 2026: 22 working days. Worked 160h out of 176h → 16h absent.
+        PayrollCalculationEngine attendanceEngine = new PayrollCalculationEngine(
+                (employee, context, payableWorkingDays, payableFrom, payableTo) ->
+                        new WorkHoursProvider.WorkHoursResult(new BigDecimal("160"), AttendanceWorkHoursProvider.SOURCE, true, BigDecimal.ZERO),
+                new PlaceholderSickLeavePolicy(),
+                workingDayCalculatorMock,
+                settingsRepository,
+                taxBracketRepository
+        );
+        Employee employee = employee(PaymentMethod.FIXED_MONTHLY, "3520.00", null, LocalDate.of(2026, 1, 1));
+        employee.setDailyWorkingHours(new BigDecimal("8.0"));
+
+        PayrollCalculationResponse result = attendanceEngine.calculate(employee, YearMonth.of(2026, 4),
+                List.of(), List.of(), List.of(), List.of(), PayrollStatus.DRAFT, true);
+
+        // Absence is tracked but salary is NOT reduced
+        assertThat(result.absenceDetails()).isNotNull();
+        assertThat(result.absenceDetails().absentMinutes()).isEqualByComparingTo("960"); // 16h × 60
+        assertThat(result.absenceDetails().applied()).isFalse();
+        assertThat(result.totals().grossEarnings()).isEqualByComparingTo("3520.00"); // full salary
     }
 
     @Test

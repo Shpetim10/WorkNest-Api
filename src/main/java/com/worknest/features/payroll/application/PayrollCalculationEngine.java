@@ -49,7 +49,6 @@ import org.springframework.stereotype.Component;
 public class PayrollCalculationEngine {
 
     private static final BigDecimal DEFAULT_DAILY_HOURS = BigDecimal.valueOf(8);
-    private static final String WORKING_DAY_PRORATION = "WORKING_DAYS";
 
     private final WorkHoursProvider workHoursProvider;
     private final SickLeavePolicy sickLeavePolicy;
@@ -102,10 +101,13 @@ public class PayrollCalculationEngine {
                 : workingDayCalculator.countWorkingDays(companyId, payableFrom, effectiveAttendanceTo);
 
         WorkHoursProvider.WorkHoursResult workHours = workHoursProvider.getWorkedHours(
-                employee, context, payableWorkingDays, payableFrom, payableTo);
-        if (DefaultWorkHoursProvider.SOURCE.equals(workHours.source())
-                && employee.getPaymentMethod() == PaymentMethod.HOURLY) {
-            warnings.add("Hourly pay is calculated using default working days — no attendance records found for this period.");
+                employee, context, effectivePayableDays, payableFrom, payableTo);
+        if (employee.getPaymentMethod() == PaymentMethod.HOURLY) {
+            if (DefaultWorkHoursProvider.SOURCE.equals(workHours.source())) {
+                warnings.add("Hourly pay is calculated using default working days — no attendance records found for this period.");
+            } else if (!workHours.attendanceRecordsFound()) {
+                warnings.add("No attendance records found for this period. The employee will receive no pay.");
+            }
         }
 
         BigDecimal paidHolidayHours = calculatePaidHolidayTopUpHours(
@@ -115,22 +117,23 @@ public class PayrollCalculationEngine {
                 : workHours.hours();
 
         // ── Overtime ────────────────────────────────────────────────────────────
-        // Computed before basePay so HOURLY base excludes OT hours (avoids double-paying them).
         OvertimeDetails overtimeDetails = calculateOvertimeDetails(
                 employee, context, workHours, effectivePayableDays, paidHolidayHours);
         BigDecimal overtimePay = overtimeDetails != null
                 ? overtimeDetails.overtimePay() : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 
-        // For HOURLY with overtime, base pay covers only the regular (non-OT) hours.
-        // OT hours are separately compensated at overtimeRate via overtimePay.
-        BigDecimal basePayableHours = (employee.getPaymentMethod() == PaymentMethod.HOURLY && overtimeDetails != null)
-                ? payableHours.subtract(overtimeDetails.overtimeHours())
-                : payableHours;
+        // Theoretical base pay reflects registration values, not actual attendance:
+        // FIXED_MONTHLY -> full monthly salary; HOURLY -> hourlyRate * dailyHours * payableWorkingDays.
+        // It is a reference figure for display only and does NOT drive gross/net pay.
+        BigDecimal basePay = calculateBasePay(employee, context, payableWorkingDays);
+        BasePayDetails basePayDetails = toBasePayDetails(employee, context, payableWorkingDays, basePay);
 
-        BigDecimal basePay = calculateBasePay(employee, context, payableWorkingDays, basePayableHours);
-        BasePayDetails basePayDetails = toBasePayDetails(employee, context, payableWorkingDays, basePayableHours, basePay);
+        // Earned base pay is attendance-derived (HOURLY: hours worked; FIXED_MONTHLY: working-day proration)
+        // and is the amount that actually flows into gross earnings.
+        BigDecimal earnedBasePay = calculateEarnedBasePay(employee, context, payableWorkingDays, payableHours, overtimeDetails);
+
         HourlyAttendancePaymentDetails hourlyAttendancePayment = calculateHourlyAttendancePayment(
-                employee, context, effectivePayableDays, workHours, paidHolidayHours, payableHours, basePay);
+                employee, context, effectivePayableDays, workHours, paidHolidayHours, payableHours, earnedBasePay);
 
         LeaveCalculationDetails leaveDetails = calculateLeave(
                 employee, context, approvedLeavesInYear, approvedLeavesInMonth,
@@ -153,7 +156,7 @@ public class PayrollCalculationEngine {
         if (employee.getPaymentMethod() == PaymentMethod.HOURLY) {
             BigDecimal sickPaidAmount = sickLeaveDetails.companyPaidAmount() != null
                     ? sickLeaveDetails.companyPaidAmount() : BigDecimal.ZERO;
-            grossEarnings = money(basePay
+            grossEarnings = money(earnedBasePay
                     .add(leaveDetails.paidLeaveAmount())
                     .add(sickPaidAmount)
                     .add(adjustmentDetails.totalBonus())
@@ -162,7 +165,7 @@ public class PayrollCalculationEngine {
         } else {
             BigDecimal sickDeduction = sickLeaveDetails.totalSickLeaveDeduction() != null
                     ? sickLeaveDetails.totalSickLeaveDeduction() : BigDecimal.ZERO;
-            grossEarnings = money(basePay.add(adjustmentDetails.totalBonus()).add(overtimePay));
+            grossEarnings = money(earnedBasePay.add(adjustmentDetails.totalBonus()).add(overtimePay));
             unpaidLeaveAndSickDeduction = money(leaveDetails.unpaidLeaveDeduction().add(sickDeduction));
         }
 
@@ -280,30 +283,47 @@ public class PayrollCalculationEngine {
     // ── Base pay ──────────────────────────────────────────────────────────────
 
     private BigDecimal calculateBasePay(Employee employee, PayrollContext context,
-                                        BigDecimal payableWorkingDays, BigDecimal payableHours) {
+                                        BigDecimal payableWorkingDays) {
+        if (employee.getPaymentMethod() == PaymentMethod.FIXED_MONTHLY) {
+            return money(employee.getMonthlySalary());
+        }
+        return money(employee.getHourlyRate()
+                .multiply(employeeDailyHours(employee, context))
+                .multiply(payableWorkingDays));
+    }
+
+    // Attendance-derived pay that actually flows into gross earnings.
+    // HOURLY: hourlyRate × hours actually worked (OT hours excluded — paid separately as overtimePay).
+    // FIXED_MONTHLY: monthlySalary prorated by payable working days in the period.
+    private BigDecimal calculateEarnedBasePay(Employee employee, PayrollContext context,
+                                              BigDecimal payableWorkingDays, BigDecimal payableHours,
+                                              OvertimeDetails overtimeDetails) {
         if (employee.getPaymentMethod() == PaymentMethod.FIXED_MONTHLY) {
             BigDecimal ratio = payableWorkingDays.divide(
                     BigDecimal.valueOf(context.workingDaysInMonth()), 8, RoundingMode.HALF_UP);
             return money(employee.getMonthlySalary().multiply(ratio));
         }
-        return money(employee.getHourlyRate().multiply(payableHours));
+        BigDecimal regularHours = overtimeDetails != null
+                ? payableHours.subtract(overtimeDetails.overtimeHours())
+                : payableHours;
+        return money(employee.getHourlyRate().multiply(regularHours));
     }
 
     private BasePayDetails toBasePayDetails(Employee employee, PayrollContext context,
-                                            BigDecimal payableWorkingDays, BigDecimal payableHours,
-                                            BigDecimal basePay) {
+                                            BigDecimal payableWorkingDays, BigDecimal basePay) {
         if (employee.getPaymentMethod() == PaymentMethod.FIXED_MONTHLY) {
             return new BasePayDetails(
-                    "monthlySalary * payableWorkingDays / workingDaysInMonth",
+                    "monthlySalary",
                     employee.getMonthlySalary(), null,
                     payableWorkingDays, context.workingDaysInMonth(),
-                    null, basePay, WORKING_DAY_PRORATION);
+                    null, basePay, null);
         }
+        BigDecimal registrationHours = money(employeeDailyHours(employee, context).multiply(payableWorkingDays));
         return new BasePayDetails(
-                "hourlyRate * payableHours",
+                "hourlyRate * dailyWorkingHours * payableWorkingDays",
                 null, employee.getHourlyRate(),
                 payableWorkingDays, context.workingDaysInMonth(),
-                payableHours, basePay, null);
+                registrationHours, basePay, null);
     }
 
     private HourlyAttendancePaymentDetails calculateHourlyAttendancePayment(
@@ -370,21 +390,31 @@ public class PayrollCalculationEngine {
                                                     WorkHoursProvider.WorkHoursResult workHours,
                                                     BigDecimal effectivePayableDays,
                                                     BigDecimal paidHolidayHours) {
-        if (employee.getPaymentMethod() != PaymentMethod.FIXED_MONTHLY) {
-            return null;
-        }
         BigDecimal dailyHoursVal = employeeDailyHours(employee, context);
         BigDecimal expectedMinutes = effectivePayableDays
                 .multiply(dailyHoursVal)
                 .multiply(BigDecimal.valueOf(60));
         BigDecimal attendedMinutes = workHours.hours().add(paidHolidayHours).multiply(BigDecimal.valueOf(60));
         BigDecimal absentMinutes = expectedMinutes.subtract(attendedMinutes).max(BigDecimal.ZERO);
-        BigDecimal dailyPay = employee.getMonthlySalary()
-                .divide(BigDecimal.valueOf(context.workingDaysInMonth()), 8, RoundingMode.HALF_UP);
-        BigDecimal absentDays = absentMinutes.divide(dailyHoursVal.multiply(BigDecimal.valueOf(60)),
-                8, RoundingMode.HALF_UP);
-        BigDecimal monetaryEquivalent = money(dailyPay.multiply(absentDays));
-        return new AbsenceDetails(expectedMinutes, attendedMinutes, absentMinutes, monetaryEquivalent, false);
+
+        BigDecimal monetaryEquivalent;
+        boolean applied;
+        if (employee.getPaymentMethod() == PaymentMethod.FIXED_MONTHLY) {
+            BigDecimal dailyPay = employee.getMonthlySalary()
+                    .divide(BigDecimal.valueOf(context.workingDaysInMonth()), 8, RoundingMode.HALF_UP);
+            BigDecimal absentDays = absentMinutes.divide(dailyHoursVal.multiply(BigDecimal.valueOf(60)),
+                    8, RoundingMode.HALF_UP);
+            monetaryEquivalent = money(dailyPay.multiply(absentDays));
+            applied = false;
+        } else {
+            // HOURLY: absent time reduces earnedBasePay directly (rate × actualHours).
+            // Monetary equivalent = absent hours × hourlyRate — matches the attendanceDeduction in HourlyAttendancePaymentDetails.
+            BigDecimal absentHours = absentMinutes.divide(BigDecimal.valueOf(60), 8, RoundingMode.HALF_UP);
+            monetaryEquivalent = money(absentHours.multiply(employee.getHourlyRate()));
+            applied = !DefaultWorkHoursProvider.SOURCE.equals(workHours.source());
+        }
+
+        return new AbsenceDetails(expectedMinutes, attendedMinutes, absentMinutes, monetaryEquivalent, applied);
     }
 
     // ── Leave calculation (B5) ────────────────────────────────────────────────
