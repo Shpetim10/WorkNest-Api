@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.worknest.audit.domain.AuditLog;
 import com.worknest.audit.service.AuditLogService;
 import com.worknest.common.api.PaginatedResponse;
+import com.worknest.common.plan.PlanEnforcementService;
 import com.worknest.common.api.PaginationSupport;
 import com.worknest.common.exception.BusinessException;
 import com.worknest.domain.entities.Company;
@@ -83,6 +84,7 @@ public class PayrollServiceImpl implements PayrollService {
     private final CompanyRepository companyRepository;
     private final AttendanceDayRecordRepository attendanceDayRecordRepository;
     private final AuditLogService auditLogService;
+    private final PlanEnforcementService planEnforcementService;
 
     @Override
     public PayrollAdjustmentResponse addBonus(UUID employeeId, PayrollAdjustmentRequest request) {
@@ -130,6 +132,7 @@ public class PayrollServiceImpl implements PayrollService {
     public PaginatedResponse<PayrollEmployeeSummaryResponse> listAdminPayrollEmployees(
             int year, int month, String search, Integer page, Integer size) {
         AuthSessionPrincipal principal = principal();
+        planEnforcementService.assertPayrollEnabled(principal.companyId());
         YearMonth payrollMonth = payrollMonth(year, month);
         Pageable pageable = PaginationSupport.pageable(page, size);
         String normalizedSearch = search == null ? null : search.trim();
@@ -176,6 +179,7 @@ public class PayrollServiceImpl implements PayrollService {
     @Override
     public BatchPayrollCalculationResponse calculateBatch(BatchPayrollCalculationRequest request) {
         AuthSessionPrincipal principal = principal();
+        planEnforcementService.assertPayrollEnabled(principal.companyId());
         YearMonth payrollMonth = payrollMonth(request.year(), request.month());
         List<Employee> employees = loadBatchEmployees(principal.companyId(), request.employeeIds(),
                 payrollMonth.atDay(1), payrollMonth.atEndOfMonth());

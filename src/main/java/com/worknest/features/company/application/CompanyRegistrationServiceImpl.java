@@ -97,7 +97,7 @@ public class CompanyRegistrationServiceImpl implements CompanyRegistrationServic
         company.setOnboardingCompletedAt(null);
         SubscriptionPlan resolvedPlan = request.plan() != null ? request.plan() : SubscriptionPlan.FOUNDATION;
         company.setSubscriptionPlan(resolvedPlan);
-        company.setSubscriptionStatus(SubscriptionStatus.TRIAL);
+        company.setSubscriptionStatus(SubscriptionStatus.TRIALING);
         company.setDataRetentionDays(90);
 
         // Handle pre-uploaded logo during registration

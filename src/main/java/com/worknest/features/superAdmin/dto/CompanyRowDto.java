@@ -12,5 +12,9 @@ public record CompanyRowDto(
         long employeeCount,
         String status,
         String createdAt,
-        String subscriptionEndDate
+        String subscriptionEndDate,
+        String subscriptionStatus,
+        String trialEndsAt,
+        String deactivationRequestedAt,
+        String deletionScheduledAt
 ) {}

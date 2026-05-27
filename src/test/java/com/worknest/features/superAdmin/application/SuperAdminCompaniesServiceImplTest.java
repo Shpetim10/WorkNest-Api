@@ -68,7 +68,7 @@ class SuperAdminCompaniesServiceImplTest {
     @Test
     void listCompaniesReturnsPaginationAndFrontendFields() {
         UUID companyId = UUID.randomUUID();
-        Company company = company(companyId, CompanyStatus.ACTIVE, SubscriptionPlan.BASIC, SubscriptionStatus.TRIAL);
+        Company company = company(companyId, CompanyStatus.ACTIVE, SubscriptionPlan.FOUNDATION, SubscriptionStatus.TRIALING);
         LocalDate endDate = LocalDate.now(ZoneOffset.UTC).plusDays(10);
         company.setTrialEndsAt(endDate.atStartOfDay().toInstant(ZoneOffset.UTC));
 
@@ -87,14 +87,14 @@ class SuperAdminCompaniesServiceImplTest {
         CompanyRowDto row = response.items().getFirst();
         assertThat(row.employeeCount()).isEqualTo(7);
         assertThat(row.subscriptionEndDate()).isEqualTo(endDate.toString());
-        assertThat(row.plan()).isEqualTo("Starter");
+        assertThat(row.plan()).isEqualTo("Foundation");
         assertThat(row.status()).isEqualTo("active");
     }
 
     @Test
     void extendTrialUpdatesTrialEndDateAndWritesPlatformEvent() {
         UUID companyId = UUID.randomUUID();
-        Company company = company(companyId, CompanyStatus.ACTIVE, SubscriptionPlan.BASIC, SubscriptionStatus.TRIAL);
+        Company company = company(companyId, CompanyStatus.ACTIVE, SubscriptionPlan.FOUNDATION, SubscriptionStatus.TRIALING);
         company.setTrialEndsAt(LocalDate.now(ZoneOffset.UTC).plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC));
         LocalDate newEndDate = LocalDate.now(ZoneOffset.UTC).plusDays(30);
         UUID actorUserId = UUID.randomUUID();
@@ -140,7 +140,7 @@ class SuperAdminCompaniesServiceImplTest {
     @Test
     void toggleSuspendSuspendsActiveCompanyAndWritesEvent() {
         UUID companyId = UUID.randomUUID();
-        Company company = company(companyId, CompanyStatus.ACTIVE, SubscriptionPlan.PREMIUM, SubscriptionStatus.ACTIVE);
+        Company company = company(companyId, CompanyStatus.ACTIVE, SubscriptionPlan.PROFESSIONAL, SubscriptionStatus.ACTIVE);
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(company));
         when(companyQueryRepository.countEmployeesByCompanyIds(List.of(companyId))).thenReturn(Map.of(companyId, 2L));
 
@@ -160,7 +160,7 @@ class SuperAdminCompaniesServiceImplTest {
     @Test
     void toggleSuspendUnsuspendsSuspendedCompany() {
         UUID companyId = UUID.randomUUID();
-        Company company = company(companyId, CompanyStatus.SUSPENDED, SubscriptionPlan.BASIC, SubscriptionStatus.TRIAL);
+        Company company = company(companyId, CompanyStatus.SUSPENDED, SubscriptionPlan.FOUNDATION, SubscriptionStatus.TRIALING);
         company.setSuspendedReason("Old reason");
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(company));
         when(companyQueryRepository.countEmployeesByCompanyIds(List.of(companyId))).thenReturn(Map.of());

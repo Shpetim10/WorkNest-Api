@@ -12,6 +12,7 @@ import com.worknest.domain.enums.PaymentMethod;
 import com.worknest.domain.enums.PayrollCalculationStatus;
 import com.worknest.domain.enums.PayrollStatus;
 import com.worknest.audit.service.AuditLogService;
+import com.worknest.common.plan.PlanEnforcementService;
 import com.worknest.features.attendance.repository.AttendanceDayRecordRepository;
 import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.company.repository.CompanyRepository;
@@ -72,6 +73,7 @@ class PayrollServiceImplTest {
     @Mock private CompanyRepository companyRepository;
     @Mock private AttendanceDayRecordRepository attendanceDayRecordRepository;
     @Mock private AuditLogService auditLogService;
+    @Mock private PlanEnforcementService planEnforcementService;
 
     private PayrollServiceImpl service;
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
@@ -86,7 +88,8 @@ class PayrollServiceImplTest {
                 employeeRepository, userRepository, leaveRequestRepository,
                 leaveBalanceRepository, adjustmentRepository, resultRepository,
                 calculationEngine, objectMapper, sickLeavePolicyRepository,
-                companyRepository, attendanceDayRecordRepository, auditLogService);
+                companyRepository, attendanceDayRecordRepository, auditLogService,
+                planEnforcementService);
         AuthSessionPrincipal principal = new AuthSessionPrincipal(
                 userId, "testuser", companyId, "test-slug", UUID.randomUUID(),
                 PlatformRole.ADMIN, PlatformAccess.WEB);

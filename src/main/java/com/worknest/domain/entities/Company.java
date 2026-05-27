@@ -96,11 +96,11 @@ public class Company {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "subscription_plan", length = 100)
-    private SubscriptionPlan subscriptionPlan = SubscriptionPlan.BASIC;
+    private SubscriptionPlan subscriptionPlan = SubscriptionPlan.FOUNDATION;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "subscription_status", nullable = false, length = 50)
-    private SubscriptionStatus subscriptionStatus = SubscriptionStatus.TRIAL;
+    private SubscriptionStatus subscriptionStatus = SubscriptionStatus.TRIALING;
 
     @Column(name = "trial_ends_at")
     private Instant trialEndsAt;
@@ -110,6 +110,9 @@ public class Company {
 
     @Column(name = "data_retention_days", nullable = false)
     private Integer dataRetentionDays = 90;
+
+    @Column(name = "deactivation_requested_at")
+    private Instant deactivationRequestedAt;
 
     @Column(name = "deleted_at")
     private Instant deletedAt;

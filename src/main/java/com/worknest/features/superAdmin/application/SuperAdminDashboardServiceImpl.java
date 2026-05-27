@@ -127,7 +127,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
                                 + " AND c.trialEndsAt IS NOT NULL"
                                 + " AND c.trialEndsAt >= :now AND c.trialEndsAt <= :soon",
                         Long.class)
-                .setParameter("trial", SubscriptionStatus.TRIAL)
+                .setParameter("trial", SubscriptionStatus.TRIALING)
                 .setParameter("now", now)
                 .setParameter("soon", soon)
                 .getSingleResult();
@@ -199,18 +199,21 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
 
     private List<SuperAdminDashboardResponse.QuickStat> buildQuickStats(List<Company> companies) {
         long total = companies.size();
-        long active = companies.stream().filter(c -> c.getStatus() == CompanyStatus.ACTIVE).count();
-        long suspended = companies.stream().filter(c -> c.getStatus() == CompanyStatus.SUSPENDED).count();
-        long trial = companies.stream().filter(c -> c.getSubscriptionStatus() == SubscriptionStatus.TRIAL).count();
+        long active = companies.stream().filter(c -> c.getStatus() == CompanyStatus.ACTIVE && c.getDeactivationRequestedAt() == null).count();
+        long suspended = companies.stream().filter(c -> c.getStatus() == CompanyStatus.SUSPENDED && c.getDeactivationRequestedAt() == null).count();
+        long trial = companies.stream().filter(c -> c.getSubscriptionStatus() == SubscriptionStatus.TRIALING && c.getDeactivationRequestedAt() == null).count();
+        long deactivated = companies.stream().filter(c -> c.getDeactivationRequestedAt() != null).count();
 
         double activePct = total > 0 ? (active * 100.0 / total) : 0.0;
         double trialPct = total > 0 ? (trial * 100.0 / total) : 0.0;
         double suspendedPct = total > 0 ? (suspended * 100.0 / total) : 0.0;
+        double deactivatedPct = total > 0 ? (deactivated * 100.0 / total) : 0.0;
 
         return List.of(
                 new SuperAdminDashboardResponse.QuickStat("active", "Active", fmt(activePct), activePct),
                 new SuperAdminDashboardResponse.QuickStat("trial", "Trial", fmt(trialPct), trialPct),
-                new SuperAdminDashboardResponse.QuickStat("suspended", "Suspended", fmt(suspendedPct), suspendedPct)
+                new SuperAdminDashboardResponse.QuickStat("suspended", "Suspended", fmt(suspendedPct), suspendedPct),
+                new SuperAdminDashboardResponse.QuickStat("deactivated", "Deactivated", fmt(deactivatedPct), deactivatedPct)
         );
     }
 

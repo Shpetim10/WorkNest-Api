@@ -76,14 +76,14 @@ class SuperAdminDashboardServiceImplTest {
         Instant now = Instant.now();
         int currentYear = ZonedDateTime.ofInstant(now, ZoneOffset.UTC).getYear();
         when(companyQuery.getResultList()).thenReturn(List.of(
-                company(CompanyStatus.ACTIVE, SubscriptionPlan.BASIC, SubscriptionStatus.TRIAL, now.minus(1, ChronoUnit.SECONDS)),
-                company(CompanyStatus.SUSPENDED, SubscriptionPlan.PREMIUM, SubscriptionStatus.ACTIVE, now.minus(370, ChronoUnit.DAYS))
+                company(CompanyStatus.ACTIVE, SubscriptionPlan.FOUNDATION, SubscriptionStatus.TRIALING, now.minus(1, ChronoUnit.SECONDS)),
+                company(CompanyStatus.SUSPENDED, SubscriptionPlan.PROFESSIONAL, SubscriptionStatus.ACTIVE, now.minus(370, ChronoUnit.DAYS))
         ));
 
         SuperAdminDashboardResponse response = service.getDashboard(currentYear, "this-year", null, null, null);
 
-        assertThat(plan(response, SubscriptionPlan.BASIC).companyCount()).isEqualTo(1);
-        assertThat(plan(response, SubscriptionPlan.PREMIUM).companyCount()).isZero();
+        assertThat(plan(response, SubscriptionPlan.FOUNDATION).companyCount()).isEqualTo(1);
+        assertThat(plan(response, SubscriptionPlan.PROFESSIONAL).companyCount()).isZero();
         assertThat(quickStat(response, "active").percentage()).isEqualTo(100.0);
         assertThat(quickStat(response, "suspended").percentage()).isZero();
     }
@@ -91,15 +91,15 @@ class SuperAdminDashboardServiceImplTest {
     @Test
     void validCustomDateRangeFiltersSuperAdminPlansAndQuickStats() {
         when(companyQuery.getResultList()).thenReturn(List.of(
-                company(CompanyStatus.ACTIVE, SubscriptionPlan.BASIC, SubscriptionStatus.TRIAL, Instant.parse("2026-05-10T09:00:00Z")),
-                company(CompanyStatus.SUSPENDED, SubscriptionPlan.PREMIUM, SubscriptionStatus.ACTIVE, Instant.parse("2026-05-31T23:59:59Z")),
-                company(CompanyStatus.ACTIVE, SubscriptionPlan.PREMIUM, SubscriptionStatus.TRIAL, Instant.parse("2026-04-30T23:59:59Z"))
+                company(CompanyStatus.ACTIVE, SubscriptionPlan.FOUNDATION, SubscriptionStatus.TRIALING, Instant.parse("2026-05-10T09:00:00Z")),
+                company(CompanyStatus.SUSPENDED, SubscriptionPlan.PROFESSIONAL, SubscriptionStatus.ACTIVE, Instant.parse("2026-05-31T23:59:59Z")),
+                company(CompanyStatus.ACTIVE, SubscriptionPlan.PROFESSIONAL, SubscriptionStatus.TRIALING, Instant.parse("2026-04-30T23:59:59Z"))
         ));
 
         SuperAdminDashboardResponse response = service.getDashboard(2026, null, "2026-05-01", "2026-05-31", null);
 
-        assertThat(plan(response, SubscriptionPlan.BASIC).companyCount()).isEqualTo(1);
-        assertThat(plan(response, SubscriptionPlan.PREMIUM).companyCount()).isEqualTo(1);
+        assertThat(plan(response, SubscriptionPlan.FOUNDATION).companyCount()).isEqualTo(1);
+        assertThat(plan(response, SubscriptionPlan.PROFESSIONAL).companyCount()).isEqualTo(1);
         assertThat(quickStat(response, "active").percentage()).isEqualTo(50.0);
         assertThat(quickStat(response, "trial").percentage()).isEqualTo(50.0);
         assertThat(quickStat(response, "suspended").percentage()).isEqualTo(50.0);
@@ -108,14 +108,14 @@ class SuperAdminDashboardServiceImplTest {
     @Test
     void customDateRangeOverridesPeriodForSuperAdminFilteredSections() {
         when(companyQuery.getResultList()).thenReturn(List.of(
-                company(CompanyStatus.ACTIVE, SubscriptionPlan.BASIC, SubscriptionStatus.TRIAL, Instant.parse("2026-05-15T09:00:00Z")),
-                company(CompanyStatus.SUSPENDED, SubscriptionPlan.PREMIUM, SubscriptionStatus.ACTIVE, Instant.parse("2026-01-15T09:00:00Z"))
+                company(CompanyStatus.ACTIVE, SubscriptionPlan.FOUNDATION, SubscriptionStatus.TRIALING, Instant.parse("2026-05-15T09:00:00Z")),
+                company(CompanyStatus.SUSPENDED, SubscriptionPlan.PROFESSIONAL, SubscriptionStatus.ACTIVE, Instant.parse("2026-01-15T09:00:00Z"))
         ));
 
         SuperAdminDashboardResponse response = service.getDashboard(2026, "this-year", "2026-05-01", "2026-05-31", null);
 
-        assertThat(plan(response, SubscriptionPlan.BASIC).companyCount()).isEqualTo(1);
-        assertThat(plan(response, SubscriptionPlan.PREMIUM).companyCount()).isZero();
+        assertThat(plan(response, SubscriptionPlan.FOUNDATION).companyCount()).isEqualTo(1);
+        assertThat(plan(response, SubscriptionPlan.PROFESSIONAL).companyCount()).isZero();
         assertThat(quickStat(response, "active").percentage()).isEqualTo(100.0);
         assertThat(quickStat(response, "suspended").percentage()).isZero();
     }
@@ -123,8 +123,8 @@ class SuperAdminDashboardServiceImplTest {
     @Test
     void sectionCanLimitCustomFilteringToSubscriptionPlans() {
         when(companyQuery.getResultList()).thenReturn(List.of(
-                company(CompanyStatus.ACTIVE, SubscriptionPlan.BASIC, SubscriptionStatus.TRIAL, Instant.parse("2026-05-15T09:00:00Z")),
-                company(CompanyStatus.SUSPENDED, SubscriptionPlan.PREMIUM, SubscriptionStatus.ACTIVE, Instant.parse("2026-01-15T09:00:00Z"))
+                company(CompanyStatus.ACTIVE, SubscriptionPlan.FOUNDATION, SubscriptionStatus.TRIALING, Instant.parse("2026-05-15T09:00:00Z")),
+                company(CompanyStatus.SUSPENDED, SubscriptionPlan.PROFESSIONAL, SubscriptionStatus.ACTIVE, Instant.parse("2026-01-15T09:00:00Z"))
         ));
 
         SuperAdminDashboardResponse response = service.getDashboard(
@@ -135,8 +135,8 @@ class SuperAdminDashboardServiceImplTest {
                 "subscriptionPlans"
         );
 
-        assertThat(plan(response, SubscriptionPlan.BASIC).companyCount()).isEqualTo(1);
-        assertThat(plan(response, SubscriptionPlan.PREMIUM).companyCount()).isZero();
+        assertThat(plan(response, SubscriptionPlan.FOUNDATION).companyCount()).isEqualTo(1);
+        assertThat(plan(response, SubscriptionPlan.PROFESSIONAL).companyCount()).isZero();
         assertThat(quickStat(response, "active").percentage()).isEqualTo(50.0);
         assertThat(quickStat(response, "suspended").percentage()).isEqualTo(50.0);
     }

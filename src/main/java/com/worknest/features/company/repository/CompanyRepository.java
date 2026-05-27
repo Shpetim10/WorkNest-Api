@@ -2,6 +2,7 @@ package com.worknest.features.company.repository;
 
 import com.worknest.domain.entities.Company;
 import com.worknest.domain.enums.CompanyStatus;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,4 +29,6 @@ public interface CompanyRepository extends JpaRepository<Company, UUID> {
     List<Company> findAllByStatusAndDeletedAtIsNull(CompanyStatus status);
 
     boolean existsByNiptHashAndIdNot(String niptHash, UUID id);
+
+    List<Company> findByDeletionScheduledAtBeforeAndStatusNot(Instant cutoff, CompanyStatus status);
 }

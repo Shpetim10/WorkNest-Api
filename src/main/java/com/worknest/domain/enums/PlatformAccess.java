@@ -16,5 +16,10 @@ public enum PlatformAccess {
     /**
      * Access via both.
      */
-    BOTH;
+    BOTH,
+
+    /**
+     * Exclusive access for the super-admin portal (web).
+     */
+    SUPERADMIN_WEB;
 }

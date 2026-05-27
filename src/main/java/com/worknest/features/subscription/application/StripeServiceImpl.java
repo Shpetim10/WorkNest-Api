@@ -8,9 +8,11 @@ import com.stripe.model.PaymentMethod;
 import com.stripe.model.billingportal.Session;
 import com.stripe.net.Webhook;
 import com.stripe.param.CustomerCreateParams;
+import com.stripe.param.CustomerRetrieveParams;
 import com.stripe.param.CustomerUpdateParams;
 import com.stripe.param.PaymentMethodAttachParams;
 import com.stripe.param.SubscriptionCreateParams;
+import com.stripe.param.SubscriptionUpdateParams;
 import com.stripe.param.billingportal.SessionCreateParams;
 import com.worknest.features.subscription.exception.StripeException;
 import jakarta.annotation.PostConstruct;
@@ -88,6 +90,63 @@ public class StripeServiceImpl implements StripeService {
     }
 
     @Override
+    public com.stripe.model.Subscription updateSubscriptionPlan(String stripeSubscriptionId, String newPriceId) {
+        try {
+            com.stripe.model.Subscription subscription = com.stripe.model.Subscription.retrieve(stripeSubscriptionId);
+            String existingItemId = subscription.getItems().getData().get(0).getId();
+
+            SubscriptionUpdateParams params = SubscriptionUpdateParams.builder()
+                    .addItem(SubscriptionUpdateParams.Item.builder()
+                            .setId(existingItemId)
+                            .setPrice(newPriceId)
+                            .build())
+                    .setProrationBehavior(SubscriptionUpdateParams.ProrationBehavior.CREATE_PRORATIONS)
+                    .build();
+
+            return subscription.update(params);
+        } catch (com.stripe.exception.StripeException e) {
+            log.error("Failed to update Stripe subscription {} to price {}: {}", stripeSubscriptionId, newPriceId, e.getMessage());
+            throw new StripeException("Failed to update subscription plan: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public com.stripe.model.PaymentMethod getDefaultPaymentMethod(String stripeCustomerId) {
+        try {
+            CustomerRetrieveParams params = CustomerRetrieveParams.builder()
+                    .addExpand("invoice_settings.default_payment_method")
+                    .build();
+            Customer customer = Customer.retrieve(stripeCustomerId, params, null);
+            return customer.getInvoiceSettings() != null
+                    ? customer.getInvoiceSettings().getDefaultPaymentMethodObject()
+                    : null;
+        } catch (com.stripe.exception.StripeException e) {
+            log.warn("Could not retrieve default payment method for customer {}: {}", stripeCustomerId, e.getMessage());
+            return null;
+        }
+    }
+
+    @Override
+    public void updatePaymentMethod(String stripeCustomerId, String paymentMethodId) {
+        try {
+            PaymentMethod pm = PaymentMethod.retrieve(paymentMethodId);
+            pm.attach(PaymentMethodAttachParams.builder().setCustomer(stripeCustomerId).build());
+
+            Customer customer = Customer.retrieve(stripeCustomerId);
+            customer.update(CustomerUpdateParams.builder()
+                    .setInvoiceSettings(
+                            CustomerUpdateParams.InvoiceSettings.builder()
+                                    .setDefaultPaymentMethod(paymentMethodId)
+                                    .build()
+                    )
+                    .build());
+        } catch (com.stripe.exception.StripeException e) {
+            log.error("Failed to update payment method for customer {}: {}", stripeCustomerId, e.getMessage());
+            throw new StripeException("Failed to update payment method: " + e.getMessage());
+        }
+    }
+
+    @Override
     public void cancelSubscription(String stripeSubscriptionId) {
         try {
             com.stripe.model.Subscription subscription = com.stripe.model.Subscription.retrieve(stripeSubscriptionId);
@@ -109,6 +168,23 @@ public class StripeServiceImpl implements StripeService {
         } catch (com.stripe.exception.StripeException e) {
             log.error("Failed to create billing portal session for customer {}: {}", customerId, e.getMessage());
             throw new StripeException("Failed to create billing portal session: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public com.stripe.model.Subscription createSubscriptionImmediate(String stripeCustomerId, String priceId) {
+        try {
+            SubscriptionCreateParams params = SubscriptionCreateParams.builder()
+                    .setCustomer(stripeCustomerId)
+                    .addItem(SubscriptionCreateParams.Item.builder().setPrice(priceId).build())
+                    .setPaymentSettings(SubscriptionCreateParams.PaymentSettings.builder()
+                            .setSaveDefaultPaymentMethod(SubscriptionCreateParams.PaymentSettings.SaveDefaultPaymentMethod.ON_SUBSCRIPTION)
+                            .build())
+                    .setCollectionMethod(SubscriptionCreateParams.CollectionMethod.CHARGE_AUTOMATICALLY)
+                    .build();
+            return com.stripe.model.Subscription.create(params);
+        } catch (com.stripe.exception.StripeException e) {
+            throw new StripeException("Failed to create subscription: " + e.getMessage());
         }
     }
 
