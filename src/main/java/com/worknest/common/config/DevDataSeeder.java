@@ -452,19 +452,16 @@ public class DevDataSeeder implements ApplicationRunner {
         for (EmployeeSeedRow e : employees) {
             jdbcTemplate.update(balanceSql, UUID.randomUUID(), companyId, e.employeeId(), year, "VACATION", BigDecimal.valueOf(20.0), BigDecimal.valueOf(6.5), nowTs, nowTs);
             jdbcTemplate.update(balanceSql, UUID.randomUUID(), companyId, e.employeeId(), year, "SICK", BigDecimal.valueOf(12.0), BigDecimal.valueOf(2.0), nowTs, nowTs);
-            jdbcTemplate.update(balanceSql, UUID.randomUUID(), companyId, e.employeeId(), year, "PERSONAL", BigDecimal.valueOf(5.0), BigDecimal.valueOf(1.0), nowTs, nowTs);
+            jdbcTemplate.update(balanceSql, UUID.randomUUID(), companyId, e.employeeId(), year, "PARENTAL", BigDecimal.valueOf(90.0), BigDecimal.valueOf(0.0), nowTs, nowTs);
 
             for (int i = 0; i < perEmployee; i++) {
                 LocalDate start = LocalDate.now().minusDays((long) (i + 1) * 9 + Math.floorMod(e.employeeId().hashCode(), 5));
                 int span = (i % 4 == 0) ? 1 : (i % 5 == 0 ? 0 : 2);
                 LocalDate end = span == 0 ? start : start.plusDays(span);
-                String type = switch (i % 6) {
+                String type = switch (i % 3) {
                     case 0 -> "VACATION";
                     case 1 -> "SICK";
-                    case 2 -> "PERSONAL";
-                    case 3 -> "UNPAID";
-                    case 4 -> "MATERNITY";
-                    default -> "OTHER";
+                    default -> "PARENTAL";
                 };
                 String status = switch (i % 4) {
                     case 0 -> "APPROVED";

@@ -1,5 +1,6 @@
 package com.worknest.features.payroll.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.worknest.domain.enums.EmploymentType;
 import com.worknest.domain.enums.PaymentMethod;
 import com.worknest.domain.enums.PayrollAdjustmentType;
@@ -98,8 +99,10 @@ public final class PayrollDtos {
             WorkPeriodDetails workPeriod,
             BasePayDetails basePayCalculation,
             HourlyAttendancePaymentDetails hourlyAttendancePayment,
+            FixedSalaryAttendancePaymentDetails fixedSalaryAttendancePayment,
             LeaveCalculationDetails leaveCalculation,
             SickLeaveCalculationDetails sickLeaveCalculation,
+            ParentalLeaveCalculationDetails parentalLeaveCalculation,
             AdjustmentDetails adjustments,
             StatutoryDeductionDetails statutoryDeductions,
             AbsenceDetails absenceDetails,
@@ -122,6 +125,7 @@ public final class PayrollDtos {
             PayrollCalculationStatus calculationStatus,
             boolean preview,
             BigDecimal basePay,
+            BigDecimal overtimePay,
             BigDecimal totalBonus,
             BigDecimal totalManualDeduction,
             BigDecimal hourlyFullPayment,
@@ -137,6 +141,15 @@ public final class PayrollDtos {
             BigDecimal employerCostTotal,
             List<String> warnings
     ) {
+        @JsonProperty("status")
+        public PayrollStatus status() {
+            return payrollStatus;
+        }
+
+        @JsonProperty("deductions")
+        public BigDecimal deductions() {
+            return totalManualDeduction;
+        }
     }
 
     public record EmploymentPeriodDetails(
@@ -178,9 +191,25 @@ public final class PayrollDtos {
     public record HourlyAttendancePaymentDetails(
             BigDecimal fullPayableHours,
             BigDecimal attendedHours,
+            BigDecimal paidHolidayHours,
+            BigDecimal payableHours,
             BigDecimal fullPayment,
             BigDecimal attendanceDeduction,
             BigDecimal paymentReceived,
+            String workHoursSource
+    ) {
+    }
+
+    public record FixedSalaryAttendancePaymentDetails(
+            BigDecimal expectedHours,
+            BigDecimal attendedHours,
+            BigDecimal paidHolidayHours,
+            BigDecimal payableAttendanceHours,
+            BigDecimal attendanceEquivalentPay,
+            BigDecimal baseSalary,
+            BigDecimal excessHours,
+            BigDecimal excessHourlyRate,
+            BigDecimal excessPay,
             String workHoursSource
     ) {
     }
@@ -218,6 +247,23 @@ public final class PayrollDtos {
             BigDecimal paidSickLeaveHours,
             BigDecimal unpaidSickLeaveHours,
             BigDecimal unpaidSickLeaveUnpaidAmount,
+            BigDecimal insuranceCoveredDays,
+            BigDecimal insuranceCoveredAmount,
+            String status
+    ) {
+    }
+
+    public record ParentalLeaveCalculationDetails(
+            BigDecimal daysTakenThisMonth,
+            BigDecimal companyPaidDays,
+            BigDecimal statePaidDays,
+            BigDecimal companyPaidPercentage,
+            BigDecimal companyPaidAmount,
+            BigDecimal paidParentalLeaveDeductionEquivalent,
+            BigDecimal totalParentalLeaveDeduction,
+            BigDecimal paidParentalLeaveHours,
+            BigDecimal stateParentalLeaveHours,
+            BigDecimal stateParentalLeaveAmount,
             BigDecimal insuranceCoveredDays,
             BigDecimal insuranceCoveredAmount,
             String status
@@ -292,6 +338,26 @@ public final class PayrollDtos {
     ) {
     }
 
+    public record UpsertParentalLeavePolicyRequest(
+            @NotNull(message = "companyPaidPercentage is required")
+            @DecimalMin(value = "0.01", message = "companyPaidPercentage must be > 0")
+            @DecimalMax(value = "100.00", message = "companyPaidPercentage must be <= 100")
+            BigDecimal companyPaidPercentage,
+
+            @NotNull(message = "maxCompanyPaidDays is required")
+            @Min(value = 1, message = "maxCompanyPaidDays must be >= 1")
+            @Max(value = 365, message = "maxCompanyPaidDays must be <= 365")
+            Integer maxCompanyPaidDays
+    ) {
+    }
+
+    public record ParentalLeavePolicyResponse(
+            BigDecimal companyPaidPercentage,
+            int maxCompanyPaidDays,
+            boolean isDefault
+    ) {
+    }
+
     // ── Statutory deductions ─────────────────────────────────────────────────
 
     public record StatutoryDeductionDetails(
@@ -360,8 +426,7 @@ public final class PayrollDtos {
         UNPAID_EXCESS,
         UNPAID_EXPLICIT,
         SICK_COMPANY_POLICY,
-        STATUTORY_MATERNITY,
-        STATUTORY_PATERNITY
+        PARENTAL_COMPANY_POLICY
     }
 
     // ── Settings DTOs (§3) ───────────────────────────────────────────────────
@@ -377,9 +442,8 @@ public final class PayrollDtos {
             BigDecimal pensionEmployerRate,
             BigDecimal contributionMinBase,
             BigDecimal contributionMaxBase,
-            BigDecimal maternityEmployerTopupRate,
-            BigDecimal paternityEmployerTopupRate,
             SickLeavePolicyResponse sickLeavePolicy,
+            ParentalLeavePolicyResponse parentalLeavePolicy,
             boolean isDefault
     ) {
     }
@@ -411,13 +475,7 @@ public final class PayrollDtos {
 
             BigDecimal contributionMinBase,
 
-            BigDecimal contributionMaxBase,
-
-            @NotNull @DecimalMin("0") @DecimalMax("100")
-            BigDecimal maternityEmployerTopupRate,
-
-            @NotNull @DecimalMin("0") @DecimalMax("100")
-            BigDecimal paternityEmployerTopupRate
+            BigDecimal contributionMaxBase
     ) {
     }
 

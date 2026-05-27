@@ -11,7 +11,9 @@ import com.worknest.features.payroll.dto.PayrollDtos.PayrollAdjustmentResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollCalculationResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollEmployeeSummaryResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollPeriodRequest;
+import com.worknest.features.payroll.dto.PayrollDtos.ParentalLeavePolicyResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.SickLeavePolicyResponse;
+import com.worknest.features.payroll.dto.PayrollDtos.UpsertParentalLeavePolicyRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.UpsertSickLeavePolicyRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -41,7 +43,7 @@ public class AdminPayrollController {
     private final PayslipPdfService payslipPdfService;
 
     @GetMapping("/employees")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_VIEW')")
     @Operation(summary = "List employees with payroll month summary for the payroll table")
     public ApiResponse<PaginatedResponse<PayrollEmployeeSummaryResponse>> listEmployees(
             @RequestParam int year,
@@ -57,7 +59,7 @@ public class AdminPayrollController {
     }
 
     @PostMapping("/employees/{employeeId}/adjustments/bonus")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_UPDATE')")
     @Operation(summary = "Add a bonus adjustment for an employee payroll period")
     public ApiResponse<PayrollAdjustmentResponse> addBonus(
             @PathVariable UUID employeeId,
@@ -67,7 +69,7 @@ public class AdminPayrollController {
     }
 
     @PostMapping("/employees/{employeeId}/adjustments/deduction")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_UPDATE')")
     @Operation(summary = "Add a deduction adjustment for an employee payroll period")
     public ApiResponse<PayrollAdjustmentResponse> addDeduction(
             @PathVariable UUID employeeId,
@@ -77,7 +79,7 @@ public class AdminPayrollController {
     }
 
     @GetMapping("/employees/{employeeId}/details")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_VIEW')")
     @Operation(summary = "Preview comprehensive payroll details without persisting a calculation")
     public ApiResponse<PayrollCalculationResponse> details(
             @PathVariable UUID employeeId,
@@ -89,7 +91,7 @@ public class AdminPayrollController {
     }
 
     @GetMapping("/employees/{employeeId}/calculate")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_CALCULATE')")
     @Operation(summary = "Preview payroll details for one employee (reads snapshot if locked, otherwise recomputes; does not persist)")
     public ApiResponse<PayrollCalculationResponse> previewCalculate(
             @PathVariable UUID employeeId,
@@ -101,7 +103,7 @@ public class AdminPayrollController {
     }
 
     @PostMapping("/employees/{employeeId}/calculate")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_CALCULATE')")
     @Operation(summary = "Calculate and persist payroll result for one employee")
     public ApiResponse<PayrollCalculationResponse> calculateEmployee(
             @PathVariable UUID employeeId,
@@ -112,7 +114,7 @@ public class AdminPayrollController {
     }
 
     @PostMapping("/calculate")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_CALCULATE')")
     @Operation(summary = "Calculate payroll for all employees or a filtered employee set")
     public ApiResponse<BatchPayrollCalculationResponse> calculateBatch(
             @Valid @RequestBody BatchPayrollCalculationRequest request
@@ -121,7 +123,7 @@ public class AdminPayrollController {
     }
 
     @PostMapping("/employees/{employeeId}/approve")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_APPROVE')")
     @Operation(summary = "Approve a calculated payroll (CALCULATED → APPROVED)")
     public ApiResponse<PayrollCalculationResponse> approvePayroll(
             @PathVariable UUID employeeId,
@@ -131,7 +133,7 @@ public class AdminPayrollController {
     }
 
     @PostMapping("/employees/{employeeId}/finalize")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_APPROVE')")
     @Operation(summary = "Finalize an approved payroll (APPROVED → FINALIZED)")
     public ApiResponse<PayrollCalculationResponse> finalizePayroll(
             @PathVariable UUID employeeId,
@@ -141,7 +143,7 @@ public class AdminPayrollController {
     }
 
     @PostMapping("/employees/{employeeId}/complete-payment")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_APPROVE')")
     @Operation(summary = "Transition payroll FINALIZED → PAID and freeze the payslip snapshot")
     public ApiResponse<PayrollCalculationResponse> completePayment(
             @PathVariable UUID employeeId,
@@ -151,7 +153,7 @@ public class AdminPayrollController {
     }
 
     @PostMapping("/employees/{employeeId}/revert-approval")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_APPROVE')")
     @Operation(summary = "Revert an approved payroll back to calculated (APPROVED → CALCULATED). Also unlocks attendance records for the period.")
     public ApiResponse<PayrollCalculationResponse> revertApproval(
             @PathVariable UUID employeeId,
@@ -161,7 +163,7 @@ public class AdminPayrollController {
     }
 
     @PostMapping("/employees/{employeeId}/revert-finalization")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_APPROVE')")
     @Operation(summary = "Revert a finalized payroll back to approved (FINALIZED → APPROVED)")
     public ApiResponse<PayrollCalculationResponse> revertFinalization(
             @PathVariable UUID employeeId,
@@ -171,7 +173,7 @@ public class AdminPayrollController {
     }
 
     @PostMapping("/employees/{employeeId}/revert-payment")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_APPROVE')")
     @Operation(summary = "Revert a paid payroll back to finalized (PAID → FINALIZED)")
     public ApiResponse<PayrollCalculationResponse> revertPayment(
             @PathVariable UUID employeeId,
@@ -181,7 +183,7 @@ public class AdminPayrollController {
     }
 
     @GetMapping("/employees/{employeeId}/payslip")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('STAFF', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_VIEW')")
     @Operation(summary = "Download payslip PDF for an employee's payroll period (requires CALCULATED or later status; STAFF scoped to assigned employees)")
     public ResponseEntity<byte[]> payslip(
             @PathVariable UUID employeeId,
@@ -197,18 +199,34 @@ public class AdminPayrollController {
     }
 
     @GetMapping("/sick-leave-policy")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_UPDATE')")
     @Operation(summary = "Get the company's sick leave policy configuration")
     public ApiResponse<SickLeavePolicyResponse> getSickLeavePolicy() {
         return ApiResponse.success("Sick leave policy retrieved", payrollService.getSickLeavePolicy());
     }
 
     @PutMapping("/sick-leave-policy")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_UPDATE')")
     @Operation(summary = "Create or update the company's sick leave policy configuration")
     public ApiResponse<SickLeavePolicyResponse> upsertSickLeavePolicy(
             @Valid @RequestBody UpsertSickLeavePolicyRequest request
     ) {
         return ApiResponse.success("Sick leave policy updated", payrollService.upsertSickLeavePolicy(request));
+    }
+
+    @GetMapping("/parental-leave-policy")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_UPDATE')")
+    @Operation(summary = "Get the company's parental leave policy configuration")
+    public ApiResponse<ParentalLeavePolicyResponse> getParentalLeavePolicy() {
+        return ApiResponse.success("Parental leave policy retrieved", payrollService.getParentalLeavePolicy());
+    }
+
+    @PutMapping("/parental-leave-policy")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('PAYROLL_UPDATE')")
+    @Operation(summary = "Create or update the company's parental leave policy (company-paid % and max days per year, remainder covered by social security)")
+    public ApiResponse<ParentalLeavePolicyResponse> upsertParentalLeavePolicy(
+            @Valid @RequestBody UpsertParentalLeavePolicyRequest request
+    ) {
+        return ApiResponse.success("Parental leave policy updated", payrollService.upsertParentalLeavePolicy(request));
     }
 }

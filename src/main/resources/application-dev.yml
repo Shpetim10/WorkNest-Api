@@ -11,7 +11,7 @@ spring:
 app:
   seed:
     dev-data:
-      enabled: true
+      enabled: false
 
 logging:
   level:

@@ -70,7 +70,7 @@ public class CompanySiteController {
     private final SiteTrustedNetworkService networkService;
 
     @GetMapping
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'COMPANY_SITE_VIEW')")
     @Operation(
             summary = "List company sites",
             description = "Returns all sites for the given company ordered by createdAt descending. " +
@@ -88,7 +88,7 @@ public class CompanySiteController {
     }
 
     @GetMapping("/{siteId}")
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'COMPANY_SITE_VIEW')")
     @Operation(
             summary = "Get company site details",
             description = "Returns comprehensive details for a specific site, including basic info, location, " +
@@ -102,7 +102,7 @@ public class CompanySiteController {
     }
 
     @GetMapping("/lookup")
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'COMPANY_SITE_VIEW')")
     @Operation(
             summary = "Lookup company sites",
             description = "Returns a lightweight id/code/name list of all ACTIVE sites for the given company (e.g. for dropdowns)."
@@ -112,7 +112,7 @@ public class CompanySiteController {
     }
 
     @GetMapping("/{siteId}/main-details")
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'COMPANY_SITE_VIEW')")
     @Operation(
             summary = "Get main details of a site",
             description = "Returns only the main details required for prefilling the Update Main Details modal, minimizing payload."
@@ -125,7 +125,7 @@ public class CompanySiteController {
     }
 
     @PutMapping("/{siteId}/main-details")
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'COMPANY_SITE_UPDATE')")
     @Operation(
             summary = "Update site main details",
             description = "Updates only the main details of an existing site. Strict optimistic locking and business rules apply."
@@ -140,7 +140,7 @@ public class CompanySiteController {
     }
 
     @GetMapping("/{siteId}/location")
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'COMPANY_SITE_VIEW')")
     @Operation(
             summary = "Get location details of a site",
             description = "Returns the location details to prefill the Update Location modal."
@@ -153,7 +153,7 @@ public class CompanySiteController {
     }
 
     @PutMapping("/{siteId}/location")
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'COMPANY_SITE_UPDATE')")
     @Operation(
             summary = "Update site location",
             description = "Replaces the site's location and geofence state. Strict normalization rules override client mismatches."
@@ -168,7 +168,7 @@ public class CompanySiteController {
     }
 
     @PostMapping("/{siteId}/detect-location")
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'COMPANY_SITE_UPDATE')")
     @Operation(
             summary = "Assess browser coordinates against geofence",
             description = "Assesses transient coordinates from the frontend map against the current site boundaries to provide UI feedback."
@@ -183,7 +183,7 @@ public class CompanySiteController {
     // ── Network Management Endpoints ──────────────────────────────────────────
 
     @GetMapping("/{siteId}/networks")
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'COMPANY_SITE_VIEW')")
     @Operation(summary = "List site trusted networks", description = "Returns all trusted networks for a specific site.")
     public ApiResponse<PaginatedResponse<TrustedNetworkResponse>> listNetworks(
             @PathVariable UUID companyId,
@@ -198,7 +198,7 @@ public class CompanySiteController {
     }
 
     @PutMapping("/{siteId}/networks/{networkId}")
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'COMPANY_SITE_UPDATE')")
     @Operation(summary = "Update trusted network", description = "Updates an existing trusted network rule.")
     public ApiResponse<TrustedNetworkResponse> updateNetwork(
             @PathVariable UUID companyId,
@@ -222,7 +222,7 @@ public class CompanySiteController {
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'COMPANY_SITE_CREATE')")
     @Operation(
             summary = "Create company site",
             description = "One-shot endpoint that creates a site, its geofence, and optional trusted-network rules " +
@@ -239,7 +239,7 @@ public class CompanySiteController {
     }
 
     @PostMapping("/{siteId}/activate")
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'COMPANY_SITE_UPDATE')")
     @Operation(
             summary = "Activate company site",
             description = "Transitions a site from PENDING_REVIEW or DISABLED to ACTIVE. " +
@@ -256,7 +256,7 @@ public class CompanySiteController {
     }
 
     @PostMapping("/{siteId}/disable")
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'COMPANY_SITE_UPDATE')")
     @Operation(
             summary = "Disable company site",
             description = "Administratively disables an ACTIVE site. Geofence and network checks will no longer permit " +

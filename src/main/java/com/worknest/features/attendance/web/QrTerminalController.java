@@ -33,7 +33,7 @@ public class QrTerminalController {
 
     @PostMapping("/api/v1/sites/{siteId}/qr-terminals")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN', 'STAFF')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('QR_TERMINAL_CREATE')")
     @Operation(summary = "Create QR terminal for a site")
     public ApiResponse<QrTerminalSummaryDto> createTerminal(
             @PathVariable UUID siteId,
@@ -44,7 +44,7 @@ public class QrTerminalController {
     }
 
     @GetMapping("/api/v1/qr-terminals/{terminalId}/current")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN', 'STAFF')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('QR_TERMINAL_VIEW')")
     @Operation(summary = "Get current QR token for terminal display")
     public ApiResponse<QrCurrentTokenResponse> currentToken(@PathVariable UUID terminalId) {
         UUID companyId = currentPrincipal().companyId();
@@ -52,7 +52,7 @@ public class QrTerminalController {
     }
 
     @PostMapping("/api/v1/qr-terminals/{terminalId}/refresh")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN', 'STAFF')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('QR_TERMINAL_UPDATE')")
     @Operation(summary = "Force-refresh terminal QR token")
     public ApiResponse<QrCurrentTokenResponse> refreshToken(@PathVariable UUID terminalId) {
         UUID companyId = currentPrincipal().companyId();

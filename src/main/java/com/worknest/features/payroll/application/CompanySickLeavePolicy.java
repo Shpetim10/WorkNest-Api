@@ -32,6 +32,7 @@ public class CompanySickLeavePolicy implements SickLeavePolicy {
     private static final int DEFAULT_MAX_COMPANY_PAID_DAYS = 14;
 
     private final CompanySickLeavePolicyConfigRepository policyConfigRepository;
+    private final WorkingDayCalculator workingDayCalculator;
 
     @Override
     public SickLeaveCalculationDetails calculate(
@@ -47,10 +48,12 @@ public class CompanySickLeavePolicy implements SickLeavePolicy {
         // Sick days taken so far this calendar year, BEFORE this payroll period
         LocalDate yearStart = context.periodStart().withDayOfYear(1);
         LocalDate dayBeforePeriod = context.periodStart().minusDays(1);
-        BigDecimal ytdDaysBefore = countWorkingDays(sickLeavesInYear, yearStart, dayBeforePeriod);
+        BigDecimal ytdDaysBefore = countWorkingDays(
+                employee.getCompany().getId(), sickLeavesInYear, yearStart, dayBeforePeriod);
 
         // Sick days taken within this payroll period
-        BigDecimal daysThisMonth = countWorkingDays(sickLeavesInMonth, context.periodStart(), context.periodEnd());
+        BigDecimal daysThisMonth = countWorkingDays(
+                employee.getCompany().getId(), sickLeavesInMonth, context.periodStart(), context.periodEnd());
 
         int maxCompanyDays = config.getMaxCompanyPaidDays();
 
@@ -126,7 +129,12 @@ public class CompanySickLeavePolicy implements SickLeavePolicy {
         );
     }
 
-    private BigDecimal countWorkingDays(List<LeaveRequest> leaves, LocalDate rangeStart, LocalDate rangeEnd) {
+    private BigDecimal countWorkingDays(
+            java.util.UUID companyId,
+            List<LeaveRequest> leaves,
+            LocalDate rangeStart,
+            LocalDate rangeEnd
+    ) {
         if (rangeEnd.isBefore(rangeStart)) {
             return BigDecimal.ZERO;
         }
@@ -136,7 +144,8 @@ public class CompanySickLeavePolicy implements SickLeavePolicy {
             LocalDate to = PayrollDateUtils.min(leave.getEndDate(), rangeEnd);
             LocalDate cursor = from;
             while (!cursor.isAfter(to)) {
-                if (PayrollDateUtils.isWorkingDay(cursor)) {
+                if (workingDayCalculator.isWorkingDay(companyId, cursor)
+                        && !workingDayCalculator.isPaidHoliday(companyId, cursor)) {
                     uniqueDays.add(cursor);
                 }
                 cursor = cursor.plusDays(1);

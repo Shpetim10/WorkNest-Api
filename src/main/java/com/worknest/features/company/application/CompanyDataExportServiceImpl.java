@@ -5,7 +5,9 @@ import com.worknest.audit.service.AuditLogService;
 import com.worknest.common.exception.BusinessException;
 import com.worknest.domain.entities.Company;
 import com.worknest.domain.entities.RoleAssignment;
+import com.worknest.domain.enums.PermissionCode;
 import com.worknest.domain.enums.PlatformRole;
+import com.worknest.features.auth.repository.RoleAssignmentPermissionRepository;
 import com.worknest.features.company.application.export.CompanyDataExportDataProvider;
 import com.worknest.features.company.application.export.CompanyDataExportFile;
 import com.worknest.features.company.application.export.ExportLocalizationService;
@@ -39,6 +41,7 @@ public class CompanyDataExportServiceImpl implements CompanyDataExportService {
 
     private final CompanyRepository companyRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
+    private final RoleAssignmentPermissionRepository roleAssignmentPermissionRepository;
     private final CompanyDataExportDataProvider dataProvider;
     private final ZipExportWriter zipExportWriter;
     private final ExportLocalizationService localization;
@@ -66,7 +69,9 @@ public class CompanyDataExportServiceImpl implements CompanyDataExportService {
         RoleAssignment actorAssignment = roleAssignmentRepository
                 .findFirstByUserIdAndCompanyIdAndIsActiveTrue(principal.userId(), companyId)
                 .orElseThrow(() -> new AccessDeniedException("Only company admins can export company data."));
-        if (actorAssignment.getRole() != PlatformRole.ADMIN && actorAssignment.getRole() != PlatformRole.SUPERADMIN) {
+        if (actorAssignment.getRole() != PlatformRole.ADMIN
+                && actorAssignment.getRole() != PlatformRole.SUPERADMIN
+                && !hasPermission(actorAssignment, PermissionCode.COMPANY_DATA_EXPORT)) {
             throw new AccessDeniedException("Only company admins can export company data.");
         }
 
@@ -105,6 +110,16 @@ public class CompanyDataExportServiceImpl implements CompanyDataExportService {
                     "Company data export generation failed."
             );
         }
+    }
+
+    private boolean hasPermission(RoleAssignment assignment, PermissionCode permissionCode) {
+        if (assignment.getRole() != PlatformRole.STAFF) {
+            return false;
+        }
+        return roleAssignmentPermissionRepository
+                .findByRoleAssignmentIdAndPermissionCode(assignment.getId(), permissionCode.code())
+                .map(grant -> Boolean.TRUE.equals(grant.getIsGranted()))
+                .orElse(false);
     }
 
     private void logExport(

@@ -9,6 +9,7 @@ import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.employee.repository.EmployeeRepository;
 import com.worknest.features.employee.dto.MobileProfileResponse;
 import com.worknest.security.AuthSessionPrincipal;
+import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -42,6 +43,11 @@ public class MobileProfileServiceImpl implements MobileProfileService {
         String department = null;
         String location = null;
         String role = null;
+        String siteName = null;
+        String contractType = null;
+        String contractStatus = null;
+        LocalDate contractStartDate = null;
+        LocalDate contractEndDate = null;
 
         if (roleAssignment != null) {
             jobTitle = roleAssignment.getJobTitle();
@@ -55,6 +61,7 @@ public class MobileProfileServiceImpl implements MobileProfileService {
                 department = employee.getDepartment().getName();
             }
             if (employee.getCompanySite() != null) {
+                siteName = employee.getCompanySite().getName();
                 String city = employee.getCompanySite().getCity();
                 String country = employee.getCompanySite().getCountryCode();
                 if (city != null && country != null) {
@@ -68,6 +75,14 @@ public class MobileProfileServiceImpl implements MobileProfileService {
             if (role == null && employee.getEmploymentTypeRole() != null) {
                 role = employee.getEmploymentTypeRole().name();
             }
+            if (employee.getEmploymentType() != null) {
+                contractType = employee.getEmploymentType().name();
+            }
+            if (employee.getEmploymentStatus() != null) {
+                contractStatus = employee.getEmploymentStatus().name();
+            }
+            contractStartDate = employee.getStartDate();
+            contractEndDate = employee.getContractExpiryDate();
         }
 
         return new MobileProfileResponse(
@@ -78,7 +93,13 @@ public class MobileProfileServiceImpl implements MobileProfileService {
                 department,
                 location,
                 role,
-                user.getEmail()
+                user.getEmail(),
+                department,
+                siteName,
+                contractType,
+                contractStatus,
+                contractStartDate,
+                contractEndDate
         );
     }
 

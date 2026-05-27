@@ -4,6 +4,7 @@ import com.worknest.domain.enums.PlatformRole;
 import com.worknest.features.auth.dto.TenantContextDto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Schema(description = "Response containing the new session tokens and active context")
@@ -27,6 +28,9 @@ public record SelectRoleResponse(
         TenantContextDto tenantContext,
 
         @Schema(description = "Expiration timestamp of the refresh token")
-        Instant refreshTokenExpiresAt
+        Instant refreshTokenExpiresAt,
+
+        @Schema(description = "Granted permission codes for STAFF role; empty for other roles.")
+        List<String> permissions
 ) {
 }

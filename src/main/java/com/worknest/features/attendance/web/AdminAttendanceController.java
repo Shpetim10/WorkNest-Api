@@ -31,7 +31,7 @@ public class AdminAttendanceController {
     private final StaffAttendanceService staffAttendanceService;
 
     @GetMapping("/dashboard")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('ATTENDANCE_VIEW')")
     @Operation(summary = "Get daily attendance dashboard — all company employees, optional site and department filters")
     public ApiResponse<AttendanceDashboardResponse> dashboard(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -45,7 +45,7 @@ public class AdminAttendanceController {
     }
 
     @GetMapping("/reports/monthly")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('ATTENDANCE_VIEW')")
     @Operation(summary = "Get monthly attendance report")
     public ApiResponse<AdminAttendanceMonthlyReportResponse> monthly(
             @RequestParam int year,
@@ -62,7 +62,7 @@ public class AdminAttendanceController {
     }
 
     @GetMapping("/export")
-    @PreAuthorize("@companySecurity.hasCurrentCompanyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasCurrentCompanyPermission('ATTENDANCE_VIEW')")
     @Operation(summary = "Export attendance dataset (structured payload for future file generators)")
     public ApiResponse<AdminAttendanceMonthlyReportResponse> export(
             @RequestParam int year,

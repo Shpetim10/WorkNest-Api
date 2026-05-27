@@ -34,7 +34,7 @@ public class CompanySettingsController {
     private final CompanySettingsService companySettingsService;
 
     @GetMapping
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN', 'STAFF', 'EMPLOYEE')")
+    @PreAuthorize("@teamSecurity.hasCompanyRoleOrPermission(#companyId, 'COMPANY_SETTINGS_VIEW', 'EMPLOYEE')")
     @Operation(summary = "Get company settings")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Company settings retrieved successfully"),
@@ -47,7 +47,7 @@ public class CompanySettingsController {
     }
 
     @PutMapping
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'COMPANY_SETTINGS_UPDATE')")
     @Operation(summary = "Update company settings", description = "Updates editable company fields. Email cannot be changed here.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Company settings updated successfully"),
@@ -65,7 +65,7 @@ public class CompanySettingsController {
     }
 
     @PostMapping("/currency")
-    @PreAuthorize("@companySecurity.hasCompanyRole(#companyId, 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@teamSecurity.hasPermission(#companyId, 'COMPANY_SETTINGS_UPDATE')")
     @Operation(
             summary = "Change company currency",
             description = "Converts all stored monetary values (employee salaries, payroll results, adjustments) by the given exchange rate and updates the company currency.")

@@ -10,6 +10,7 @@ import com.worknest.common.plan.PlanEnforcementService;
 import com.worknest.common.api.PaginationSupport;
 import com.worknest.common.exception.BusinessException;
 import com.worknest.domain.entities.Company;
+import com.worknest.domain.entities.CompanyParentalLeavePolicyConfig;
 import com.worknest.domain.entities.CompanySickLeavePolicyConfig;
 import com.worknest.domain.entities.Employee;
 import com.worknest.domain.entities.LeaveBalance;
@@ -21,6 +22,9 @@ import com.worknest.domain.enums.PayrollAdjustmentType;
 import com.worknest.domain.enums.PayrollCalculationStatus;
 import com.worknest.domain.enums.PayrollStatus;
 import com.worknest.domain.enums.PlatformRole;
+import com.worknest.domain.enums.NotificationType;
+import com.worknest.domain.enums.NotificationTargetType;
+import com.worknest.features.notification.application.NotificationService;
 import com.worknest.features.attendance.repository.AttendanceDayRecordRepository;
 import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.company.repository.CompanyRepository;
@@ -36,8 +40,11 @@ import com.worknest.features.payroll.dto.PayrollDtos.PayrollCalculationResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollEmployeeSummaryResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollMonthSummary;
 import com.worknest.features.payroll.dto.PayrollDtos.PayrollPeriodRequest;
+import com.worknest.features.payroll.dto.PayrollDtos.ParentalLeavePolicyResponse;
 import com.worknest.features.payroll.dto.PayrollDtos.SickLeavePolicyResponse;
+import com.worknest.features.payroll.dto.PayrollDtos.UpsertParentalLeavePolicyRequest;
 import com.worknest.features.payroll.dto.PayrollDtos.UpsertSickLeavePolicyRequest;
+import com.worknest.features.payroll.repository.CompanyParentalLeavePolicyConfigRepository;
 import com.worknest.features.payroll.repository.CompanySickLeavePolicyConfigRepository;
 import com.worknest.features.payroll.repository.PayrollAdjustmentRepository;
 import com.worknest.features.payroll.repository.PayrollResultRepository;
@@ -81,10 +88,12 @@ public class PayrollServiceImpl implements PayrollService {
     private final PayrollCalculationEngine calculationEngine;
     private final ObjectMapper objectMapper;
     private final CompanySickLeavePolicyConfigRepository sickLeavePolicyRepository;
+    private final CompanyParentalLeavePolicyConfigRepository parentalLeavePolicyRepository;
     private final CompanyRepository companyRepository;
     private final AttendanceDayRecordRepository attendanceDayRecordRepository;
     private final AuditLogService auditLogService;
     private final PlanEnforcementService planEnforcementService;
+    private final NotificationService notificationService;
 
     @Override
     public PayrollAdjustmentResponse addBonus(UUID employeeId, PayrollAdjustmentRequest request) {
@@ -260,6 +269,35 @@ public class PayrollServiceImpl implements PayrollService {
 
     @Override
     @Transactional(readOnly = true)
+    public ParentalLeavePolicyResponse getParentalLeavePolicy() {
+        UUID companyId = principal().companyId();
+        return parentalLeavePolicyRepository.findByCompanyId(companyId)
+                .map(cfg -> new ParentalLeavePolicyResponse(cfg.getCompanyPaidPercentage(), cfg.getMaxCompanyPaidDays(), false))
+                .orElse(new ParentalLeavePolicyResponse(new BigDecimal("80.00"), 90, true));
+    }
+
+    @Override
+    public ParentalLeavePolicyResponse upsertParentalLeavePolicy(UpsertParentalLeavePolicyRequest request) {
+        UUID companyId = principal().companyId();
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "COMPANY_NOT_FOUND", "Company not found."));
+        CompanyParentalLeavePolicyConfig cfg = parentalLeavePolicyRepository.findByCompanyId(companyId)
+                .orElseGet(() -> {
+                    CompanyParentalLeavePolicyConfig c = new CompanyParentalLeavePolicyConfig();
+                    c.setCompany(company);
+                    return c;
+                });
+        cfg.setCompanyPaidPercentage(request.companyPaidPercentage().setScale(2, java.math.RoundingMode.HALF_UP));
+        cfg.setMaxCompanyPaidDays(request.maxCompanyPaidDays());
+        parentalLeavePolicyRepository.save(cfg);
+        audit("PARENTAL_POLICY_UPSERTED", "parental_leave_policy", companyId,
+                Map.of("percentage", cfg.getCompanyPaidPercentage(), "maxDays", cfg.getMaxCompanyPaidDays()),
+                Map.of("companyId", companyId));
+        return new ParentalLeavePolicyResponse(cfg.getCompanyPaidPercentage(), cfg.getMaxCompanyPaidDays(), false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<PayrollMonthSummary> listMyPayrollHistory() {
         AuthSessionPrincipal principal = principal();
         Employee employee = employeeRepository.findByUserIdAndCompanyId(principal.userId(), principal.companyId())
@@ -313,6 +351,20 @@ public class PayrollServiceImpl implements PayrollService {
                 Map.of("year", request.year(), "month", request.month(), "netPay", result.getNetPay()),
                 Map.of("companyId", principal.companyId(), "employeeId", employeeId,
                         "actorUserId", principal.userId(), "from", "CALCULATED", "to", "APPROVED"));
+
+        // Create in-app notification for the employee
+        String monthFormatted = String.format("%02d", result.getMonth());
+        String period = result.getYear() + "-" + monthFormatted;
+        notificationService.createNotification(
+                result.getCompany(),
+                result.getEmployee().getUser(),
+                NotificationType.PAYSLIP_READY,
+                "Payslip Ready",
+                "Your payslip for " + period + " is now available",
+                result.getId(),
+                NotificationTargetType.PAYSLIP
+        );
+
         return responseFromSnapshot(result, false);
     }
 
@@ -539,6 +591,7 @@ public class PayrollServiceImpl implements PayrollService {
                 payroll.calculationStatus(),
                 payroll.preview(),
                 payroll.totals().basePay(),
+                payroll.totals().overtimePay(),
                 payroll.adjustments().totalBonus(),
                 payroll.adjustments().totalManualDeduction(),
                 payroll.hourlyAttendancePayment() != null ? payroll.hourlyAttendancePayment().fullPayment() : null,

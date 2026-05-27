@@ -17,6 +17,7 @@ import com.worknest.domain.entities.User;
 import com.worknest.domain.enums.CompanyStatus;
 import com.worknest.domain.enums.PlatformAccess;
 import com.worknest.domain.enums.PlatformRole;
+import com.worknest.features.auth.repository.RoleAssignmentPermissionRepository;
 import com.worknest.features.auth.repository.RoleAssignmentRepository;
 import com.worknest.features.company.application.export.CompanyDataExportDataProvider;
 import com.worknest.features.company.application.export.CompanyDataExportFile;
@@ -71,6 +72,9 @@ class CompanyDataExportServiceImplTest {
     private RoleAssignmentRepository roleAssignmentRepository;
 
     @Mock
+    private RoleAssignmentPermissionRepository roleAssignmentPermissionRepository;
+
+    @Mock
     private CompanyDataExportDataProvider dataProvider;
 
     @Mock
@@ -88,6 +92,7 @@ class CompanyDataExportServiceImplTest {
         service = new CompanyDataExportServiceImpl(
                 companyRepository,
                 roleAssignmentRepository,
+                roleAssignmentPermissionRepository,
                 dataProvider,
                 new ZipExportWriter(new ExcelExportWriter()),
                 localization,

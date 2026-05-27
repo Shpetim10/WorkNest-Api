@@ -9,6 +9,9 @@ import com.worknest.domain.enums.EmploymentStatus;
 import com.worknest.domain.enums.LeaveStatus;
 import com.worknest.domain.enums.LeaveType;
 import com.worknest.domain.enums.PayrollStatus;
+import com.worknest.domain.enums.NotificationType;
+import com.worknest.domain.enums.NotificationTargetType;
+import com.worknest.features.notification.application.NotificationService;
 import com.worknest.features.auth.repository.UserRepository;
 import com.worknest.features.employee.repository.EmployeeRepository;
 import com.worknest.features.leave.dto.ApproveLeaveRequestDto;
@@ -19,15 +22,18 @@ import com.worknest.features.leave.dto.RejectLeaveRequestDto;
 import com.worknest.realtime.event.LeaveRequestApprovedDomainEvent;
 import com.worknest.realtime.event.LeaveRequestRejectedDomainEvent;
 import com.worknest.realtime.event.LeaveRequestSubmittedDomainEvent;
+import com.worknest.domain.entities.CompanyParentalLeavePolicyConfig;
+import com.worknest.domain.entities.CompanySickLeavePolicyConfig;
 import com.worknest.features.leave.repository.LeaveBalanceRepository;
 import com.worknest.features.leave.repository.LeaveRequestRepository;
+import com.worknest.features.payroll.application.WorkingDayCalculator;
+import com.worknest.features.payroll.repository.CompanyParentalLeavePolicyConfigRepository;
+import com.worknest.features.payroll.repository.CompanySickLeavePolicyConfigRepository;
 import com.worknest.features.payroll.repository.PayrollResultRepository;
 import com.worknest.security.AuthSessionPrincipal;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -53,7 +59,11 @@ public class LeaveServiceImpl implements LeaveService {
     private final EmployeeRepository employeeRepository;
     private final UserRepository userRepository;
     private final PayrollResultRepository payrollResultRepository;
+    private final CompanySickLeavePolicyConfigRepository sickLeavePolicyRepository;
+    private final CompanyParentalLeavePolicyConfigRepository parentalLeavePolicyRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final NotificationService notificationService;
+    private final WorkingDayCalculator workingDayCalculator;
 
     @Override
     public List<LeaveBalanceDto> getMyBalance() {
@@ -61,11 +71,27 @@ public class LeaveServiceImpl implements LeaveService {
         Employee employee = resolveCurrentEmployee(principal);
         int year = LocalDate.now().getYear();
 
-        return Arrays.stream(LeaveType.values())
+        int sickMaxPaidDays = sickLeavePolicyRepository
+                .findByCompanyId(principal.companyId())
+                .map(CompanySickLeavePolicyConfig::getMaxCompanyPaidDays)
+                .orElse(14);
+
+        int parentalMaxPaidDays = parentalLeavePolicyRepository
+                .findByCompanyId(principal.companyId())
+                .map(CompanyParentalLeavePolicyConfig::getMaxCompanyPaidDays)
+                .orElse(90);
+
+        return List.of(LeaveType.VACATION, LeaveType.SICK, LeaveType.PARENTAL)
+                .stream()
                 .map(type -> {
                     LeaveBalance balance = findOrInitBalance(employee, type, year);
                     BigDecimal available = balance.getTotalDays().subtract(balance.getUsedDays()).max(BigDecimal.ZERO);
-                    return new LeaveBalanceDto(type, balance.getTotalDays(), balance.getUsedDays(), available);
+                    int maxPaidDays = switch (type) {
+                        case VACATION -> balance.getTotalDays().intValue();
+                        case SICK -> sickMaxPaidDays;
+                        case PARENTAL -> parentalMaxPaidDays;
+                    };
+                    return new LeaveBalanceDto(type, balance.getTotalDays(), balance.getUsedDays(), available, maxPaidDays);
                 })
                 .toList();
     }
@@ -104,8 +130,8 @@ public class LeaveServiceImpl implements LeaveService {
                     "A pending or approved leave request already exists for the selected dates.");
         }
 
-        long calendarDays = ChronoUnit.DAYS.between(request.startDate(), request.endDate()) + 1;
-        BigDecimal daysCount = BigDecimal.valueOf(calendarDays);
+        BigDecimal daysCount = workingDayCalculator.countWorkingDays(
+                employee.getCompany().getId(), request.startDate(), request.endDate());
 
         LeaveRequest leaveRequest = new LeaveRequest();
         leaveRequest.setCompany(employee.getCompany());
@@ -173,6 +199,21 @@ public class LeaveServiceImpl implements LeaveService {
                 principal.companyId(), requestId, request.getEmployee().getId(),
                 employeeUserId, principal.userId(), request.getLeaveType()
         ));
+
+        // Create in-app notification
+        String message = "Your " + request.getLeaveType().name().toLowerCase() + " leave (" + request.getStartDate() + " to " + request.getEndDate() + ") has been approved";
+        if (request.getApprovalNote() != null && !request.getApprovalNote().isBlank()) {
+            message += ": " + request.getApprovalNote();
+        }
+        notificationService.createNotification(
+                request.getCompany(),
+                request.getEmployee().getUser(),
+                NotificationType.LEAVE_APPROVED,
+                "Leave Request Approved",
+                message,
+                request.getId(),
+                NotificationTargetType.LEAVE_REQUEST
+        );
     }
 
     @Override
@@ -197,6 +238,21 @@ public class LeaveServiceImpl implements LeaveService {
                 principal.companyId(), requestId, request.getEmployee().getId(),
                 employeeUserId, principal.userId(), request.getLeaveType(), dto.reason()
         ));
+
+        // Create in-app notification
+        String message = "Your " + request.getLeaveType().name().toLowerCase() + " leave (" + request.getStartDate() + " to " + request.getEndDate() + ") has been rejected";
+        if (dto.reason() != null && !dto.reason().isBlank()) {
+            message += ": " + dto.reason();
+        }
+        notificationService.createNotification(
+                request.getCompany(),
+                request.getEmployee().getUser(),
+                NotificationType.LEAVE_REJECTED,
+                "Leave Request Rejected",
+                message,
+                request.getId(),
+                NotificationTargetType.LEAVE_REQUEST
+        );
     }
 
     @Override
@@ -221,6 +277,11 @@ public class LeaveServiceImpl implements LeaveService {
         }
 
         if (request.getStatus() == LeaveStatus.APPROVED) {
+            if (!LocalDate.now().isBefore(request.getStartDate())) {
+                throw new BusinessException(HttpStatus.CONFLICT, "LEAVE_ALREADY_STARTED",
+                        "Approved leave requests can only be cancelled before the leave start date.");
+            }
+
             ensurePayrollNotLocked(employee, request);
 
             leaveBalanceRepository
@@ -289,10 +350,9 @@ public class LeaveServiceImpl implements LeaveService {
 
     private int defaultDays(Employee employee, LeaveType type) {
         return switch (type) {
-            case VACATION, MATERNITY, PATERNITY, OTHER -> employee.getLeaveDaysPerYear() != null ? employee.getLeaveDaysPerYear() : 20;
+            case VACATION -> employee.getLeaveDaysPerYear() != null ? employee.getLeaveDaysPerYear() : 20;
             case SICK -> 10;
-            case PERSONAL -> 5;
-            case UNPAID -> 0;
+            case PARENTAL -> 90;
         };
     }
 

@@ -309,12 +309,18 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
                     "Worked minutes must not be negative.");
         }
 
-        record.setFirstCheckInAt(request.firstCheckInAt());
-        record.setLastCheckOutAt(request.lastCheckOutAt());
+        if (request.firstCheckInAt() != null) {
+            record.setFirstCheckInAt(request.firstCheckInAt());
+        }
+        if (request.lastCheckOutAt() != null) {
+            record.setLastCheckOutAt(request.lastCheckOutAt());
+        }
         if (request.workedMinutes() != null) {
             record.setWorkedMinutes(request.workedMinutes());
-        } else if (request.firstCheckInAt() != null && request.lastCheckOutAt() != null) {
-            record.setWorkedMinutes((int) Math.max(0L, java.time.Duration.between(request.firstCheckInAt(), request.lastCheckOutAt()).toMinutes()));
+        } else if (record.getFirstCheckInAt() != null && record.getLastCheckOutAt() != null) {
+            record.setWorkedMinutes((int) Math.max(0L, java.time.Duration.between(record.getFirstCheckInAt(), record.getLastCheckOutAt()).toMinutes()));
+        } else {
+            record.setWorkedMinutes(0);
         }
         record.setDayStatus(request.dayStatus());
         record.setReviewStatus(AttendanceReviewStatus.PENDING_REVIEW);

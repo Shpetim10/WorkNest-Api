@@ -45,7 +45,7 @@ class AdminCompanyDataExportControllerTest {
         GetMapping getMapping = method.getAnnotation(GetMapping.class);
 
         assertThat(preAuthorize).isNotNull();
-        assertThat(preAuthorize.value()).isEqualTo("isAuthenticated()");
+        assertThat(preAuthorize.value()).isEqualTo("@teamSecurity.hasCurrentCompanyPermission('COMPANY_DATA_EXPORT')");
         assertThat(getMapping.value()).containsExactly("/export");
         assertThat(getMapping.produces()).containsExactly("application/zip");
     }

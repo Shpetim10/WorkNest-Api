@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd"
+        objectQuotingStrategy="QUOTE_ONLY_RESERVED_WORDS">
+
+    <changeSet id="022-1" author="worknest">
+        <createTable tableName="notifications">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="company_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="recipient_user_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="type" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="title" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="message" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_type" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="read" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="read_at" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="notifications" baseColumnNames="company_id"
+                                  constraintName="fk_notifications_company"
+                                  referencedTableName="companies" referencedColumnNames="id"
+                                  onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="notifications" baseColumnNames="recipient_user_id"
+                                  constraintName="fk_notifications_recipient_user"
+                                  referencedTableName="users" referencedColumnNames="id"
+                                  onDelete="CASCADE"/>
+
+        <createIndex tableName="notifications" indexName="idx_notifications_company_recipient">
+            <column name="company_id"/>
+            <column name="recipient_user_id"/>
+        </createIndex>
+        <createIndex tableName="notifications" indexName="idx_notifications_recipient_read">
+            <column name="recipient_user_id"/>
+            <column name="read"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

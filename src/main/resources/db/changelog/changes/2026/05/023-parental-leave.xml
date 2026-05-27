@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd"
+        objectQuotingStrategy="QUOTE_ONLY_RESERVED_WORDS">
+
+    <!-- Migrate leave_requests: MATERNITY/PATERNITY → PARENTAL -->
+    <changeSet id="023-migrate-leave-requests-to-parental" author="codex">
+        <sql>
+            UPDATE leave_requests
+            SET leave_type = 'PARENTAL'
+            WHERE leave_type IN ('MATERNITY', 'PATERNITY')
+        </sql>
+    </changeSet>
+
+    <!-- Migrate leave_balances: merge MATERNITY → PARENTAL, then fold PATERNITY in -->
+    <changeSet id="023-migrate-leave-balances-to-parental" author="codex">
+        <!-- Rename MATERNITY rows to PARENTAL where no PARENTAL row exists yet -->
+        <sql>
+            UPDATE leave_balances
+            SET leave_type = 'PARENTAL'
+            WHERE leave_type = 'MATERNITY'
+              AND NOT EXISTS (
+                  SELECT 1 FROM leave_balances lb2
+                  WHERE lb2.company_id   = leave_balances.company_id
+                    AND lb2.employee_id  = leave_balances.employee_id
+                    AND lb2.year         = leave_balances.year
+                    AND lb2.leave_type   = 'PARENTAL'
+              )
+        </sql>
+        <!-- Where both MATERNITY and PARENTAL rows exist, merge used/total into PARENTAL then delete MATERNITY -->
+        <sql>
+            UPDATE leave_balances lb_parental
+            SET used_days  = lb_parental.used_days  + lb_mat.used_days,
+                total_days = GREATEST(lb_parental.total_days, lb_mat.total_days)
+            FROM leave_balances lb_mat
+            WHERE lb_mat.company_id  = lb_parental.company_id
+              AND lb_mat.employee_id = lb_parental.employee_id
+              AND lb_mat.year        = lb_parental.year
+              AND lb_mat.leave_type  = 'MATERNITY'
+              AND lb_parental.leave_type = 'PARENTAL'
+        </sql>
+        <sql>
+            DELETE FROM leave_balances WHERE leave_type = 'MATERNITY'
+        </sql>
+        <!-- Rename PATERNITY rows to PARENTAL where no PARENTAL row exists yet -->
+        <sql>
+            UPDATE leave_balances
+            SET leave_type = 'PARENTAL'
+            WHERE leave_type = 'PATERNITY'
+              AND NOT EXISTS (
+                  SELECT 1 FROM leave_balances lb2
+                  WHERE lb2.company_id   = leave_balances.company_id
+                    AND lb2.employee_id  = leave_balances.employee_id
+                    AND lb2.year         = leave_balances.year
+                    AND lb2.leave_type   = 'PARENTAL'
+              )
+        </sql>
+        <!-- Where both PATERNITY and PARENTAL rows exist, merge into PARENTAL then delete PATERNITY -->
+        <sql>
+            UPDATE leave_balances lb_parental
+            SET used_days  = lb_parental.used_days  + lb_pat.used_days,
+                total_days = GREATEST(lb_parental.total_days, lb_pat.total_days)
+            FROM leave_balances lb_pat
+            WHERE lb_pat.company_id  = lb_parental.company_id
+              AND lb_pat.employee_id = lb_parental.employee_id
+              AND lb_pat.year        = lb_parental.year
+              AND lb_pat.leave_type  = 'PATERNITY'
+              AND lb_parental.leave_type = 'PARENTAL'
+        </sql>
+        <sql>
+            DELETE FROM leave_balances WHERE leave_type = 'PATERNITY'
+        </sql>
+    </changeSet>
+
+    <!-- Drop legacy maternity/paternity columns from company_payroll_settings -->
+    <changeSet id="023-drop-maternity-paternity-columns" author="codex">
+        <sql>
+            ALTER TABLE company_payroll_settings
+            DROP CONSTRAINT IF EXISTS chk_payroll_settings_maternity_rate;
+            ALTER TABLE company_payroll_settings
+            DROP CONSTRAINT IF EXISTS chk_payroll_settings_paternity_rate;
+        </sql>
+        <dropColumn tableName="company_payroll_settings" columnName="maternity_employer_topup_rate"/>
+        <dropColumn tableName="company_payroll_settings" columnName="paternity_employer_topup_rate"/>
+    </changeSet>
+
+    <!-- Create company_parental_leave_policies table -->
+    <changeSet id="023-create-company-parental-leave-policies" author="codex">
+        <createTable tableName="company_parental_leave_policies">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false" primaryKeyName="pk_company_parental_leave_policies"/>
+            </column>
+            <column name="company_id" type="UUID">
+                <constraints nullable="false"
+                             foreignKeyName="fk_parental_leave_policy_company"
+                             references="companies(id)"/>
+            </column>
+            <column name="company_paid_percentage" type="NUMERIC(5,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="max_company_paid_days" type="INT" defaultValueNumeric="90">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint tableName="company_parental_leave_policies"
+                             constraintName="uk_parental_leave_policy_company"
+                             columnNames="company_id"/>
+        <sql>
+            ALTER TABLE company_parental_leave_policies
+            ADD CONSTRAINT chk_parental_leave_policy_percentage
+            CHECK (company_paid_percentage > 0 AND company_paid_percentage &lt;= 100)
+        </sql>
+        <sql>
+            ALTER TABLE company_parental_leave_policies
+            ADD CONSTRAINT chk_parental_leave_policy_max_days
+            CHECK (max_company_paid_days > 0)
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

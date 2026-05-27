@@ -12,6 +12,7 @@ import com.worknest.features.auth.dto.RefreshTokenResponse;
 import com.worknest.features.auth.dto.TenantContextDto;
 import com.worknest.features.auth.exception.AuthenticationFailedException;
 import com.worknest.features.auth.repository.RefreshTokenRepository;
+import com.worknest.features.auth.repository.RoleAssignmentPermissionRepository;
 import com.worknest.features.auth.utility.SecureTokenGenerator;
 import com.worknest.features.auth.utility.Sha256TokenHashUtility;
 import com.worknest.security.config.JwtProperties;
@@ -21,6 +22,7 @@ import com.worknest.audit.service.model.AuthAuditActorContext;
 import com.worknest.audit.service.model.AuthSessionContext;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     private static final String ROTATION_REASON = "rotation";
 
     private final RefreshTokenRepository refreshTokenRepository;
+    private final RoleAssignmentPermissionRepository roleAssignmentPermissionRepository;
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
     private final SecureTokenGenerator secureTokenGenerator;
@@ -120,7 +123,8 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                 existingToken.getPlatformAccess(),
                 toTenantContext(activeRoleAssignment.getCompany()),
                 accessTokenExpiresAt,
-                refreshTokenExpiresAt
+                refreshTokenExpiresAt,
+                resolvePermissions(activeRoleAssignment)
         );
     }
 
@@ -244,6 +248,18 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         if (company.getStatus() != CompanyStatus.ACTIVE) {
             throw new AuthenticationFailedException("COMPANY_INACTIVE", "Company account is no longer active");
         }
+    }
+
+    private List<String> resolvePermissions(RoleAssignment assignment) {
+        if (assignment.getRole() != PlatformRole.STAFF) {
+            return List.of();
+        }
+        return roleAssignmentPermissionRepository
+                .findAllByRoleAssignmentIdAndIsGranted(assignment.getId(), true)
+                .stream()
+                .map(grant -> grant.getPermission().getCode())
+                .sorted()
+                .toList();
     }
 
     private String trimToNull(String value) {
