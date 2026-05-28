@@ -6,6 +6,7 @@ public record AttendanceEventReviewedDomainEvent(
         UUID companyId,
         UUID eventId,
         UUID employeeId,
+        UUID employeeUserId,
         UUID actorUserId,
         String reviewStatus
 ) {}

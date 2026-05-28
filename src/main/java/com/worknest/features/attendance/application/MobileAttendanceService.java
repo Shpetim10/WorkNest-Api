@@ -40,6 +40,8 @@ import com.worknest.features.attendance.repository.AttendanceDayRecordRepository
 import com.worknest.features.attendance.repository.AttendanceEventRepository;
 import com.worknest.features.companySite.repository.SiteTrustedNetworkRepository;
 import com.worknest.features.employee.repository.EmployeeRepository;
+import com.worknest.realtime.event.AttendanceManualEventDomainEvent;
+import com.worknest.realtime.event.AttendanceRealtimeEventType;
 import com.worknest.security.AuthSessionPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
@@ -52,6 +54,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -71,6 +74,7 @@ public class MobileAttendanceService {
     private final SiteTrustedNetworkRepository siteTrustedNetworkRepository;
     private final CidrMatcher cidrMatcher;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public TodayAttendanceResponse getToday() {
@@ -199,6 +203,13 @@ public class MobileAttendanceService {
 
         AttendanceEvent savedEvent = attendanceEventRepository.save(event);
         AttendanceDayRecord updatedDayRecord = upsertDayRecord(dayRecord, savedEvent, employee, site, workDate, site.getTimezone(), warningCodes);
+
+        String realtimeType = nextType == AttendanceEventType.CHECK_IN
+                ? AttendanceRealtimeEventType.ATTENDANCE_CHECK_IN
+                : AttendanceRealtimeEventType.ATTENDANCE_CHECK_OUT;
+        eventPublisher.publishEvent(new AttendanceManualEventDomainEvent(
+                company.getId(), employee.getId(), user.getId(), user.getId(), realtimeType, serverNow));
+
         return toClockResponse(savedEvent, updatedDayRecord, site.getTimezone(), "Attendance recorded successfully.");
     }
 

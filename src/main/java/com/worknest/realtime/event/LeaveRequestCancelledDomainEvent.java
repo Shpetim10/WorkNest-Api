@@ -1,13 +1,14 @@
 package com.worknest.realtime.event;
 
-import java.time.Instant;
+import com.worknest.domain.enums.LeaveType;
+
 import java.util.UUID;
 
-public record AttendanceManualEventDomainEvent(
+public record LeaveRequestCancelledDomainEvent(
         UUID companyId,
+        UUID leaveRequestId,
         UUID employeeId,
         UUID employeeUserId,
         UUID actorUserId,
-        String realtimeEventType,
-        Instant occurredAt
+        LeaveType leaveType
 ) {}

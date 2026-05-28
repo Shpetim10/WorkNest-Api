@@ -1,6 +1,7 @@
 package com.worknest.realtime.publisher;
 
 import com.worknest.realtime.event.LeaveRequestApprovedDomainEvent;
+import com.worknest.realtime.event.LeaveRequestCancelledDomainEvent;
 import com.worknest.realtime.event.LeaveRequestEventType;
 import com.worknest.realtime.event.LeaveRequestRejectedDomainEvent;
 import com.worknest.realtime.event.LeaveRequestSubmittedDomainEvent;
@@ -71,6 +72,26 @@ public class LeaveRequestRealtimeEventListener {
                         "employeeId", event.employeeId(),
                         "leaveType", event.leaveType(),
                         "rejectionReason", event.rejectionReason() != null ? event.rejectionReason() : ""
+                ))
+                .build();
+        publisher.publishToCompanyLeaveRequests(event.companyId(), envelope);
+        if (event.employeeUserId() != null) {
+            publisher.publishToUser(event.employeeUserId(), envelope);
+        }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onLeaveRequestCancelled(LeaveRequestCancelledDomainEvent event) {
+        RealtimeEventEnvelope envelope = RealtimeEventEnvelope.builder()
+                .type(LeaveRequestEventType.LEAVE_REQUEST_CANCELLED)
+                .entity("leaveRequest")
+                .entityId(event.leaveRequestId())
+                .scopeId(event.companyId())
+                .actorUserId(event.actorUserId())
+                .payload(Map.of(
+                        "leaveRequestId", event.leaveRequestId(),
+                        "employeeId", event.employeeId(),
+                        "leaveType", event.leaveType()
                 ))
                 .build();
         publisher.publishToCompanyLeaveRequests(event.companyId(), envelope);

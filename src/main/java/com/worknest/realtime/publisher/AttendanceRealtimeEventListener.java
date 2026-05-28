@@ -31,6 +31,11 @@ public class AttendanceRealtimeEventListener {
                 ))
                 .build();
         publisher.publishToCompanyAttendance(event.companyId(), envelope);
+        // Also notify the affected employee directly: they are not authorized to
+        // subscribe to the company-wide attendance topic (STAFF/ADMIN only).
+        if (event.employeeUserId() != null) {
+            publisher.publishToUser(event.employeeUserId(), envelope);
+        }
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -48,6 +53,9 @@ public class AttendanceRealtimeEventListener {
                 ))
                 .build();
         publisher.publishToCompanyAttendance(event.companyId(), envelope);
+        if (event.employeeUserId() != null) {
+            publisher.publishToUser(event.employeeUserId(), envelope);
+        }
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -65,5 +73,8 @@ public class AttendanceRealtimeEventListener {
                 ))
                 .build();
         publisher.publishToCompanyAttendance(event.companyId(), envelope);
+        if (event.employeeUserId() != null) {
+            publisher.publishToUser(event.employeeUserId(), envelope);
+        }
     }
 }

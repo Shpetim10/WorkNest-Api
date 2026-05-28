@@ -273,8 +273,10 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         event.setReviewedBy(reviewer);
         event.setReviewNote(request.note());
         attendanceEventRepository.save(event);
+        UUID reviewedEmployeeUserId = event.getEmployee().getUser() != null
+                ? event.getEmployee().getUser().getId() : null;
         eventPublisher.publishEvent(new AttendanceEventReviewedDomainEvent(
-                principal.companyId(), eventId, event.getEmployee().getId(),
+                principal.companyId(), eventId, event.getEmployee().getId(), reviewedEmployeeUserId,
                 principal.userId(), request.reviewStatus().name()
         ));
     }
@@ -325,8 +327,10 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         record.setDayStatus(request.dayStatus());
         record.setReviewStatus(AttendanceReviewStatus.PENDING_REVIEW);
         attendanceDayRecordRepository.save(record);
+        UUID adjustedEmployeeUserId = record.getEmployee().getUser() != null
+                ? record.getEmployee().getUser().getId() : null;
         eventPublisher.publishEvent(new AttendanceDayAdjustedDomainEvent(
-                principal.companyId(), recordId, record.getEmployee().getId(),
+                principal.companyId(), recordId, record.getEmployee().getId(), adjustedEmployeeUserId,
                 principal.userId(), record.getWorkDate()
         ));
     }
@@ -369,8 +373,9 @@ public class StaffAttendanceServiceImpl implements StaffAttendanceService {
         String realtimeType = eventType == AttendanceEventType.MANUAL_CHECK_IN
                 ? AttendanceRealtimeEventType.ATTENDANCE_MANUAL_CHECK_IN
                 : AttendanceRealtimeEventType.ATTENDANCE_MANUAL_CHECK_OUT;
+        UUID employeeUserId = employee.getUser() != null ? employee.getUser().getId() : null;
         eventPublisher.publishEvent(new AttendanceManualEventDomainEvent(
-                principal.companyId(), employee.getId(), principal.userId(), realtimeType, resolvedAt));
+                principal.companyId(), employee.getId(), employeeUserId, principal.userId(), realtimeType, resolvedAt));
 
         AttendanceDayRecord dayRecord = attendanceDayRecordRepository
                 .findByCompanyIdAndEmployeeIdAndWorkDate(principal.companyId(), employee.getId(), workDate)

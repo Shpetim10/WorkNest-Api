@@ -7,6 +7,7 @@ public record AttendanceDayAdjustedDomainEvent(
         UUID companyId,
         UUID recordId,
         UUID employeeId,
+        UUID employeeUserId,
         UUID actorUserId,
         LocalDate workDate
 ) {}

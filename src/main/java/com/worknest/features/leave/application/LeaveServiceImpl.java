@@ -20,6 +20,7 @@ import com.worknest.features.leave.dto.LeaveBalanceDto;
 import com.worknest.features.leave.dto.LeaveRequestDto;
 import com.worknest.features.leave.dto.RejectLeaveRequestDto;
 import com.worknest.realtime.event.LeaveRequestApprovedDomainEvent;
+import com.worknest.realtime.event.LeaveRequestCancelledDomainEvent;
 import com.worknest.realtime.event.LeaveRequestRejectedDomainEvent;
 import com.worknest.realtime.event.LeaveRequestSubmittedDomainEvent;
 import com.worknest.domain.entities.CompanyParentalLeavePolicyConfig;
@@ -296,6 +297,11 @@ public class LeaveServiceImpl implements LeaveService {
 
         request.setStatus(LeaveStatus.CANCELLED);
         leaveRequestRepository.save(request);
+
+        eventPublisher.publishEvent(new LeaveRequestCancelledDomainEvent(
+                principal.companyId(), request.getId(), employee.getId(),
+                employee.getUser().getId(), principal.userId(), request.getLeaveType()
+        ));
     }
 
     /** Blocks cancellation of approved leave if payroll is locked for any month the leave spans. */
