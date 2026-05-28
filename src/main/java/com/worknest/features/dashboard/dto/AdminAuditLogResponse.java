@@ -1,24 +1,28 @@
 package com.worknest.features.dashboard.dto;
 
 import java.util.List;
+import java.util.Map;
 
 public record AdminAuditLogResponse(
         List<AuditLogEntry> content,
         long totalElements,
         int totalPages,
-        int size,
-        int number,
+        int pageSize,
+        int pageNumber,
         boolean first,
         boolean last
 ) {
 
     public record AuditLogEntry(
-            String id,
-            String user,
-            String role,
+            long id,
             String action,
-            String details,
-            String timestamp,
-            String referenceId
+            String entityType,
+            String entityId,
+            String actorUserId,
+            String actorRole,
+            String actorJobTitle,
+            Map<String, Object> diff,
+            Map<String, Object> metadata,
+            String createdAt
     ) {}
 }
