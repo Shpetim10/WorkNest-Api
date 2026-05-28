@@ -9,6 +9,7 @@ import com.worknest.domain.entities.Employee;
 import com.worknest.domain.entities.User;
 import com.worknest.domain.enums.AnnouncementAudience;
 import com.worknest.domain.enums.EmploymentStatus;
+import com.worknest.domain.enums.PlatformRole;
 import com.worknest.features.announcement.dto.AnnouncementListResponse;
 import com.worknest.features.announcement.dto.AnnouncementListResponse.TargetEmployeeSummary;
 import com.worknest.features.announcement.dto.CreateAnnouncementRequest;
@@ -90,6 +91,17 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     @Override
     @Transactional(readOnly = true)
     public Page<AnnouncementListResponse> listForAdmin(UUID companyId, Pageable pageable) {
+        AuthSessionPrincipal principal = principal();
+        if (principal.role() == PlatformRole.STAFF) {
+            Employee staffEmployee = employeeRepository
+                    .findByUserIdAndCompanyId(principal.userId(), companyId)
+                    .orElseThrow(() -> new BusinessException(HttpStatus.FORBIDDEN, "EMPLOYEE_PROFILE_NOT_FOUND",
+                            "Employee profile is not configured."));
+            UUID departmentId = staffEmployee.getDepartment() != null ? staffEmployee.getDepartment().getId() : null;
+            return announcementRepository
+                    .findVisibleToStaff(companyId, departmentId, principal.roleAssignmentId(), pageable)
+                    .map(this::toListResponse);
+        }
         return announcementRepository.findAllByCompanyIdOrderByCreatedAtDesc(companyId, pageable)
                 .map(this::toListResponse);
     }

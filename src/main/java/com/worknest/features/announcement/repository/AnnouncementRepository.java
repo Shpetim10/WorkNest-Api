@@ -46,4 +46,25 @@ public interface AnnouncementRepository extends JpaRepository<Announcement, UUID
             @Param("departmentId") UUID departmentId,
             Pageable pageable
     );
+
+    @Query("""
+            SELECT DISTINCT a FROM Announcement a
+            WHERE a.company.id = :companyId
+            AND (
+                a.targetAudience = com.worknest.domain.enums.AnnouncementAudience.ALL_EMPLOYEES
+                OR (a.targetAudience = com.worknest.domain.enums.AnnouncementAudience.DEPARTMENT
+                    AND :departmentId IS NOT NULL
+                    AND EXISTS (SELECT d FROM a.targetDepartments d WHERE d.id = :departmentId))
+                OR (a.targetAudience = com.worknest.domain.enums.AnnouncementAudience.SPECIFIC_USERS
+                    AND EXISTS (SELECT e FROM a.targetEmployees e
+                                WHERE e.supervisorRoleAssignment.id = :staffRoleAssignmentId))
+            )
+            ORDER BY a.createdAt DESC
+            """)
+    Page<Announcement> findVisibleToStaff(
+            @Param("companyId") UUID companyId,
+            @Param("departmentId") UUID departmentId,
+            @Param("staffRoleAssignmentId") UUID staffRoleAssignmentId,
+            Pageable pageable
+    );
 }
